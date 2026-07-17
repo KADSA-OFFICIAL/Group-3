@@ -1,0 +1,85 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon_select.gd" id="1_select"]
+
+[node name="WeaponSelect" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_select")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.1, 0.1, 0.14, 1)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="VBox" type="VBoxContainer" parent="Center"]
+layout_mode = 2
+theme_override_constants/separation = 40
+
+[node name="Title" type="Label" parent="Center/VBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 44
+text = "무기 선택"
+horizontal_alignment = 1
+
+[node name="Panels" type="HBoxContainer" parent="Center/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 120
+alignment = 1
+
+[node name="P1Panel" type="VBoxContainer" parent="Center/VBox/Panels"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="PlayerLabel" type="Label" parent="Center/VBox/Panels/P1Panel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "1P"
+horizontal_alignment = 1
+
+[node name="WeaponName" type="Label" parent="Center/VBox/Panels/P1Panel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 40
+text = "검"
+horizontal_alignment = 1
+
+[node name="Status" type="Label" parent="Center/VBox/Panels/P1Panel"]
+layout_mode = 2
+text = "선택 중..."
+horizontal_alignment = 1
+
+[node name="P2Panel" type="VBoxContainer" parent="Center/VBox/Panels"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="PlayerLabel" type="Label" parent="Center/VBox/Panels/P2Panel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "2P"
+horizontal_alignment = 1
+
+[node name="WeaponName" type="Label" parent="Center/VBox/Panels/P2Panel"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 40
+text = "검"
+horizontal_alignment = 1
+
+[node name="Status" type="Label" parent="Center/VBox/Panels/P2Panel"]
+layout_mode = 2
+text = "선택 중..."
+horizontal_alignment = 1
+
+[node name="Hint" type="Label" parent="Center/VBox"]
+layout_mode = 2
+text = "이동 키(좌/우)로 무기 변경, 공격 키로 확정"
+horizontal_alignment = 1

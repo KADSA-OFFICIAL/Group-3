@@ -1,0 +1,61 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/match.gd" id="1_match"]
+
+[node name="Match" type="Node2D"]
+script = ExtResource("1_match")
+
+[node name="MapHolder" type="Node2D" parent="."]
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="P1Health" type="ProgressBar" parent="HUD"]
+offset_left = 40.0
+offset_top = 32.0
+offset_right = 440.0
+offset_bottom = 56.0
+max_value = 100.0
+value = 100.0
+show_percentage = false
+
+[node name="P2Health" type="ProgressBar" parent="HUD"]
+offset_left = 840.0
+offset_top = 32.0
+offset_right = 1240.0
+offset_bottom = 56.0
+max_value = 100.0
+value = 100.0
+show_percentage = false
+fill_mode = 1
+
+[node name="P1Label" type="Label" parent="HUD"]
+offset_left = 40.0
+offset_top = 60.0
+offset_right = 140.0
+offset_bottom = 84.0
+text = "1P"
+
+[node name="P2Label" type="Label" parent="HUD"]
+offset_left = 1200.0
+offset_top = 60.0
+offset_right = 1240.0
+offset_bottom = 84.0
+text = "2P"
+horizontal_alignment = 2
+
+[node name="ScoreLabel" type="Label" parent="HUD"]
+offset_left = 540.0
+offset_top = 20.0
+offset_right = 740.0
+offset_bottom = 72.0
+theme_override_font_sizes/font_size = 40
+text = "0  :  0"
+horizontal_alignment = 1
+
+[node name="Banner" type="Label" parent="HUD"]
+offset_top = 280.0
+offset_right = 1280.0
+offset_bottom = 360.0
+theme_override_font_sizes/font_size = 52
+horizontal_alignment = 1
+vertical_alignment = 1
