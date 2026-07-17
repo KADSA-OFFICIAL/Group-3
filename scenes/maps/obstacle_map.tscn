@@ -1,0 +1,59 @@
+[gd_scene load_steps=3 format=3]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_segment"]
+size = Vector2(480, 60)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_platform"]
+size = Vector2(240, 24)
+
+[node name="ObstacleMap" type="Node2D"]
+
+[node name="Background" type="ColorRect" parent="."]
+offset_right = 1280.0
+offset_bottom = 720.0
+color = Color(0.1, 0.14, 0.12, 1)
+
+[node name="LeftFloor" type="StaticBody2D" parent="."]
+position = Vector2(240, 690)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="LeftFloor"]
+shape = SubResource("RectangleShape2D_segment")
+
+[node name="Visual" type="ColorRect" parent="LeftFloor"]
+offset_left = -240.0
+offset_top = -30.0
+offset_right = 240.0
+offset_bottom = 30.0
+color = Color(0.3, 0.35, 0.25, 1)
+
+[node name="RightFloor" type="StaticBody2D" parent="."]
+position = Vector2(1040, 690)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RightFloor"]
+shape = SubResource("RectangleShape2D_segment")
+
+[node name="Visual" type="ColorRect" parent="RightFloor"]
+offset_left = -240.0
+offset_top = -30.0
+offset_right = 240.0
+offset_bottom = 30.0
+color = Color(0.3, 0.35, 0.25, 1)
+
+[node name="CenterPlatform" type="StaticBody2D" parent="."]
+position = Vector2(640, 520)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="CenterPlatform"]
+shape = SubResource("RectangleShape2D_platform")
+
+[node name="Visual" type="ColorRect" parent="CenterPlatform"]
+offset_left = -120.0
+offset_top = -12.0
+offset_right = 120.0
+offset_bottom = 12.0
+color = Color(0.4, 0.4, 0.3, 1)
+
+[node name="SpawnP1" type="Marker2D" parent="."]
+position = Vector2(240, 600)
+
+[node name="SpawnP2" type="Marker2D" parent="."]
+position = Vector2(1040, 600)
