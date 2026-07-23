@@ -18,8 +18,3 @@ KADSA Group-3 게임 프로젝트 저장소입니다.
 | 공격 | Ctrl | 숫자패드 0 |
 
 > 기획서에서 2P 공격 키가 미정("?")이라 임시로 숫자패드 0을 사용합니다. `project.godot`의 `[input]` 섹션에서 변경할 수 있습니다.
-
-### 실행 / 검증
-
-- Godot 4.6 에디터로 프로젝트를 열고 F5 (메인 씬: `scenes/main_menu.tscn`)
-- 헤드리스 스모크 테스트: `godot --headless --path . --quit`
