@@ -1,0 +1,86 @@
+[gd_scene load_steps=5 format=3 uid="uid://jellytitle001"]
+
+[ext_resource type="Script" path="res://scripts/title.gd" id="1_title"]
+[ext_resource type="Script" path="res://scripts/jelly_preview.gd" id="2_preview"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_start"]
+bg_color = Color(1, 0.78, 0.15, 1)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+corner_radius_bottom_left = 16
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_start_hover"]
+bg_color = Color(1, 0.87, 0.35, 1)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+corner_radius_bottom_left = 16
+
+[node name="Title" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_title")
+
+[node name="BG" type="ColorRect" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.11, 0.27, 0.45, 1)
+
+[node name="JellyLeft" type="Control" parent="."]
+offset_left = 110.0
+offset_top = 220.0
+offset_right = 300.0
+offset_bottom = 480.0
+script = ExtResource("2_preview")
+body_color = Color(0.25, 0.95, 0.95, 1)
+
+[node name="JellyRight" type="Control" parent="."]
+offset_left = 852.0
+offset_top = 220.0
+offset_right = 1042.0
+offset_bottom = 480.0
+script = ExtResource("2_preview")
+body_color = Color(1, 0.9, 0.2, 1)
+
+[node name="TitleLabel" type="Label" parent="."]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -450.0
+offset_top = 110.0
+offset_right = 450.0
+offset_bottom = 270.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.08, 0.14, 0.28, 1)
+theme_override_constants/outline_size = 20
+theme_override_font_sizes/font_size = 110
+text = "젤리 워즈"
+horizontal_alignment = 1
+
+[node name="SubLabel" type="Label" parent="."]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+offset_top = 272.0
+offset_right = 300.0
+offset_bottom = 310.0
+theme_override_colors/font_color = Color(0.75, 0.85, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "JELLY WARS  —  스틱매너"
+horizontal_alignment = 1
+
+[node name="StartButton" type="Button" parent="."]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -140.0
+offset_top = 440.0
+offset_right = 140.0
+offset_bottom = 520.0
+theme_override_colors/font_color = Color(0.3, 0.18, 0, 1)
+theme_override_colors/font_hover_color = Color(0.3, 0.18, 0, 1)
+theme_override_colors/font_pressed_color = Color(0.3, 0.18, 0, 1)
+theme_override_font_sizes/font_size = 38
+theme_override_styles/normal = SubResource("StyleBoxFlat_start")
+theme_override_styles/hover = SubResource("StyleBoxFlat_start_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_start")
+text = "게임 시작"

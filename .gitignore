@@ -1,0 +1,18 @@
+# Godot 4+ 전용 무시 목록
+.godot/
+/android/
+
+# 내보낸 실행 파일
+export.cfg
+export_presets.cfg
+build/
+*.exe
+*.pck
+
+# 개인 로컬 설정 (컴퓨터마다 다름)
+.claude/settings.local.json
+
+# 시스템 파일
+Thumbs.db
+desktop.ini
+.DS_Store

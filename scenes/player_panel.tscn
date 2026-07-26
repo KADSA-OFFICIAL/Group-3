@@ -1,0 +1,65 @@
+[gd_scene load_steps=3 format=3 uid="uid://jellypanel001"]
+
+[ext_resource type="Script" path="res://scripts/player_panel.gd" id="1_panel"]
+[ext_resource type="Script" path="res://scripts/jelly_preview.gd" id="2_preview"]
+
+[node name="PlayerPanel" type="Control"]
+script = ExtResource("1_panel")
+
+[node name="HBox" type="HBoxContainer" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/separation = 12
+
+[node name="IconColumn" type="VBoxContainer" parent="HBox"]
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 14
+
+[node name="WeaponButton" type="Button" parent="HBox/IconColumn"]
+custom_minimum_size = Vector2(0, 62)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "무기"
+
+[node name="HeadButton" type="Button" parent="HBox/IconColumn"]
+custom_minimum_size = Vector2(0, 62)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "머리"
+
+[node name="Color1Button" type="Button" parent="HBox/IconColumn"]
+custom_minimum_size = Vector2(0, 62)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "색상 1"
+
+[node name="Color2Button" type="Button" parent="HBox/IconColumn"]
+custom_minimum_size = Vector2(0, 62)
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "색상 2"
+
+[node name="Center" type="VBoxContainer" parent="HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="PlayerDropdown" type="OptionButton" parent="HBox/Center"]
+custom_minimum_size = Vector2(230, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 22
+
+[node name="Preview" type="Control" parent="HBox/Center"]
+layout_mode = 2
+size_flags_vertical = 3
+script = ExtResource("2_preview")
+
+[node name="RandomButton" type="Button" parent="HBox/Center"]
+custom_minimum_size = Vector2(230, 48)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_font_sizes/font_size = 22
+text = "랜덤 🎲"
