@@ -1,0 +1,17 @@
+# Code owners for Group-3 (젤리 워즈)
+#
+# 여기에 적힌 사람은 해당 경로의 PR에 자동으로 리뷰어로 지정됩니다.
+# PR 작성자는 자기 PR의 리뷰어로 지정되지 않습니다.
+# GitHub 사용자명은 @ 로 시작합니다.
+#
+# 팀원이 바뀌면 이 목록을 갱신하세요. 여기 없는 사람의 변경은 리뷰어가 붙지 않습니다.
+
+# 기본: 저장소 전체
+*               @LouizXT @1jealy @zestman0318 @Kadsa-MXZI @iwonjun @wio458
+
+# 하네스/워크플로우 설정은 팀 합의해서 변경
+/CLAUDE.md      @LouizXT @1jealy @zestman0318 @Kadsa-MXZI @iwonjun @wio458
+/AGENTS.md      @LouizXT @1jealy @zestman0318 @Kadsa-MXZI @iwonjun @wio458
+/.github/       @LouizXT @1jealy @zestman0318 @Kadsa-MXZI @iwonjun @wio458
+/scripts/       @LouizXT @1jealy @zestman0318 @Kadsa-MXZI @iwonjun @wio458
+/docs/          @LouizXT @1jealy @zestman0318 @Kadsa-MXZI @iwonjun @wio458
