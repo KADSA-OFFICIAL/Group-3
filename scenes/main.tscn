@@ -1,6 +1,5 @@
-[gd_scene load_steps=5 format=3 uid="uid://jellymain0001"]
+[gd_scene load_steps=4 format=3 uid="uid://jellymain0001"]
 
-[ext_resource type="PackedScene" uid="uid://jellyplayer01" path="res://scenes/player.tscn" id="1_playerscene"]
 [ext_resource type="Script" path="res://scripts/main.gd" id="2_mainscript"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_ground"]
@@ -42,17 +41,10 @@ position = Vector2(1172, 324)
 [node name="CollisionShape2D" type="CollisionShape2D" parent="WallRight"]
 shape = SubResource("RectangleShape2D_wall")
 
-[node name="Player1" parent="." instance=ExtResource("1_playerscene")]
-position = Vector2(300, 500)
-input_prefix = "p1"
-player_name = "1P"
-jelly_color = Color(1, 0.42, 0.55, 1)
+[node name="Players" type="Node2D" parent="."]
 
-[node name="Player2" parent="." instance=ExtResource("1_playerscene")]
-position = Vector2(852, 500)
-input_prefix = "p2"
-player_name = "2P"
-jelly_color = Color(0.36, 0.55, 1, 1)
+[node name="PlayerSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../Players")
 
 [node name="ControlsHint" type="Label" parent="."]
 offset_left = 16.0
@@ -60,7 +52,7 @@ offset_top = 12.0
 offset_right = 600.0
 offset_bottom = 40.0
 theme_override_font_sizes/font_size = 16
-text = "1P: WASD (W 점프, S 빠른 낙하)   |   2P: 방향키 (↑ 점프, ↓ 빠른 낙하)   |   ESC: 선택 창"
+text = "이동: A·D / ←·→   |   점프: W / ↑   |   빠른 낙하: S / ↓   |   ESC: 접속 종료"
 
 [node name="MapLabel" type="Label" parent="."]
 offset_left = 986.0
