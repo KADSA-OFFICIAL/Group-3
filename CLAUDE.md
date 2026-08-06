@@ -27,7 +27,11 @@ title(서버 주소 입력 후 `StartButton`으로 접속) → main(평지 전�
 - `scenes/player_panel.tscn` + `scripts/player_panel.gd` = 플레이어 1인 패널(양쪽 재사용). `mirrored`가 true면 아이콘 열을 오른쪽으로 옮긴다. 무기/머리/색1/색2 버튼은 각각 목록을 순환하고, `RandomButton`은 전부 랜덤. `get_config()`로 선택값 반환.
 - `scripts/jelly_preview.gd` = 젤리 미리보기를 `_draw()`로 직접 그린다(StyleBoxFlat 둥근 모서리 + 눈 2개). `body_color`/`eye_color` setter가 `queue_redraw()`를 호출한다.
 - `scenes/main.tscn` + `scripts/main.gd` = 전투 화면. `Ground`/`WallLeft`/`WallRight`(StaticBody2D + CollisionShape2D + ColorRect) 지형, `MapLabel`에 `GameState.map_name` 표시, ESC로 접속 종료. **플레이어는 씬에 배치되어 있지 않고 서버가 런타임에 스폰한다** — `PlayerSpawner`(MultiplayerSpawner, `spawn_path = ../Players`)와 `Players` 노드가 담당. 클라이언트는 씬 준비 후 `_notify_ready()`를 서버로 RPC하고, 서버가 그때 `spawn()`한다(접속 직후 스폰하면 클라이언트가 씬 로드 전이라 놓칠 수 있다). 노드 이름은 `Player_<peer_id>`.
-- `scenes/player.tscn` + `scripts/player.gd`(CharacterBody2D): `owner_peer_id`·`player_name`·`jelly_color` export. SPEED 320, JUMP_VELOCITY -560, FAST_FALL_MULTIPLIER 2.0. `is_local_player()`가 `owner_peer_id == multiplayer.get_unique_id()`로 자기 소유를 판정하고, **`read_input()`이 `Input`을 읽는 유일한 지점**이다. `apply_movement(input, delta)`는 `Input`을 직접 읽지 않고 인자만 받는다 — 3단계에서 서버가 호출하도록 바꾸기 위한 구조다. 이동·점프 시 `$Body.scale`을 lerp로 찌그러뜨려 젤리 느낌을 낸다.
+- `scenes/player.tscn` + `scripts/player.gd`(CharacterBody2D): **서버 권위 이동**. `owner_peer_id`·`player_name`·`jelly_color` export. SPEED 320, JUMP_VELOCITY -560, FAST_FALL_MULTIPLIER 2.0, INTERPOLATION_SPEED 20.
+  - 클라이언트: `read_input()`(**`Input`을 읽는 유일한 지점**) → `_receive_move_input`(unreliable_ordered)·`_receive_jump`(reliable, 엣지 입력이라 유실되면 안 됨)로 서버 전송. 물리를 계산하지 않고 `_receive_state`로 받은 위치로 lerp 보간만 한다.
+  - 서버: `apply_movement(input, delta)`로 위치를 정하고(`move_and_slide()`는 여기서만 호출) `_receive_state`(authority, unreliable_ordered)로 위치·속도·접지를 복제한다.
+  - **권한 검증**: 입력 RPC에서 `multiplayer.get_remote_sender_id() != owner_peer_id`이면 무시한다 — 없으면 남의 플레이어를 조작할 수 있다.
+  - 젤리 찌그러짐은 복제된 속도·접지값으로 각 피어가 계산한다.
 - `resources/korean_font.tres` = 한글 폰트 리소스.
 
 ### 조작 (project.godot `[input]`)
@@ -37,9 +41,9 @@ title(서버 주소 입력 후 `StartButton`으로 접속) → main(평지 전�
 
 ### 미구현 (로드맵 #32 기준)
 
-이동 동기화(3단계), 공격·체력·사망(4단계), 점수·3점 선취 승리(5단계), 대기실·캐릭터 설정 전달(2단계), 무기 시스템, 추가 맵(냉장고·봉지 속·위 속).
-**현재 이동은 각 클라이언트 화면에서만 반영되어 서로 어긋난다** — 3단계에서 서버 권위 동기화를 넣기 전까지는 정상이다.
-선택 창에서 고른 무기·머리는 `GameState`에 저장되지만 전투에 반영되지 않는다.
+무기 선택 씬·캐릭터 설정 전달(2단계 #36), 공격·체력·사망(4단계), 점수·3점 선취 승리(5단계), 추가 맵(냉장고·봉지 속·위 속).
+**무기 동작 구현(광선검·망치·총·활·의자·우산·방패)은 공동작업자 담당이다** — 이쪽은 연결부만 만든다. 무기는 문자열 id 하나로 식별하고 목록의 유일한 출처는 `GameState.WEAPONS`이며, 선택값은 스폰 시 `Player`에 주입된다. "랜덤"은 서버가 확정해 양쪽에 같은 값을 내려보낸다. **공격 판정도 서버에서만 실행한다** — `backup/main-before-reset`의 옛 무기 코드는 클라이언트 로컬 판정이라 그대로 쓰면 두 화면이 어긋난다(밸런스 값은 재사용 권장).
+지연 보상(prediction·rollback)은 로드맵 Non-goal이라 입력 지연이 왕복 시간만큼 발생한다.
 
 ### 개발 시 주의
 
