@@ -111,6 +111,16 @@ offset_bottom = 186.0
 theme_override_font_sizes/font_size = 24
 text = "▶"
 
+[node name="StatusLabel" type="Label" parent="."]
+offset_left = 356.0
+offset_top = 492.0
+offset_right = 796.0
+offset_bottom = 526.0
+theme_override_colors/font_color = Color(1, 0.9, 0.6, 1)
+theme_override_font_sizes/font_size = 20
+text = "상대 대기 중..."
+horizontal_alignment = 1
+
 [node name="GoButton" type="Button" parent="."]
 offset_left = 456.0
 offset_top = 540.0

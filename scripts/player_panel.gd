@@ -1,5 +1,11 @@
 extends Control
 ## 선택 창의 플레이어 한 명 분량 패널 (미리보기 + 무기/머리/색상 선택)
+##
+## 온라인에서는 자기 패널만 조작할 수 있고(`set_interactive`),
+## 상대 패널은 서버가 보낸 값을 `apply_config()`로 표시만 한다.
+
+## 이 패널의 선택이 사용자 조작으로 바뀌었을 때 (서버 전송용)
+signal config_changed
 
 @export var mirrored := false          # 2P는 아이콘 열이 오른쪽으로
 @export var default_color1 := 0
@@ -36,6 +42,21 @@ func _ready() -> void:
 	_update_ui()
 
 
+## 조작 가능 여부. 상대 패널은 false로 두어 표시 전용이 된다.
+func set_interactive(value: bool) -> void:
+	for button in [weapon_button, head_button, color1_button, color2_button, random_button]:
+		button.disabled = not value
+
+
+## 서버가 보낸 선택값을 그대로 표시한다. config_changed를 내보내지 않는다.
+func apply_config(config: Dictionary) -> void:
+	weapon_i = maxi(GameState.WEAPONS.find(config.get("weapon", "")), 0)
+	head_i = maxi(GameState.HEADS.find(config.get("head", "")), 0)
+	color1_i = maxi(GameState.COLORS.find(config.get("color1", Color.BLACK)), 0)
+	color2_i = maxi(GameState.COLORS.find(config.get("color2", Color.BLACK)), 0)
+	_update_ui()
+
+
 func _cycle(what: String) -> void:
 	match what:
 		"weapon":
@@ -47,6 +68,7 @@ func _cycle(what: String) -> void:
 		"color2":
 			color2_i = (color2_i + 1) % GameState.COLORS.size()
 	_update_ui()
+	config_changed.emit()
 
 
 func _randomize_all() -> void:
@@ -55,6 +77,7 @@ func _randomize_all() -> void:
 	color1_i = randi() % GameState.COLORS.size()
 	color2_i = randi() % GameState.COLORS.size()
 	_update_ui()
+	config_changed.emit()
 
 
 func _update_ui() -> void:
