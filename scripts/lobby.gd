@@ -117,6 +117,8 @@ func _sanitize(config: Dictionary, slot: int) -> Dictionary:
 
 
 ## "랜덤"을 실제 무기로 확정한다. 서버에서만 호출되므로 양쪽이 같은 값을 받는다.
+## 클라이언트가 각자 뽑으면 서로 다른 무기가 되므로 이 위치를 옮기지 말 것.
+## 무기 시스템 통합 가이드: docs/weapon-system.md
 func _resolve_weapon(weapon: String) -> String:
 	if weapon != GameState.WEAPONS[0]:
 		return weapon
