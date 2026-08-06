@@ -4,14 +4,13 @@ extends Node2D
 
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
 const SPAWN_POSITIONS := [Vector2(300, 500), Vector2(852, 500)]
-const PLAYER_COLORS := [Color(1.0, 0.42, 0.55), Color(0.36, 0.55, 1.0)]
 
 @onready var players_root: Node2D = $Players
 @onready var spawner: MultiplayerSpawner = $PlayerSpawner
 
 
 func _ready() -> void:
-	$MapLabel.text = "맵: " + GameState.map_name
+	$MapLabel.text = "맵: " + Lobby.map_name
 	# 스폰 함수는 모든 피어에서 등록되어야 한다 — 서버 판정보다 먼저 설정한다.
 	spawner.spawn_function = _spawn_player
 
@@ -34,7 +33,17 @@ func _notify_ready() -> void:
 func _add_player(peer_id: int) -> void:
 	if players_root.has_node("Player_%d" % peer_id):
 		return
-	spawner.spawn({"peer_id": peer_id, "index": players_root.get_child_count()})
+	# 슬롯과 선택값은 대기실에서 서버가 확정한 것을 그대로 쓴다
+	var index: int = Lobby.slot_of(peer_id)
+	if index < 0:
+		index = players_root.get_child_count()
+	var config: Dictionary = Lobby.config_for(peer_id)
+	spawner.spawn({
+		"peer_id": peer_id,
+		"index": index,
+		"weapon_id": config["weapon"],
+		"color": config["color1"],
+	})
 
 
 ## 모든 피어에서 호출되어 플레이어 노드를 만든다. 반환한 노드는 spawn_path 아래에 붙는다.
@@ -45,7 +54,8 @@ func _spawn_player(data: Dictionary) -> Node:
 	player.name = "Player_%d" % peer_id
 	player.owner_peer_id = peer_id
 	player.player_name = "%dP" % (index + 1)
-	player.jelly_color = PLAYER_COLORS[index % PLAYER_COLORS.size()]
+	player.weapon_id = data["weapon_id"]
+	player.jelly_color = data["color"]
 	player.position = SPAWN_POSITIONS[index % SPAWN_POSITIONS.size()]
 	return player
 

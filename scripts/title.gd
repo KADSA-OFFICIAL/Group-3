@@ -40,7 +40,8 @@ func _on_start_pressed() -> void:
 
 
 func _on_join_succeeded() -> void:
-	get_tree().change_scene_to_file("res://scenes/main.tscn")
+	# 접속 후 바로 전투가 아니라 대기실 겸 무기 선택 화면으로 간다
+	get_tree().change_scene_to_file("res://scenes/select.tscn")
 
 
 func _on_join_failed(reason: String) -> void:

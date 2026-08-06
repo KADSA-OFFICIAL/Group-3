@@ -9,6 +9,9 @@ extends CharacterBody2D
 @export var owner_peer_id := 0
 @export var player_name: String = "1P"
 @export var jelly_color: Color = Color(1.0, 0.42, 0.55)
+## 대기실에서 고른 무기 id. 값 보관만 하며 동작은 없다 —
+## 무기 동작 구현은 공동작업자 담당이며 이 값을 읽어 자신을 붙이면 된다.
+@export var weapon_id: String = ""
 
 const SPEED := 320.0
 const JUMP_VELOCITY := -560.0
