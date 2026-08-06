@@ -4,34 +4,42 @@
 
 ## 게임 정보 (젤리 워즈)
 
-2인 로컬 대전 액션, **Godot 4.6 (GL Compatibility)**. 3조(스틱매너) 개발기획서 기반. `project.godot`의 `config/name`은 "Jelly Wars", 메인 씬은 `scenes/title.tscn`.
-기획 핵심 루프는 무기 선택 → 맵 → 전투 → 3점 선취 승리지만, **현재는 타이틀·선택 창·평지 이동까지만 구현**되어 있다.
+2기기 **1 VS 1 온라인 대전** 액션, **Godot 4.6 (GL Compatibility)**. 3조(스틱매너) 개발기획서 기반. `project.godot`의 `config/name`은 "Jelly Wars", 메인 씬은 `scenes/title.tscn`.
+기획 핵심 루프는 무기 선택 → 맵 → 전투 → 3점 선취 승리지만, **현재는 접속·스폰·평지 이동까지만 구현**되어 있다.
+
+2026-07-28에 한 기기 2인 로컬에서 온라인 구조로 전환 중이다(로드맵 이슈 #32). 전용 헤드리스 서버가 권위를 갖고, 클라이언트 2대가 Tailscale로 접속한다. 서버 주소는 **저장소가 공개이므로 코드에 적지 않는다** — 접속 화면에서 입력받고 커밋되는 기본값은 `127.0.0.1`이다.
 
 `main` 브랜치는 2026-07-26에 새 구현(커밋 `e2a7dcb`)으로 교체되었다. 이전 구현(`autoload/game_manager.gd`, `scripts/weapons/`, `scenes/maps/` 등)은 `backup/main-before-reset` 브랜치에만 있고 현재 코드베이스에는 없다 — 그 경로를 참조하지 말 것.
 
 ### 씬 흐름
 
-title(`StartButton`) → select(캐릭터·무기·머리·색상·맵 선택 후 `GoButton`) → main(평지 전투) → ESC(`ui_cancel`)로 select 복귀
+title(서버 주소 입력 후 `StartButton`으로 접속) → main(평지 전투, 서버가 플레이어 스폰) → ESC(`ui_cancel`)로 접속 종료 후 title 복귀
+
+헤드리스로 실행되면 `Network`가 서버를 시작하고 title이 UI 없이 곧바로 main으로 넘어간다.
+**`select.tscn`은 현재 어느 흐름에서도 열리지 않는다** — 2단계에서 대기실로 개편할 때 다시 연결된다.
 
 ### 구조 요약
 
+- `scripts/network.gd` = 오토로드 싱글턴 `Network`: 연결 수립과 피어 알림만 담당(게임 로직 없음). `PORT = 7777`(서버컴 방화벽 UDP 규칙과 일치), `MAX_CLIENTS = 2`, `DEFAULT_ADDRESS = "127.0.0.1"`. `should_run_as_server()`가 헤드리스 또는 `--server` 인자를 감지해 `_ready()`에서 자동으로 서버를 연다. 시그널 `server_started`·`join_succeeded`·`join_failed`·`peer_joined`·`peer_left`. **포트는 여기에만 정의한다.**
 - `scripts/game_state.gd` = 오토로드 싱글턴 `GameState`: 화면 간 선택 정보 전달. `COLORS`(10색), `WEAPONS`(랜덤·광선검·망치·총·활·의자·우산·방패), `HEADS`(없음·중절모·왕관·헬멧), `MAPS`(랜덤·평지·냉장고·봉지 속·위 속), `p1_config`/`p2_config`(weapon·head·color1·color2), `map_name`, `get_config(prefix)`.
-- `scenes/title.tscn` + `scripts/title.gd` = 타이틀. `StartButton` 누르면 select로 이동. 좌우 `JellyLeft`/`JellyRight`는 미리보기 장식.
+- `scenes/title.tscn` + `scripts/title.gd` = 타이틀 겸 접속 화면. `AddressEdit`(기본 `127.0.0.1`)·`StartButton`("접속")·`StatusLabel`(접속 중/실패 표시). 접속 성공 시 main으로 전환한다. 좌우 `JellyLeft`/`JellyRight`는 미리보기 장식.
 - `scenes/select.tscn` + `scripts/select.gd` = 준비 화면. `P1Panel`/`P2Panel`(둘 다 `player_panel.tscn` 인스턴스), `MapBox`의 좌우 화살표로 맵 순환, `GoButton`이 두 패널의 `get_config()`를 `GameState`에 저장하고 main으로 전환. **평지 외 맵은 미구현이라 선택해도 "평지"로 강제된다.**
 - `scenes/player_panel.tscn` + `scripts/player_panel.gd` = 플레이어 1인 패널(양쪽 재사용). `mirrored`가 true면 아이콘 열을 오른쪽으로 옮긴다. 무기/머리/색1/색2 버튼은 각각 목록을 순환하고, `RandomButton`은 전부 랜덤. `get_config()`로 선택값 반환.
 - `scripts/jelly_preview.gd` = 젤리 미리보기를 `_draw()`로 직접 그린다(StyleBoxFlat 둥근 모서리 + 눈 2개). `body_color`/`eye_color` setter가 `queue_redraw()`를 호출한다.
-- `scenes/main.tscn` + `scripts/main.gd` = 전투 화면. `Ground`/`WallLeft`/`WallRight`(StaticBody2D + CollisionShape2D + ColorRect) 지형, `MapLabel`에 `GameState.map_name` 표시. ESC로 select 복귀.
-- `scenes/player.tscn` + `scripts/player.gd`(CharacterBody2D): `input_prefix`(`p1`/`p2`)로 입력 분기, `player_name`·`jelly_color` export. SPEED 320, JUMP_VELOCITY -560, FAST_FALL_MULTIPLIER 2.0. `_ready()`에서 `GameState.get_config()`의 `color1`을 `$Body`에 적용. 이동·점프 시 `$Body.scale`을 lerp로 찌그러뜨려 젤리 느낌을 낸다.
+- `scenes/main.tscn` + `scripts/main.gd` = 전투 화면. `Ground`/`WallLeft`/`WallRight`(StaticBody2D + CollisionShape2D + ColorRect) 지형, `MapLabel`에 `GameState.map_name` 표시, ESC로 접속 종료. **플레이어는 씬에 배치되어 있지 않고 서버가 런타임에 스폰한다** — `PlayerSpawner`(MultiplayerSpawner, `spawn_path = ../Players`)와 `Players` 노드가 담당. 클라이언트는 씬 준비 후 `_notify_ready()`를 서버로 RPC하고, 서버가 그때 `spawn()`한다(접속 직후 스폰하면 클라이언트가 씬 로드 전이라 놓칠 수 있다). 노드 이름은 `Player_<peer_id>`.
+- `scenes/player.tscn` + `scripts/player.gd`(CharacterBody2D): `owner_peer_id`·`player_name`·`jelly_color` export. SPEED 320, JUMP_VELOCITY -560, FAST_FALL_MULTIPLIER 2.0. `is_local_player()`가 `owner_peer_id == multiplayer.get_unique_id()`로 자기 소유를 판정하고, **`read_input()`이 `Input`을 읽는 유일한 지점**이다. `apply_movement(input, delta)`는 `Input`을 직접 읽지 않고 인자만 받는다 — 3단계에서 서버가 호출하도록 바꾸기 위한 구조다. 이동·점프 시 `$Body.scale`을 lerp로 찌그러뜨려 젤리 느낌을 낸다.
 - `resources/korean_font.tres` = 한글 폰트 리소스.
 
 ### 조작 (project.godot `[input]`)
 
-1P: A/D 이동, W 점프, S 빠른 낙하 / 2P: ←·→ 이동, ↑ 점프, ↓ 빠른 낙하. 전투 중 ESC로 선택 창 복귀.
-정의된 액션은 `p1_/p2_` × `left·right·up·down` 8개뿐이다 — **공격 액션은 아직 없다.**
+기기당 1명이므로 **액션은 `move_left`·`move_right`·`jump`·`fast_fall` 4개뿐**이며, 각 액션에 WASD와 방향키가 함께 바인딩되어 있어 어느 쪽을 눌러도 동작한다. 전투 중 ESC(`ui_cancel`)로 접속 종료.
+**공격 액션은 아직 없다.** 옛 `p1_/p2_` 8개 액션은 온라인 전환(#33)으로 제거되었다.
 
-### 미구현 (README 진행 상황 기준)
+### 미구현 (로드맵 #32 기준)
 
-공격(Ctrl), 무기 시스템, 추가 맵(냉장고·봉지 속·위 속), 점수·3점 선취 승리. 선택 창에서 고른 무기·머리는 `GameState`에 저장되지만 전투에 반영되지 않는다 — 무기 시스템 구현 시 그 값을 사용하면 된다.
+이동 동기화(3단계), 공격·체력·사망(4단계), 점수·3점 선취 승리(5단계), 대기실·캐릭터 설정 전달(2단계), 무기 시스템, 추가 맵(냉장고·봉지 속·위 속).
+**현재 이동은 각 클라이언트 화면에서만 반영되어 서로 어긋난다** — 3단계에서 서버 권위 동기화를 넣기 전까지는 정상이다.
+선택 창에서 고른 무기·머리는 `GameState`에 저장되지만 전투에 반영되지 않는다.
 
 ### 개발 시 주의
 
