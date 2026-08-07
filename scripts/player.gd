@@ -42,6 +42,12 @@ const BASE_REACH := 24.0
 const BODY_HEIGHT := 72.0
 ## 발이 닿는 높이 — 충돌 상자(48x56)의 아래쪽 모서리.
 const BODY_BOTTOM := 28.0
+## 무기 그림을 그릴 높이(px). 캐릭터보다 조금 작아야 손에 든 것처럼 보인다.
+const WEAPON_HEIGHT := 56.0
+## 무기를 몸 중심에서 얼마나 옆으로 둘지. 바라보는 쪽에 놓인다.
+const WEAPON_OFFSET_X := 26.0
+## 무기 그림의 세로 중심. 몸 한가운데쯤이다.
+const WEAPON_CENTER_Y := -8.0
 ## 넉백 직후 좌우 입력이 속도를 덮어쓰지 못하는 시간.
 ##
 ## 서버가 매 프레임 velocity.x를 입력값으로 덮어쓰기 때문에, 이 잠금이 없으면
@@ -85,6 +91,10 @@ var _skill_held_since := -1.0
 var _body_base_scale := Vector2.ONE
 ## 그림 좌우 여백이 달라 생기는 치우침 보정. 뒤집으면 부호도 뒤집는다.
 var _body_offset_x := 0.0
+## 무기 그림의 여백 보정. 그림이 없는 무기면 쓰이지 않는다.
+var _weapon_offset := Vector2.ZERO
+## 이 무기에 그림이 있는가. 없으면 지금까지처럼 임시 막대로 그린다.
+var _weapon_has_art := false
 
 ## 클라이언트가 서버로부터 받은 표시용 상태
 var _target_position := Vector2.ZERO
@@ -95,6 +105,7 @@ var _skill_was_pressed := false
 
 func _ready() -> void:
 	_apply_character()
+	_apply_weapon()
 	$NameLabel.text = player_name
 	_target_position = global_position
 	# 투사체가 사거리 안의 젤리를 찾을 때 쓴다.
@@ -197,7 +208,7 @@ func _apply_character() -> void:
 	if texture == null:
 		return
 	var texture_size := Vector2(texture.get_size())
-	var content := Characters.content_rect(texture)
+	var content := Art.content_rect(texture)
 	if content.size.y <= 0.0:
 		return
 
@@ -222,14 +233,59 @@ func _update_squash(grounded: bool, delta: float) -> void:
 	$Body.scale = $Body.scale.lerp(_body_base_scale * target_scale, 12.0 * delta)
 
 
-## 무기는 임시 도형(막대)으로 그린다 — 그래픽이 나오면 교체한다.
-## 길이는 무기의 사거리, 방패의 크기 증가는 두께로 표현한다.
-## 특수 공격 쿨타임은 도형 색으로만 보여준다 (별도 UI 없음).
+## 무기 그림을 붙이고 크기를 맞춘다. 그림이 없는 무기면 막대 쪽을 쓴다.
+func _apply_weapon() -> void:
+	var sprite: Sprite2D = $WeaponSprite
+	var texture := Weapons.texture(weapon_id)
+	sprite.texture = texture
+	_weapon_has_art = texture != null
+	if texture == null:
+		return
+	var texture_size := Vector2(texture.get_size())
+	var content := Art.content_rect(texture)
+	if content.size.y <= 0.0:
+		_weapon_has_art = false
+		return
+	var factor := WEAPON_HEIGHT / content.size.y
+	sprite.scale = Vector2.ONE * factor
+	# 캐릭터와 마찬가지로 여백을 뺀 실제 그림의 가운데를 기준으로 놓는다.
+	_weapon_offset = Vector2(
+		(texture_size.x * 0.5 - content.position.x - content.size.x * 0.5) * factor,
+		(texture_size.y * 0.5 - content.position.y - content.size.y * 0.5) * factor,
+	)
+
+
+## 무기 표시. 그림이 있으면 그림을, 없으면 지금까지의 임시 막대를 쓴다.
+## 어느 쪽이든 특수 공격 쿨타임 상태를 밝기·색으로 보여준다 (별도 UI 없음).
 func _update_weapon_shape() -> void:
 	var shape: ColorRect = $WeaponShape
+	var sprite: Sprite2D = $WeaponSprite
 	if Weapons.get_weapon(weapon_id).is_empty():
 		shape.hide()
+		sprite.hide()
 		return
+
+	if _weapon_has_art:
+		shape.hide()
+		sprite.show()
+		# 뒤집으면 그림이 스프라이트 중심을 기준으로 반전되므로 여백 보정도 반대로 간다.
+		var flipped := facing < 0
+		sprite.flip_h = flipped
+		var offset_x := -_weapon_offset.x if flipped else _weapon_offset.x
+		sprite.position = Vector2(
+			facing * WEAPON_OFFSET_X + offset_x,
+			WEAPON_CENTER_Y + _weapon_offset.y,
+		)
+		if not can_act():
+			sprite.modulate = Color(0.45, 0.45, 0.5)   # 기절·사망·강제 이동
+		elif special_ready:
+			sprite.modulate = Color.WHITE              # 특수 공격 가능
+		else:
+			sprite.modulate = Color(0.7, 0.7, 0.75)    # 쿨타임 중
+		return
+
+	# 그림이 없는 무기 — 길이는 사거리, 두께는 크기 증가를 나타낸다.
+	sprite.hide()
 	shape.show()
 	var length := current_reach()
 	var thickness := 10.0 * _size_multiplier

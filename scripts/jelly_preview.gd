@@ -28,7 +28,7 @@ func _draw() -> void:
 	if _texture == null:
 		return
 	# 원화의 투명 여백까지 그리면 캐릭터가 작아 보이므로 실제 그림 부분만 쓴다.
-	var region := Characters.content_rect(_texture)
+	var region := Art.content_rect(_texture)
 	if region.size.x <= 0.0 or region.size.y <= 0.0:
 		return
 	# 패널 크기에 맞추되 가로세로 비율은 유지한다.

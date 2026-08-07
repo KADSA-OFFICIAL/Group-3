@@ -61,24 +61,6 @@ static func texture(name: String) -> Texture2D:
 	return _placeholder(character["color"])
 
 
-## 투명한 여백을 뺀 실제 그림 영역.
-##
-## 원화가 정사각 캔버스에 여백을 두고 그려져 있어서, 파일 크기를 그대로 쓰면
-## 전투 화면에서는 발이 뜨고 대기실에서는 캐릭터가 작게 보인다.
-## 픽셀을 읽을 수 없는 텍스처(VRAM 압축 등)면 파일 전체를 돌려준다.
-static func content_rect(texture: Texture2D) -> Rect2:
-	if texture == null:
-		return Rect2()
-	var full := Rect2(Vector2.ZERO, Vector2(texture.get_size()))
-	var image := texture.get_image()
-	if image == null or image.is_compressed():
-		return full
-	var used := Rect2(image.get_used_rect())
-	if used.size.x <= 0.0 or used.size.y <= 0.0:
-		return full
-	return used
-
-
 ## 그림이 없을 때 쓰는 단색 텍스처. 크기는 플레이어 충돌 상자와 같다.
 static func _placeholder(color: Color) -> ImageTexture:
 	var image := Image.create_empty(48, 56, false, Image.FORMAT_RGBA8)
