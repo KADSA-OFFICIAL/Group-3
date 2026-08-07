@@ -46,13 +46,54 @@ shape = SubResource("RectangleShape2D_wall")
 [node name="PlayerSpawner" type="MultiplayerSpawner" parent="."]
 spawn_path = NodePath("../Players")
 
+[node name="Projectiles" type="Node2D" parent="."]
+
+[node name="ProjectileSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../Projectiles")
+
+[node name="HUD" type="Control" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="P1Name" type="Label" parent="HUD"]
+offset_left = 16.0
+offset_top = 44.0
+offset_right = 216.0
+offset_bottom = 68.0
+theme_override_font_sizes/font_size = 16
+text = "1P"
+
+[node name="P1Bar" type="ProgressBar" parent="HUD"]
+offset_left = 16.0
+offset_top = 68.0
+offset_right = 316.0
+offset_bottom = 92.0
+value = 100.0
+
+[node name="P2Name" type="Label" parent="HUD"]
+offset_left = 836.0
+offset_top = 44.0
+offset_right = 1136.0
+offset_bottom = 68.0
+theme_override_font_sizes/font_size = 16
+text = "2P"
+horizontal_alignment = 2
+
+[node name="P2Bar" type="ProgressBar" parent="HUD"]
+offset_left = 836.0
+offset_top = 68.0
+offset_right = 1136.0
+offset_bottom = 92.0
+value = 100.0
+
 [node name="ControlsHint" type="Label" parent="."]
 offset_left = 16.0
 offset_top = 12.0
-offset_right = 600.0
+offset_right = 700.0
 offset_bottom = 40.0
 theme_override_font_sizes/font_size = 16
-text = "이동: A·D / ←·→   |   점프: W / ↑   |   빠른 낙하: S / ↓   |   ESC: 접속 종료"
+text = "이동: A·D / ←·→   |   점프: W / ↑   |   빠른 낙하: S / ↓   |   특수 공격: Shift / Space   |   ESC: 접속 종료"
 
 [node name="MapLabel" type="Label" parent="."]
 offset_left = 986.0

@@ -27,7 +27,7 @@ func _ready() -> void:
 
 func default_config(slot: int) -> Dictionary:
 	return {
-		"weapon": GameState.WEAPONS[0],
+		"weapon": Weapons.RANDOM,
 		"head": GameState.HEADS[0],
 		"color1": GameState.COLORS[slot % GameState.COLORS.size()],
 		"color2": GameState.COLORS[8],
@@ -117,13 +117,10 @@ func _sanitize(config: Dictionary, slot: int) -> Dictionary:
 
 
 ## "랜덤"을 실제 무기로 확정한다. 서버에서만 호출되므로 양쪽이 같은 값을 받는다.
-## 클라이언트가 각자 뽑으면 서로 다른 무기가 되므로 이 위치를 옮기지 말 것.
-## 무기 시스템 통합 가이드: docs/weapon-system.md
+## 클라이언트가 각자 뽑으면 서로 다른 무기가 되므로 이 호출을 클라이언트로 옮기지 말 것.
+## 뽑기 자체는 무기 표가 들고 있다 — 무기 시스템 통합 가이드: docs/weapon-system.md
 func _resolve_weapon(weapon: String) -> String:
-	if weapon != GameState.WEAPONS[0]:
-		return weapon
-	var pool: Array = GameState.WEAPONS.slice(1)
-	return pool[randi() % pool.size()]
+	return Weapons.resolve(weapon)
 
 
 func _check_start() -> void:
