@@ -15,9 +15,14 @@ extends RefCounted
 ## 실제 무기가 아닌 특수값. 서버가 실제 무기 하나로 확정한다 (resolve 참고).
 const RANDOM := "랜덤"
 
+## 무기 그림 폴더. `file` 필드가 있는 무기만 전투 화면에 그림이 나오고,
+## 없는 무기는 지금까지처럼 임시 막대로 그려진다.
+const ART_DIR := "res://assets/weapons/"
+
 const LIST: Array[Dictionary] = [
 	{
 		"name": "검",
+		"file": "sword.png",
 		"basic": "닿으면 일정 데미지",
 		"special": "일정 체력 비례 데미지 + 이펙트",
 		"basic_damage": 10.0, "basic_interval": 0.0, "basic_kind": "melee",
@@ -27,6 +32,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "단검",
+		"file": "dagger.png",
 		"basic": "드랍된 단검을 주우면 자동으로 상대 피격",
 		"special": "자동 재수집 (피격 가능)",
 		"basic_damage": 15.0, "basic_interval": 0.0, "basic_kind": "ranged",
@@ -44,6 +50,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "전기톱",
+		"file": "chainsaw.png",
 		"basic": "닿으면 일정 지속 데미지",
 		"special": "관통 돌진 후 일정 시간 출혈",
 		"basic_damage": 15.0, "basic_interval": 1.0, "basic_kind": "melee_dot",
@@ -52,6 +59,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "망치",
+		"file": "hammer.png",
 		"basic": "닿으면 일정 데미지",
 		"special": "닿으면 일정 시간 피격 시 기절 효과 부여",
 		"basic_damage": 14.0, "basic_interval": 0.0, "basic_kind": "melee",
@@ -60,6 +68,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "대포 총",
+		"file": "cannon.png",
 		"basic": "일정 시간 일정 데미지",
 		"special": "추가 데미지 + 넉백 미사일 발사",
 		"basic_damage": 6.0, "basic_interval": 0.5, "basic_kind": "ranged",
@@ -67,6 +76,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "폭탄",
+		"file": "bomb.png",
 		"basic": "",  # 문서에 "X" — 기본 공격 없음
 		"special": "피격하거나 일정 시간이 지나면 터지는 폭탄 투하 (일정 확률로 데미지·넉백 증가 폭탄 등장)",
 		"basic_damage": 0.0, "basic_interval": 0.0, "basic_kind": "",
@@ -75,6 +85,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "활",
+		"file": "bow.png",
 		"basic": "일정 시간 일정 데미지",
 		"special": "동시 다중 관통 화살 발사",
 		"basic_damage": 10.0, "basic_interval": 0.7, "basic_kind": "ranged",
@@ -181,6 +192,18 @@ static func has_basic_attack(weapon_name: String) -> bool:
 
 ## "랜덤" 을 실제 무기 이름으로 바꾼다.
 ## **서버에서만 호출한다** — 클라이언트가 각자 뽑으면 양쪽이 다른 무기를 갖는다.
+## 무기 그림. 그림이 없는 무기이거나 파일이 아직 없으면 null을 돌려준다 —
+## 부르는 쪽이 임시 막대로 대신 그린다.
+static func texture(weapon_name: String) -> Texture2D:
+	var file: String = get_weapon(weapon_name).get("file", "")
+	if file.is_empty():
+		return null
+	var path := ART_DIR + file
+	if not ResourceLoader.exists(path):
+		return null
+	return load(path)
+
+
 static func resolve(weapon_name: String) -> String:
 	if weapon_name == RANDOM:
 		return names().pick_random()
