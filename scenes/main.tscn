@@ -1,6 +1,5 @@
-[gd_scene load_steps=5 format=3 uid="uid://jellymain0001"]
+[gd_scene load_steps=4 format=3 uid="uid://jellymain0001"]
 
-[ext_resource type="PackedScene" uid="uid://jellyplayer01" path="res://scenes/player.tscn" id="1_playerscene"]
 [ext_resource type="Script" path="res://scripts/main.gd" id="2_mainscript"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_ground"]
@@ -42,31 +41,135 @@ position = Vector2(1172, 324)
 [node name="CollisionShape2D" type="CollisionShape2D" parent="WallRight"]
 shape = SubResource("RectangleShape2D_wall")
 
-[node name="Player1" parent="." instance=ExtResource("1_playerscene")]
-position = Vector2(300, 500)
-input_prefix = "p1"
-player_name = "1P"
-jelly_color = Color(1, 0.42, 0.55, 1)
+[node name="Players" type="Node2D" parent="."]
 
-[node name="Player2" parent="." instance=ExtResource("1_playerscene")]
-position = Vector2(852, 500)
-input_prefix = "p2"
-player_name = "2P"
-jelly_color = Color(0.36, 0.55, 1, 1)
+[node name="Projectiles" type="Node2D" parent="."]
+
+[node name="HUD" type="Control" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="P1Bar" type="ProgressBar" parent="HUD"]
+offset_left = 40.0
+offset_top = 48.0
+offset_right = 400.0
+offset_bottom = 82.0
+max_value = 100.0
+value = 100.0
+show_percentage = false
+
+[node name="P1Label" type="Label" parent="HUD"]
+offset_left = 40.0
+offset_top = 84.0
+offset_right = 200.0
+offset_bottom = 110.0
+theme_override_font_sizes/font_size = 18
+text = "1P"
+
+[node name="P2Bar" type="ProgressBar" parent="HUD"]
+offset_left = 752.0
+offset_top = 48.0
+offset_right = 1112.0
+offset_bottom = 82.0
+max_value = 100.0
+value = 100.0
+show_percentage = false
+
+[node name="P2Label" type="Label" parent="HUD"]
+offset_left = 952.0
+offset_top = 84.0
+offset_right = 1112.0
+offset_bottom = 110.0
+theme_override_font_sizes/font_size = 18
+text = "2P"
+horizontal_alignment = 2
+
+[node name="Score" type="Label" parent="HUD"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -120.0
+offset_top = 40.0
+offset_right = 120.0
+offset_bottom = 100.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.08, 0.14, 0.28, 1)
+theme_override_constants/outline_size = 8
+theme_override_font_sizes/font_size = 44
+text = "0  :  0"
+horizontal_alignment = 1
+
+[node name="WeaponPick" type="Control" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Dim" type="ColorRect" parent="WeaponPick"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.04, 0.07, 0.14, 0.82)
+
+[node name="Title" type="Label" parent="WeaponPick"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+offset_top = 40.0
+offset_right = 300.0
+offset_bottom = 100.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 44
+text = "무기 선택"
+horizontal_alignment = 1
+
+[node name="TimeLabel" type="Label" parent="WeaponPick"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+offset_top = 100.0
+offset_right = 300.0
+offset_bottom = 140.0
+theme_override_colors/font_color = Color(1, 0.85, 0.4, 1)
+theme_override_font_sizes/font_size = 26
+text = "10초"
+horizontal_alignment = 1
+
+[node name="Rows" type="VBoxContainer" parent="WeaponPick"]
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -540.0
+offset_top = -110.0
+offset_right = 540.0
+offset_bottom = 230.0
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="CenterLabel" type="Label" parent="HUD"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+offset_top = 240.0
+offset_right = 300.0
+offset_bottom = 320.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.08, 0.14, 0.28, 1)
+theme_override_constants/outline_size = 12
+theme_override_font_sizes/font_size = 56
+horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="ControlsHint" type="Label" parent="."]
 offset_left = 16.0
 offset_top = 12.0
-offset_right = 600.0
+offset_right = 700.0
 offset_bottom = 40.0
 theme_override_font_sizes/font_size = 16
-text = "1P: WASD (W 점프, S 빠른 낙하)   |   2P: 방향키 (↑ 점프, ↓ 빠른 낙하)   |   ESC: 선택 창"
+text = "이동: ← →   |   점프: ↑   |   빠른 낙하: ↓   |   스킬: Shift   |   ESC: 나가기"
 
 [node name="MapLabel" type="Label" parent="."]
-offset_left = 986.0
+offset_left = 906.0
 offset_top = 12.0
 offset_right = 1136.0
 offset_bottom = 40.0
 theme_override_font_sizes/font_size = 16
-text = "맵: 평지"
+text = "맵: 일반 평맵"
 horizontal_alignment = 2

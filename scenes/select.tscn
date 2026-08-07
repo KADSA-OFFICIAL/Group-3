@@ -47,6 +47,7 @@ offset_left = 16.0
 offset_top = 60.0
 offset_right = 436.0
 offset_bottom = 630.0
+slot = 1
 
 [node name="P2Panel" parent="." instance=ExtResource("2_panel")]
 offset_left = 716.0
@@ -54,7 +55,7 @@ offset_top = 60.0
 offset_right = 1136.0
 offset_bottom = 630.0
 mirrored = true
-default_color1 = 1
+slot = 2
 
 [node name="MapBox" type="Panel" parent="."]
 offset_left = 436.0
