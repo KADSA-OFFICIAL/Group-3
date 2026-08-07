@@ -72,10 +72,10 @@ horizontal_alignment = 1
 [node name="StartButton" type="Button" parent="."]
 anchor_left = 0.5
 anchor_right = 0.5
-offset_left = -140.0
-offset_top = 440.0
-offset_right = 140.0
-offset_bottom = 520.0
+offset_left = -160.0
+offset_top = 420.0
+offset_right = 160.0
+offset_bottom = 500.0
 theme_override_colors/font_color = Color(0.3, 0.18, 0, 1)
 theme_override_colors/font_hover_color = Color(0.3, 0.18, 0, 1)
 theme_override_colors/font_pressed_color = Color(0.3, 0.18, 0, 1)
@@ -83,4 +83,14 @@ theme_override_font_sizes/font_size = 38
 theme_override_styles/normal = SubResource("StyleBoxFlat_start")
 theme_override_styles/hover = SubResource("StyleBoxFlat_start_hover")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_start")
-text = "게임 시작"
+text = "온라인 대전"
+
+[node name="LocalButton" type="Button" parent="."]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -160.0
+offset_top = 514.0
+offset_right = 160.0
+offset_bottom = 566.0
+theme_override_font_sizes/font_size = 22
+text = "로컬 2인 (개발용)"

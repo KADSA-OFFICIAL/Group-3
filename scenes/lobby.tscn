@@ -1,0 +1,145 @@
+[gd_scene load_steps=3 format=3 uid="uid://jellylobby001"]
+
+[ext_resource type="Script" path="res://scripts/lobby.gd" id="1_lobby"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.16, 0.34, 0.54, 1)
+corner_radius_top_left = 16
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+corner_radius_bottom_left = 16
+
+[node name="Lobby" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_lobby")
+
+[node name="BG" type="ColorRect" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.11, 0.27, 0.45, 1)
+
+[node name="BackButton" type="Button" parent="."]
+offset_left = 16.0
+offset_top = 12.0
+offset_right = 100.0
+offset_bottom = 54.0
+theme_override_font_sizes/font_size = 20
+text = "뒤로"
+
+[node name="TitleLabel" type="Label" parent="."]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+offset_top = 60.0
+offset_right = 300.0
+offset_bottom = 120.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 46
+text = "온라인 대전"
+horizontal_alignment = 1
+
+[node name="Panel" type="Panel" parent="."]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -330.0
+offset_top = 150.0
+offset_right = 330.0
+offset_bottom = 560.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="VBox" type="VBoxContainer" parent="Panel"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 30.0
+offset_top = 26.0
+offset_right = -30.0
+offset_bottom = -26.0
+theme_override_constants/separation = 16
+
+[node name="AddressRow" type="HBoxContainer" parent="Panel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="AddressLabel" type="Label" parent="Panel/VBox/AddressRow"]
+custom_minimum_size = Vector2(130, 46)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.92, 1, 1)
+theme_override_font_sizes/font_size = 22
+text = "서버 주소"
+vertical_alignment = 1
+
+[node name="AddressEdit" type="LineEdit" parent="Panel/VBox/AddressRow"]
+custom_minimum_size = Vector2(0, 46)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 20
+placeholder_text = "127.0.0.1"
+
+[node name="PortEdit" type="LineEdit" parent="Panel/VBox/AddressRow"]
+custom_minimum_size = Vector2(120, 46)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+placeholder_text = "포트"
+
+[node name="ButtonRow" type="HBoxContainer" parent="Panel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="HostButton" type="Button" parent="Panel/VBox/ButtonRow"]
+custom_minimum_size = Vector2(0, 58)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "방 열기"
+
+[node name="JoinButton" type="Button" parent="Panel/VBox/ButtonRow"]
+custom_minimum_size = Vector2(0, 58)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 24
+text = "접속"
+
+[node name="Slots" type="HBoxContainer" parent="Panel/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Slot1" type="Label" parent="Panel/VBox/Slots"]
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "1P  비어 있음"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Slot2" type="Label" parent="Panel/VBox/Slots"]
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+text = "2P  비어 있음"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="StatusLabel" type="Label" parent="Panel/VBox"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.8, 0.88, 1, 1)
+theme_override_font_sizes/font_size = 19
+autowrap_mode = 2
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Hint" type="Label" parent="Panel/VBox"]
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.62, 0.73, 0.9, 1)
+theme_override_font_sizes/font_size = 17
+autowrap_mode = 2
+text = "두 명이 모두 접속하면 캐릭터 선택 창으로 자동으로 넘어갑니다."
+horizontal_alignment = 1
+vertical_alignment = 1

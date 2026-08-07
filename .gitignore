@@ -11,6 +11,7 @@ build/
 
 # 개인 로컬 설정 (컴퓨터마다 다름)
 .claude/settings.local.json
+server/.env
 
 # 시스템 파일
 Thumbs.db
