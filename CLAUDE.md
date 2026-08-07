@@ -23,11 +23,11 @@ title(서버 주소 입력 후 `StartButton`으로 접속) → select(대기실 
 - `scripts/lobby.gd` = 오토로드 싱글턴 `Lobby`: 대기실 상태를 **서버가 권위로** 보관한다. `order`(접속 순서, 먼저 들어온 쪽이 1P), `configs`(peer_id → weapon·head·color1·color2), `ready_flags`, `map_name`. 클라이언트는 `submit_config()`·`submit_ready()`로 자기 값만 보내고, 서버가 `_receive_lobby`로 전체를 복제한다. **무기 "랜덤" 확정과 시작 판정은 서버에서만** 실행되어 양쪽이 같은 값을 갖는다. 클라이언트가 보낸 값은 `_sanitize()`로 목록에 있는 값인지 검사한다. 시그널 `lobby_changed`·`match_starting`.
 - `scripts/game_state.gd` = 오토로드 싱글턴 `GameState`: 화면 간 선택 정보 전달. `CHARACTERS`(`Characters.names()` 5종 — 사본을 두지 않고 캐릭터 표에서 만든다), `WEAPONS`("랜덤" + `Weapons.names()` 17종 — 마찬가지), `MAPS`(랜덤·평지·냉장고·봉지 속·위 속), `p1_config`/`p2_config`(weapon·character), `map_name`, `get_config(prefix)`.
 - `scenes/title.tscn` + `scripts/title.gd` = 타이틀 겸 접속 화면. `AddressEdit`(기본 `127.0.0.1`)·`StartButton`("접속")·`StatusLabel`(접속 중/실패 표시). 접속 성공 시 main으로 전환한다. 좌우 `JellyLeft`/`JellyRight`는 미리보기 장식.
-- `scenes/select.tscn` + `scripts/select.gd` = 대기실 겸 무기 선택. `P1Panel`/`P2Panel`은 `Lobby.order` 슬롯에 대응하며 **자기 슬롯만 조작 가능**하고 상대 패널은 서버가 보낸 값을 표시만 한다. `StatusLabel`에 "상대 대기 중" 또는 양쪽 준비 상태, `GoButton`은 준비 토글. **씬 전환은 클라이언트가 스스로 하지 않고 `Lobby.match_starting`(서버 지시)을 받아서 한다.** 맵은 서버가 정하며 평지만 구현되어 있어 좌우 화살표는 비활성이다.
+- `scenes/select.tscn` + `scripts/select.gd` = 대기실 겸 무기 선택. `P1Panel`/`P2Panel`은 흰 카드(`Card`) 위에 얹히며 `Lobby.order` 슬롯에 대응하고 **자기 슬롯만 조작 가능**하고 상대 패널은 서버가 보낸 값을 표시만 한다. `StatusLabel`에 "상대 대기 중" 또는 양쪽 준비 상태, `GoButton`은 준비 토글. **씬 전환은 클라이언트가 스스로 하지 않고 `Lobby.match_starting`(서버 지시)을 받아서 한다.** 맵은 서버가 정하며 평지만 구현되어 있어 좌우 화살표는 비활성이다.
 - `scenes/player_panel.tscn` + `scripts/player_panel.gd` = 플레이어 1인 패널(양쪽 재사용). `mirrored`가 true면 아이콘 열을 오른쪽으로 옮긴다. 무기/캐릭터 버튼은 각각 목록을 순환하고, `RandomButton`은 전부 랜덤. 사용자 조작으로 값이 바뀌면 `config_changed`를 내보낸다. `set_interactive(false)`로 상대 패널을 잠그고, `apply_config()`로 서버가 보낸 값을 표시한다(이때는 시그널을 내보내지 않는다).
 - `scripts/jelly_preview.gd` = 젤리곰 미리보기. `character_id` setter가 `Characters.texture()`로 그림을 받아 `queue_redraw()`를 호출하고, `_draw()`가 비율을 지켜 가운데에 그린다.
 - `scripts/characters.gd`(`class_name Characters`) = **캐릭터 표 5종**(분홍·파랑·초록·노랑·빨강). 이름과 그림 경로의 유일한 출처이며 대기실 선택지·서버 검증·전투 화면 그림이 모두 여기서 나온다. 그림은 `assets/characters/`에 있고, 파일이 없으면 표의 몸통 색 단색으로 대신 그린다. 여백 측정은 `Art.content_rect()`가 한다.
-- `scenes/main.tscn` + `scripts/main.gd` = 전투 화면이자 **공격 판정의 주인**. `Ground`/`WallLeft`/`WallRight`(StaticBody2D + CollisionShape2D + ColorRect) 지형, `MapLabel`에 `Lobby.map_name` 표시, `HUD`에 양쪽 체력 막대, ESC로 접속 종료.
+- `scenes/main.tscn` + `scripts/main.gd` = 전투 화면이자 **공격 판정의 주인**. `Ground`/`WallLeft`/`WallRight`(StaticBody2D + CollisionShape2D + ColorRect) 지형, `MapLabel`에 `Lobby.map_name` 표시, `HUD`에 양쪽 체력 막대(흰 카드 위, 1P 핑크·2P 라벤더), ESC로 접속 종료.
   - **플레이어는 씬에 배치되어 있지 않고 서버가 런타임에 스폰한다** — `PlayerSpawner`(MultiplayerSpawner, `spawn_path = ../Players`)와 `Players` 노드가 담당. 클라이언트는 씬 준비 후 `_notify_ready()`를 서버로 RPC하고, 서버가 그때 `spawn()`한다(접속 직후 스폰하면 클라이언트가 씬 로드 전이라 놓칠 수 있다). 노드 이름은 `Player_<peer_id>`.
   - 투사체도 같은 방식이다 — `ProjectileSpawner`(`spawn_path = ../Projectiles`). 서버에서 `queue_free()`하면 클라이언트에서도 같이 사라진다.
   - `_physics_process()`가 `multiplayer.is_server()` 하나로 전투 틱 전체를 감싼다: `_check_basic_attacks()`(근접 접촉·원거리 자동 발사) → `_check_pending_specials()`(강제 이동 중 명중) → `_tick_bleeds()`(출혈) → `_tick_bursts()`(소총 연사). 특수 공격은 `Player.special_requested` 신호를 받아 `_execute_special()`에서 무기별로 분기한다.
@@ -45,7 +45,9 @@ title(서버 주소 입력 후 `StartButton`으로 접속) → select(대기실 
 - `scripts/combat.gd`(`class_name Combat`) = 전투 공통 수치. MAX_HP 100, INVULNERABLE_TIME 0.1, MELEE_HIT_INTERVAL 0.3, ROUND_START_GRACE 2.0, 넉백 3단계(200/400/700), PROJECTILE_SPEED 1120.
 - `scenes/projectile.tscn` + `scripts/projectile.gd`(Area2D, `class_name Projectile`) = 허공을 나는 것(화살·총알·표창·던진 단검·폭탄). 이동·판정은 서버만 하고 위치는 `MultiplayerSynchronizer`로 복제된다. 상대 무기에 막히지 않고 공유 무적도 타지 않는다.
 - `docs/weapon-system.md` = 무기 추가·수정 방법과 지켜야 할 계약. `docs/무기_수치_초안.md` = 수치가 정해진 근거와 미확정 항목.
-- `resources/korean_font.tres` = 한글 폰트 리소스.
+- `resources/korean_font.tres` = 한글 폰트 리소스 (SystemFont).
+- `resources/ui_theme.tres` = **UI 공통 테마**. `project.godot`의 `gui/theme/custom`으로 프로젝트 전체에 걸려 있어 버튼·라벨·패널·입력칸·진행바의 기본 모양이 여기서 나온다. **색을 바꾸려면 여기를 고친다** — 씬마다 `theme_override`를 넣지 말 것. 젤리 톤 팔레트: 크림 배경 `(0.99, 0.95, 0.92)`, 진한 글자 `(0.29, 0.23, 0.32)`, 보조 글자 `(0.55, 0.48, 0.58)`, 젤리 핑크 `(0.96, 0.55, 0.78)`, 라벤더 `(0.56, 0.59, 0.91)`. 흰 카드 + 큰 둥근 모서리(버튼 18·패널 28) + 부드러운 그림자가 기본형이다.
+  - 예외적으로 씬에 남긴 `theme_override`는 **화면마다 하나뿐인 주 동작 버튼**(타이틀 `StartButton`·대기실 `GoButton`은 핑크, `RandomButton`은 라벤더)과 글자 크기·색 같은 개별 값이다. 새 버튼은 기본 흰 카드 모양을 그대로 쓰는 것이 원칙이다.
 
 ### 조작 (project.godot `[input]`)
 

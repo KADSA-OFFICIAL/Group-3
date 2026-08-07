@@ -1,6 +1,14 @@
-[gd_scene load_steps=4 format=3 uid="uid://jellymain0001"]
+[gd_scene load_steps=5 format=3 uid="uid://jellymain0001"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="2_mainscript"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar_fill_p2"]
+bg_color = Color(0.56, 0.59, 0.91, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+corner_detail = 10
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_ground"]
 size = Vector2(1152, 96)
@@ -14,7 +22,7 @@ script = ExtResource("2_mainscript")
 [node name="Background" type="ColorRect" parent="."]
 offset_right = 1152.0
 offset_bottom = 648.0
-color = Color(0.53, 0.81, 0.92, 1)
+color = Color(0.82, 0.93, 0.99, 1)
 
 [node name="Ground" type="StaticBody2D" parent="."]
 position = Vector2(576, 600)
@@ -24,7 +32,7 @@ offset_left = -576.0
 offset_top = -48.0
 offset_right = 576.0
 offset_bottom = 48.0
-color = Color(0.36, 0.66, 0.32, 1)
+color = Color(0.6, 0.85, 0.63, 1)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Ground"]
 shape = SubResource("RectangleShape2D_ground")
@@ -56,6 +64,18 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 
+[node name="P1Card" type="Panel" parent="HUD"]
+offset_left = 8.0
+offset_top = 40.0
+offset_right = 328.0
+offset_bottom = 100.0
+
+[node name="P2Card" type="Panel" parent="HUD"]
+offset_left = 824.0
+offset_top = 40.0
+offset_right = 1144.0
+offset_bottom = 100.0
+
 [node name="P1Name" type="Label" parent="HUD"]
 offset_left = 16.0
 offset_top = 44.0
@@ -85,6 +105,7 @@ offset_left = 836.0
 offset_top = 68.0
 offset_right = 1136.0
 offset_bottom = 92.0
+theme_override_styles/fill = SubResource("StyleBoxFlat_bar_fill_p2")
 value = 100.0
 
 [node name="ControlsHint" type="Label" parent="."]
