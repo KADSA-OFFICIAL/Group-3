@@ -104,7 +104,6 @@ if multiplayer.get_remote_sender_id() != owner_peer_id:
   (`main.gd`의 `_on_player_died()`가 그 자리입니다)
 - 낙사 판정 — `Combat.is_out_of_bounds()`는 있지만 플레이어에는 아직 안 쓰입니다
   (현재 유일한 맵인 평지는 좌우 벽이 있어 낙사가 없습니다)
-- 머리 장식의 전투 반영
 
 ## 이전 구현 (참고용)
 

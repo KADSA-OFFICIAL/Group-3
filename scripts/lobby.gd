@@ -13,7 +13,7 @@ const DEFAULT_MAP := "평지"
 
 ## 접속 순서. 먼저 들어온 peer가 1P(슬롯 0)다.
 var order: Array = []
-## peer_id -> {"weapon": String, "head": String, "character": String}
+## peer_id -> {"weapon": String, "character": String}
 var configs: Dictionary = {}
 ## peer_id -> bool
 var ready_flags: Dictionary = {}
@@ -28,7 +28,6 @@ func _ready() -> void:
 func default_config(slot: int) -> Dictionary:
 	return {
 		"weapon": Weapons.RANDOM,
-		"head": GameState.HEADS[0],
 		"character": Characters.id_at(slot),
 	}
 
@@ -106,11 +105,9 @@ func _receive_ready(flag: bool) -> void:
 func _sanitize(config: Dictionary, slot: int) -> Dictionary:
 	var base := default_config(slot)
 	var weapon: String = config.get("weapon", base["weapon"])
-	var head: String = config.get("head", base["head"])
 	var character: String = config.get("character", base["character"])
 	return {
 		"weapon": weapon if GameState.WEAPONS.has(weapon) else base["weapon"],
-		"head": head if GameState.HEADS.has(head) else base["head"],
 		"character": character if Characters.has(character) else base["character"],
 	}
 
