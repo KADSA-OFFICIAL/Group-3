@@ -15,9 +15,14 @@ extends RefCounted
 ## 실제 무기가 아닌 특수값. 서버가 실제 무기 하나로 확정한다 (resolve 참고).
 const RANDOM := "랜덤"
 
+## 무기 그림 폴더. `file` 필드가 있는 무기만 전투 화면에 그림이 나오고,
+## 없는 무기는 지금까지처럼 임시 막대로 그려진다.
+const ART_DIR := "res://assets/weapons/"
+
 const LIST: Array[Dictionary] = [
 	{
 		"name": "검",
+		"file": "sword.png",
 		"basic": "닿으면 일정 데미지",
 		"special": "일정 체력 비례 데미지 + 이펙트",
 		"basic_damage": 10.0, "basic_interval": 0.0, "basic_kind": "melee",
@@ -27,6 +32,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "단검",
+		"file": "dagger.png",
 		"basic": "드랍된 단검을 주우면 자동으로 상대 피격",
 		"special": "자동 재수집 (피격 가능)",
 		"basic_damage": 15.0, "basic_interval": 0.0, "basic_kind": "ranged",
@@ -38,12 +44,14 @@ const LIST: Array[Dictionary] = [
 		"name": "광선검",
 		"basic": "닿으면 일정 지속 데미지",
 		"special": "일정 시간 관통 능력 부여",
-		"basic_damage": 12.0, "basic_interval": 1.0, "basic_kind": "melee_dot",
+		# 특수가 능력 부여라 기본 지속 데미지만으로 싸운다 — 12 → 20 (#55).
+		"basic_damage": 20.0, "basic_interval": 1.0, "basic_kind": "melee_dot",
 		"special_damage": 0.0, "special_cooldown": 8.0, "knockback": 0,
 		"special_duration": 3.0,
 	},
 	{
 		"name": "전기톱",
+		"file": "chainsaw.png",
 		"basic": "닿으면 일정 지속 데미지",
 		"special": "관통 돌진 후 일정 시간 출혈",
 		"basic_damage": 15.0, "basic_interval": 1.0, "basic_kind": "melee_dot",
@@ -52,6 +60,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "망치",
+		"file": "hammer.png",
 		"basic": "닿으면 일정 데미지",
 		"special": "닿으면 일정 시간 피격 시 기절 효과 부여",
 		"basic_damage": 14.0, "basic_interval": 0.0, "basic_kind": "melee",
@@ -60,21 +69,26 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "대포 총",
+		"file": "cannon.png",
 		"basic": "일정 시간 일정 데미지",
 		"special": "추가 데미지 + 넉백 미사일 발사",
-		"basic_damage": 6.0, "basic_interval": 0.5, "basic_kind": "ranged",
+		# 6 → 7 (#55). 원거리 계열 중 가장 낮아서 조금 올렸다.
+		"basic_damage": 7.0, "basic_interval": 0.5, "basic_kind": "ranged",
 		"special_damage": 25.0, "special_cooldown": 6.0, "knockback": 2,
 	},
 	{
 		"name": "폭탄",
+		"file": "bomb.png",
 		"basic": "",  # 문서에 "X" — 기본 공격 없음
 		"special": "피격하거나 일정 시간이 지나면 터지는 폭탄 투하 (일정 확률로 데미지·넉백 증가 폭탄 등장)",
 		"basic_damage": 0.0, "basic_interval": 0.0, "basic_kind": "",
-		"special_damage": 22.0, "special_cooldown": 5.0, "knockback": 1,
-		"empowered_chance": 0.20, "empowered_damage": 35.0, "empowered_knockback": 2,
+		# 기본 공격이 없어 특수 하나로 싸운다 — 22 → 32, 쿨타임 5 → 3.5 (#55).
+		"special_damage": 32.0, "special_cooldown": 3.5, "knockback": 1,
+		"empowered_chance": 0.20, "empowered_damage": 48.0, "empowered_knockback": 2,
 	},
 	{
 		"name": "활",
+		"file": "bow.png",
 		"basic": "일정 시간 일정 데미지",
 		"special": "동시 다중 관통 화살 발사",
 		"basic_damage": 10.0, "basic_interval": 0.7, "basic_kind": "ranged",
@@ -125,14 +139,16 @@ const LIST: Array[Dictionary] = [
 		"basic": "",  # 문서에 "X" — 기본 공격 없음
 		"special": "샷건 발사 (+장전 쿨타임)",
 		"basic_damage": 0.0, "basic_interval": 0.0, "basic_kind": "",
-		"special_damage": 30.0, "special_cooldown": 4.0, "knockback": 1,
-		"falloff_min_damage": 10.0,  # 거리에 따라 30 → 10 으로 감소
+		# 기본 공격이 없어 특수 하나로 싸운다 — 30 → 34, 쿨타임 4 → 3 (#55).
+		"special_damage": 34.0, "special_cooldown": 3.0, "knockback": 1,
+		"falloff_min_damage": 14.0,  # 거리에 따라 34 → 14 로 감소
 	},
 	{
 		"name": "장대",
 		"basic": "닿으면 일정 데미지",
 		"special": "봉 길이 증가",
-		"basic_damage": 8.0, "basic_interval": 0.0, "basic_kind": "melee",
+		# 특수가 사거리 증가뿐이라 기본 데미지로만 싸운다 — 8 → 10 (#55).
+		"basic_damage": 10.0, "basic_interval": 0.0, "basic_kind": "melee",
 		"special_damage": 0.0, "special_cooldown": 10.0, "knockback": 0,
 		"reach_multiplier": 1.6, "special_duration": 5.0,
 	},
@@ -181,6 +197,18 @@ static func has_basic_attack(weapon_name: String) -> bool:
 
 ## "랜덤" 을 실제 무기 이름으로 바꾼다.
 ## **서버에서만 호출한다** — 클라이언트가 각자 뽑으면 양쪽이 다른 무기를 갖는다.
+## 무기 그림. 그림이 없는 무기이거나 파일이 아직 없으면 null을 돌려준다 —
+## 부르는 쪽이 임시 막대로 대신 그린다.
+static func texture(weapon_name: String) -> Texture2D:
+	var file: String = get_weapon(weapon_name).get("file", "")
+	if file.is_empty():
+		return null
+	var path := ART_DIR + file
+	if not ResourceLoader.exists(path):
+		return null
+	return load(path)
+
+
 static func resolve(weapon_name: String) -> String:
 	if weapon_name == RANDOM:
 		return names().pick_random()

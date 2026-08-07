@@ -71,7 +71,7 @@ func _add_player(peer_id: int) -> void:
 		"peer_id": peer_id,
 		"index": index,
 		"weapon_id": config["weapon"],
-		"color": config["color1"],
+		"character": config["character"],
 	}) as Player
 	if player == null:
 		return
@@ -90,7 +90,7 @@ func _spawn_player(data: Dictionary) -> Node:
 	player.owner_peer_id = peer_id
 	player.player_name = "%dP" % (index + 1)
 	player.weapon_id = data["weapon_id"]
-	player.jelly_color = data["color"]
+	player.character_id = data["character"]
 	player.position = SPAWN_POSITIONS[index % SPAWN_POSITIONS.size()]
 	# 서로 마주 보게 둔다. 2P는 왼쪽을 본다.
 	player.facing = -1 if index % 2 == 1 else 1

@@ -54,7 +54,7 @@ offset_top = 60.0
 offset_right = 1136.0
 offset_bottom = 630.0
 mirrored = true
-default_color1 = 1
+default_character = 1
 
 [node name="MapBox" type="Panel" parent="."]
 offset_left = 436.0
