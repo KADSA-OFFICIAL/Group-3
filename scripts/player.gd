@@ -20,7 +20,8 @@ signal special_requested(peer_id: int, long_press: bool)
 ## 이 플레이어를 조작하는 클라이언트의 peer id. 스폰할 때 서버가 정한다.
 @export var owner_peer_id := 0
 @export var player_name: String = "1P"
-@export var jelly_color: Color = Color(1.0, 0.42, 0.55)
+## 대기실에서 고른 캐릭터 이름 (예: "분홍"). 그림은 Characters 표에서 꺼낸다.
+@export var character_id: String = ""
 ## 대기실에서 서버가 확정한 무기 이름 (예: "광선검", "망치").
 ## 수치는 Weapons.get_weapon()으로 꺼내 쓴다 — 통합 가이드: docs/weapon-system.md
 @export var weapon_id: String = ""
@@ -37,6 +38,10 @@ const LONG_PRESS_TIME := 0.3
 const FORCED_SPEED := absf(JUMP_VELOCITY) * 2.0
 ## 무기 도형의 기본 길이. 여기에 무기별 배율이 곱해진다.
 const BASE_REACH := 24.0
+## 캐릭터를 화면에 그릴 높이(px). 그림의 투명 여백은 빼고 실제로 보이는 부분의 높이다.
+const BODY_HEIGHT := 72.0
+## 발이 닿는 높이 — 충돌 상자(48x56)의 아래쪽 모서리.
+const BODY_BOTTOM := 28.0
 ## 넉백 직후 좌우 입력이 속도를 덮어쓰지 못하는 시간.
 ##
 ## 서버가 매 프레임 velocity.x를 입력값으로 덮어쓰기 때문에, 이 잠금이 없으면
@@ -76,6 +81,11 @@ var _jump_queued := false
 ## 서버가 재는 Shift 누른 시각. 음수면 안 누르고 있다.
 var _skill_held_since := -1.0
 
+## 그림을 BODY_HEIGHT에 맞추는 배율. 찌그러짐은 여기에 곱해진다.
+var _body_base_scale := Vector2.ONE
+## 그림 좌우 여백이 달라 생기는 치우침 보정. 뒤집으면 부호도 뒤집는다.
+var _body_offset_x := 0.0
+
 ## 클라이언트가 서버로부터 받은 표시용 상태
 var _target_position := Vector2.ZERO
 var _remote_on_floor := false
@@ -84,7 +94,7 @@ var _skill_was_pressed := false
 
 
 func _ready() -> void:
-	$Body.color = jelly_color
+	_apply_character()
 	$NameLabel.text = player_name
 	_target_position = global_position
 	# 투사체가 사거리 안의 젤리를 찾을 때 쓴다.
@@ -174,14 +184,42 @@ func _apply_forced(delta: float) -> void:
 				server_end_forced()
 
 
+## 캐릭터 그림을 붙이고 크기·위치를 맞춘다.
+##
+## 원화는 정사각 캔버스에 투명 여백을 두고 그려져 있어서 파일 크기를 그대로 쓰면
+## 발이 땅에서 뜬다. 그래서 여백을 뺀 실제 그림 영역을 재서 그 아래쪽을 발밑에 맞춘다.
+func _apply_character() -> void:
+	if not Characters.has(character_id):
+		character_id = Characters.default_id()
+	var sprite: Sprite2D = $Body
+	var texture := Characters.texture(character_id)
+	sprite.texture = texture
+	if texture == null:
+		return
+	var texture_size := Vector2(texture.get_size())
+	var content := Characters.content_rect(texture)
+	if content.size.y <= 0.0:
+		return
+
+	var factor := BODY_HEIGHT / content.size.y
+	_body_base_scale = Vector2.ONE * factor
+	sprite.scale = _body_base_scale
+	# 스프라이트는 자기 위치를 중심으로 그려진다 — 여백만큼 밀어서 그림의 좌우 가운데가
+	# 몸 중심에, 아래쪽이 충돌 상자 바닥에 오게 한다.
+	_body_offset_x = (texture_size.x * 0.5 - content.position.x - content.size.x * 0.5) * factor
+	var offset_y := (texture_size.y * 0.5 - content.position.y - content.size.y) * factor
+	sprite.position = Vector2(_body_offset_x, BODY_BOTTOM + offset_y)
+
+
 ## 젤리 찌그러짐 연출. 서버·클라이언트 모두 복제된 속도·접지값으로 계산한다.
+## 그림마다 원본 크기가 달라 찌그러짐은 기본 배율에 곱해서 쓴다.
 func _update_squash(grounded: bool, delta: float) -> void:
 	var target_scale := Vector2.ONE
 	if not grounded:
 		target_scale = Vector2(0.9, 1.1)
 	elif absf(velocity.x) > 1.0:
 		target_scale = Vector2(1.1, 0.9)
-	$Body.scale = $Body.scale.lerp(target_scale, 12.0 * delta)
+	$Body.scale = $Body.scale.lerp(_body_base_scale * target_scale, 12.0 * delta)
 
 
 ## 무기는 임시 도형(막대)으로 그린다 — 그래픽이 나오면 교체한다.
@@ -231,6 +269,11 @@ func _physics_process(delta: float) -> void:
 
 	_expire_buffs()
 	_update_weapon_shape()
+	# 바라보는 방향으로 그림을 뒤집는다. facing은 서버가 정해 양쪽에 복제된다.
+	# 뒤집으면 그림이 스프라이트 중심을 기준으로 반전되므로 여백 보정도 반대로 간다.
+	var flipped := facing < 0
+	$Body.flip_h = flipped
+	$Body.position.x = -_body_offset_x if flipped else _body_offset_x
 
 
 ## 자기 입력을 서버로 보낸다.
