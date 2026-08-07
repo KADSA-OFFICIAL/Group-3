@@ -44,7 +44,8 @@ const LIST: Array[Dictionary] = [
 		"name": "광선검",
 		"basic": "닿으면 일정 지속 데미지",
 		"special": "일정 시간 관통 능력 부여",
-		"basic_damage": 12.0, "basic_interval": 1.0, "basic_kind": "melee_dot",
+		# 특수가 능력 부여라 기본 지속 데미지만으로 싸운다 — 12 → 20 (#55).
+		"basic_damage": 20.0, "basic_interval": 1.0, "basic_kind": "melee_dot",
 		"special_damage": 0.0, "special_cooldown": 8.0, "knockback": 0,
 		"special_duration": 3.0,
 	},
@@ -71,7 +72,8 @@ const LIST: Array[Dictionary] = [
 		"file": "cannon.png",
 		"basic": "일정 시간 일정 데미지",
 		"special": "추가 데미지 + 넉백 미사일 발사",
-		"basic_damage": 6.0, "basic_interval": 0.5, "basic_kind": "ranged",
+		# 6 → 7 (#55). 원거리 계열 중 가장 낮아서 조금 올렸다.
+		"basic_damage": 7.0, "basic_interval": 0.5, "basic_kind": "ranged",
 		"special_damage": 25.0, "special_cooldown": 6.0, "knockback": 2,
 	},
 	{
@@ -80,8 +82,9 @@ const LIST: Array[Dictionary] = [
 		"basic": "",  # 문서에 "X" — 기본 공격 없음
 		"special": "피격하거나 일정 시간이 지나면 터지는 폭탄 투하 (일정 확률로 데미지·넉백 증가 폭탄 등장)",
 		"basic_damage": 0.0, "basic_interval": 0.0, "basic_kind": "",
-		"special_damage": 22.0, "special_cooldown": 5.0, "knockback": 1,
-		"empowered_chance": 0.20, "empowered_damage": 35.0, "empowered_knockback": 2,
+		# 기본 공격이 없어 특수 하나로 싸운다 — 22 → 32, 쿨타임 5 → 3.5 (#55).
+		"special_damage": 32.0, "special_cooldown": 3.5, "knockback": 1,
+		"empowered_chance": 0.20, "empowered_damage": 48.0, "empowered_knockback": 2,
 	},
 	{
 		"name": "활",
@@ -136,14 +139,16 @@ const LIST: Array[Dictionary] = [
 		"basic": "",  # 문서에 "X" — 기본 공격 없음
 		"special": "샷건 발사 (+장전 쿨타임)",
 		"basic_damage": 0.0, "basic_interval": 0.0, "basic_kind": "",
-		"special_damage": 30.0, "special_cooldown": 4.0, "knockback": 1,
-		"falloff_min_damage": 10.0,  # 거리에 따라 30 → 10 으로 감소
+		# 기본 공격이 없어 특수 하나로 싸운다 — 30 → 34, 쿨타임 4 → 3 (#55).
+		"special_damage": 34.0, "special_cooldown": 3.0, "knockback": 1,
+		"falloff_min_damage": 14.0,  # 거리에 따라 34 → 14 로 감소
 	},
 	{
 		"name": "장대",
 		"basic": "닿으면 일정 데미지",
 		"special": "봉 길이 증가",
-		"basic_damage": 8.0, "basic_interval": 0.0, "basic_kind": "melee",
+		# 특수가 사거리 증가뿐이라 기본 데미지로만 싸운다 — 8 → 10 (#55).
+		"basic_damage": 10.0, "basic_interval": 0.0, "basic_kind": "melee",
 		"special_damage": 0.0, "special_cooldown": 10.0, "knockback": 0,
 		"reach_multiplier": 1.6, "special_duration": 5.0,
 	},
