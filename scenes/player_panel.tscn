@@ -29,17 +29,11 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 18
 text = "머리"
 
-[node name="Color1Button" type="Button" parent="HBox/IconColumn"]
+[node name="CharacterButton" type="Button" parent="HBox/IconColumn"]
 custom_minimum_size = Vector2(0, 62)
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
-text = "색상 1"
-
-[node name="Color2Button" type="Button" parent="HBox/IconColumn"]
-custom_minimum_size = Vector2(0, 62)
-layout_mode = 2
-theme_override_font_sizes/font_size = 18
-text = "색상 2"
+text = "캐릭터"
 
 [node name="Center" type="VBoxContainer" parent="HBox"]
 layout_mode = 2

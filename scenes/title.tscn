@@ -33,7 +33,7 @@ offset_top = 220.0
 offset_right = 300.0
 offset_bottom = 480.0
 script = ExtResource("2_preview")
-body_color = Color(0.25, 0.95, 0.95, 1)
+character_id = "분홍"
 
 [node name="JellyRight" type="Control" parent="."]
 offset_left = 852.0
@@ -41,7 +41,7 @@ offset_top = 220.0
 offset_right = 1042.0
 offset_bottom = 480.0
 script = ExtResource("2_preview")
-body_color = Color(1, 0.9, 0.2, 1)
+character_id = "파랑"
 
 [node name="TitleLabel" type="Label" parent="."]
 anchor_left = 0.5
