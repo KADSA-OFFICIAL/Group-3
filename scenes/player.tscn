@@ -19,6 +19,11 @@ color = Color(1, 0.42, 0.55, 1)
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("RectangleShape2D_body")
 
+[node name="WeaponShape" type="ColorRect" parent="."]
+offset_right = 24.0
+offset_bottom = 10.0
+color = Color(0.9, 0.9, 0.95, 1)
+
 [node name="NameLabel" type="Label" parent="."]
 offset_left = -24.0
 offset_top = -58.0

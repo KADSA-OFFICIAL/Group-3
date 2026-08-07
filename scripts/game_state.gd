@@ -14,17 +14,26 @@ const COLORS: Array[Color] = [
 	Color(0.95, 0.95, 0.95), # 흰색
 ]
 
-## 선택 가능한 무기 목록의 **유일한 출처**. 선택 UI·검증·전송이 모두 이 배열을 따른다.
+## 선택 가능한 무기 목록. 선택 UI·검증·전송이 모두 이 배열을 따른다.
 ## 0번 "랜덤"은 실제 무기가 아닌 특수값이며 서버가 실제 무기로 확정한다.
-## 무기를 추가·변경하려면 여기만 고치면 된다 — 통합 가이드: docs/weapon-system.md
-const WEAPONS := ["랜덤", "광선검", "망치", "총", "활", "의자", "우산", "방패"]
+##
+## 실제 무기 표는 `scripts/weapons.gd`에 있고 여기서는 앞에 "랜덤"만 붙인다 —
+## **무기를 추가·변경하려면 `Weapons.LIST`를 고친다.** 통합 가이드: docs/weapon-system.md
+var WEAPONS: Array[String] = _selectable_weapons()
 const HEADS := ["없음", "중절모", "왕관", "헬멧"]
 const MAPS := ["랜덤", "평지", "냉장고", "봉지 속", "위 속"]
 
-var p1_config := {"weapon": "랜덤", "head": "없음", "color1": COLORS[0], "color2": COLORS[8]}
-var p2_config := {"weapon": "랜덤", "head": "없음", "color1": COLORS[1], "color2": COLORS[8]}
+var p1_config := {"weapon": Weapons.RANDOM, "head": "없음", "color1": COLORS[0], "color2": COLORS[8]}
+var p2_config := {"weapon": Weapons.RANDOM, "head": "없음", "color1": COLORS[1], "color2": COLORS[8]}
 var map_name := "평지"
 
 
 func get_config(prefix: String) -> Dictionary:
 	return p1_config if prefix == "p1" else p2_config
+
+
+## "랜덤" + 무기 표 전체. 사본을 따로 두지 않기 위해 Weapons에서 만들어 쓴다.
+static func _selectable_weapons() -> Array[String]:
+	var out: Array[String] = [Weapons.RANDOM]
+	out.append_array(Weapons.names())
+	return out
