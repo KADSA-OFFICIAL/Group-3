@@ -34,6 +34,7 @@ offset_right = 300.0
 offset_bottom = 480.0
 script = ExtResource("2_preview")
 character_id = "분홍"
+fill_ratio = 0.85
 
 [node name="JellyRight" type="Control" parent="."]
 offset_left = 852.0
@@ -42,6 +43,7 @@ offset_right = 1042.0
 offset_bottom = 480.0
 script = ExtResource("2_preview")
 character_id = "파랑"
+fill_ratio = 0.85
 
 [node name="TitleLabel" type="Label" parent="."]
 anchor_left = 0.5

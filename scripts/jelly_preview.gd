@@ -9,6 +9,12 @@ extends Control
 		_texture = Characters.texture(value)
 		queue_redraw()
 
+## 미리보기 칸을 채우는 비율. 1.0이면 칸에 꽉 차서 너무 커 보인다.
+@export_range(0.1, 1.0, 0.05) var fill_ratio := 0.65:
+	set(value):
+		fill_ratio = value
+		queue_redraw()
+
 var _texture: Texture2D = null
 
 
@@ -26,6 +32,6 @@ func _draw() -> void:
 	if region.size.x <= 0.0 or region.size.y <= 0.0:
 		return
 	# 패널 크기에 맞추되 가로세로 비율은 유지한다.
-	var fit := minf(size.x / region.size.x, size.y / region.size.y)
+	var fit := minf(size.x / region.size.x, size.y / region.size.y) * fill_ratio
 	var draw_size := region.size * fit
 	draw_texture_rect_region(_texture, Rect2((size - draw_size) * 0.5, draw_size), region)
