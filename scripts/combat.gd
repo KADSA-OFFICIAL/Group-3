@@ -25,6 +25,13 @@ const ROUND_START_GRACE := 2.0
 ## 3점 선취 승리 (계획서).
 const POINTS_TO_WIN := 3
 
+## 한쪽이 죽고 다음 라운드가 시작되기까지의 대기 시간.
+## 죽은 순간 바로 재배치되면 무슨 일이 있었는지 보이지 않는다.
+const ROUND_RESTART_DELAY := 2.0
+
+## 3점에 도달해 승리가 표시된 뒤 대기실로 돌아가기까지의 시간.
+const MATCH_END_DELAY := 4.0
+
 enum Knockback { WEAK, MEDIUM, STRONG }
 
 ## 넉백 세기(px/s). 플레이어 이동 속도 320 기준.
@@ -47,7 +54,7 @@ const PARALLEL_SPACING := 18.0
 
 ## 낙사 경계 — 화면(1152×648) 밖으로 이만큼 벗어나면 낙사.
 ## "일반 평맵" 은 좌우 벽이 있어서 낙사가 일어나지 않는다.
-## 낙사 공중다리·위 속 같은 맵에서 쓴다.
+## 좌우 벽이 없는 맵(용암 등)에서 쓴다. 물·용암에 닿는 즉사는 맵의 Hazard가 따로 판정한다.
 const FALL_MARGIN_BOTTOM := 200.0
 const FALL_MARGIN_SIDE := 150.0
 

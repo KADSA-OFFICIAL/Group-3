@@ -6,10 +6,12 @@ extends Node2D
 ## 플레이어의 체력·상태이상은 Player의 server_* 함수로 전달한다.
 ## 통합 가이드: docs/weapon-system.md
 ##
-## 점수·라운드 진행(3점 선취)은 아직 없다 — 로드맵 #32의 5단계다.
+## 라운드 진행(점수·3점 선취)도 여기가 주인이다. 판정은 전부 서버에서 하고
+## 결과만 `_receive_round`로 복제한다 — 클라이언트는 점수를 세지 않는다.
 
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
 const PROJECTILE_SCENE := preload("res://scenes/projectile.tscn")
+## 맵에 Spawns가 없을 때만 쓰는 대비값. 정상 경로에서는 맵 씬이 위치를 들고 있다.
 const SPAWN_POSITIONS := [Vector2(300, 500), Vector2(852, 500)]
 
 ## 근접 "닿으면" 판정 거리. 젤리 몸통이 48px이므로 두 몸통이 맞닿는 거리다.
@@ -30,7 +32,24 @@ var _bursts := {}
 ## 단검을 손에 들고 있는가. 발사하면 false, 주우면 다시 true.
 var _dagger_held := {}
 var _next_projectile_id := 1
+## 다음 라운드를 시작할 시각. 0이면 예약 없음 (진행 중이거나 경기가 끝났다).
+var _round_restart_at := 0.0
+## 경기가 끝났으면 더 이상 라운드를 시작하지 않는다.
+var _match_over := false
+## 대기실로 돌려보낼 시각. 0이면 예약 없음.
+var _return_at := 0.0
 
+## 아래 둘은 서버가 정하고 모든 피어에 복제된다 — HUD가 읽는다.
+## peer_id -> 점수
+var scores := {}
+## 화면 가운데 안내. ""이면 아무것도 표시하지 않는다.
+var banner := ""
+
+## 현재 깔린 맵 지형과 그 즉사 구역 (물·용암). 없는 맵이면 _hazard가 null이다.
+var _map: Node2D = null
+var _hazard: Area2D = null
+
+@onready var map_root: Node2D = $MapRoot
 @onready var players_root: Node2D = $Players
 @onready var projectiles_root: Node2D = $Projectiles
 @onready var player_spawner: MultiplayerSpawner = $PlayerSpawner
@@ -39,9 +58,15 @@ var _next_projectile_id := 1
 
 func _ready() -> void:
 	$MapLabel.text = "맵: " + Lobby.map_name
+	# 지형은 모든 피어에서 똑같이 깔려야 한다 — 스폰보다 먼저 붙인다.
+	# 서버가 대기실에서 "랜덤"을 확정해 두므로 양쪽이 같은 맵을 받는다.
+	_load_map(Lobby.map_name)
 	# 스폰 함수는 모든 피어에서 등록되어야 한다 — 서버 판정보다 먼저 설정한다.
 	player_spawner.spawn_function = _spawn_player
 	projectile_spawner.spawn_function = _spawn_projectile
+
+	# 경기가 끝나면 서버 지시로 대기실에 돌아간다 (서버 자신은 이 씬에 머문다).
+	Lobby.match_ended.connect(_on_match_ended)
 
 	if multiplayer.is_server():
 		Network.peer_left.connect(_on_peer_left)
@@ -79,6 +104,9 @@ func _add_player(peer_id: int) -> void:
 	player.special_requested.connect(_on_special_requested)
 	player.died.connect(_on_player_died)
 	_dagger_held[peer_id] = true
+	if not scores.has(peer_id):
+		scores[peer_id] = 0
+	_broadcast_round(banner)
 
 
 ## 모든 피어에서 호출되어 플레이어 노드를 만든다. 반환한 노드는 spawn_path 아래에 붙는다.
@@ -91,9 +119,8 @@ func _spawn_player(data: Dictionary) -> Node:
 	player.player_name = "%dP" % (index + 1)
 	player.weapon_id = data["weapon_id"]
 	player.character_id = data["character"]
-	player.position = SPAWN_POSITIONS[index % SPAWN_POSITIONS.size()]
-	# 서로 마주 보게 둔다. 2P는 왼쪽을 본다.
-	player.facing = -1 if index % 2 == 1 else 1
+	player.position = _spawn_position(index)
+	player.facing = _spawn_facing(index)
 	return player
 
 
@@ -110,9 +137,139 @@ func _on_peer_left(peer_id: int) -> void:
 	_next_hit_at.clear()
 
 
-func _on_player_died(_peer_id: int) -> void:
-	# 점수·라운드 재시작은 5단계에서 여기에 붙인다.
-	pass
+# ─────────────────────────── 라운드 진행 (서버 판정) ───────────────────────────
+
+## 죽은 쪽의 상대가 1점을 얻는다. 3점이면 경기가 끝나고, 아니면 다음 라운드를 예약한다.
+func _on_player_died(peer_id: int) -> void:
+	if not multiplayer.is_server() or _match_over:
+		return
+	# 이미 이번 라운드의 승패가 갈렸다 — 대기 중에 남은 쪽이 또 떨어져도 점수를 주지 않는다.
+	if _round_restart_at > 0.0:
+		return
+	var winner := _opponent_of(peer_id)
+	if winner != null:
+		var id := winner.owner_peer_id
+		scores[id] = int(scores.get(id, 0)) + 1
+
+	if winner != null and int(scores[winner.owner_peer_id]) >= Combat.POINTS_TO_WIN:
+		_match_over = true
+		_return_at = _now() + Combat.MATCH_END_DELAY
+		_broadcast_round("%s 승리!" % winner.player_name)
+		return
+
+	_round_restart_at = _now() + Combat.ROUND_RESTART_DELAY
+	_broadcast_round("다음 라운드...")
+
+
+## 양쪽을 되살리고 판을 깨끗이 만든다. 여기서 안 지운 값은 다음 라운드로 새어 나간다.
+func _start_round() -> void:
+	_round_restart_at = 0.0
+
+	for projectile in projectiles_root.get_children():
+		projectile.queue_free()
+
+	_next_hit_at.clear()
+	_special_ready_at.clear()
+	_special_pending.clear()
+	_bleeds.clear()
+	_bursts.clear()
+
+	for player: Player in players_root.get_children():
+		var index := maxi(Lobby.slot_of(player.owner_peer_id), 0)
+		player.server_reset(_spawn_position(index), _spawn_facing(index))
+		_dagger_held[player.owner_peer_id] = true
+
+	_broadcast_round("")
+
+
+## 낙사 — 화면 밖으로 나가거나 즉사 구역(물·용암)에 닿으면 죽는다.
+## 좌우 벽이 있고 즉사 구역이 없는 맵(평지·벽돌)에서는 일어나지 않는다.
+func _check_falls() -> void:
+	if _match_over:
+		return
+	var screen := Vector2(get_viewport_rect().size)
+	var drowning := _hazard.get_overlapping_bodies() if _hazard != null else []
+	for player: Player in players_root.get_children():
+		if not player.alive:
+			continue
+		if Combat.is_out_of_bounds(player.global_position, screen) or drowning.has(player):
+			player.server_kill()
+
+
+## 예약된 라운드 재시작·대기실 복귀를 처리한다.
+func _tick_round() -> void:
+	var now := _now()
+	if _round_restart_at > 0.0 and now >= _round_restart_at:
+		_start_round()
+	if _return_at > 0.0 and now >= _return_at:
+		_return_at = 0.0
+		Lobby.server_end_match()
+		_server_reset_match()
+
+
+## 전용 서버는 씬을 벗어나지 않으므로 다음 경기를 위해 직접 판을 비운다.
+## 이걸 안 하면 다음 경기에서 점수가 이어지고 플레이어가 다시 스폰되지 않는다.
+func _server_reset_match() -> void:
+	for player in players_root.get_children():
+		player.queue_free()
+	for projectile in projectiles_root.get_children():
+		projectile.queue_free()
+	scores.clear()
+	banner = ""
+	_match_over = false
+	_round_restart_at = 0.0
+	_next_hit_at.clear()
+	_special_ready_at.clear()
+	_special_pending.clear()
+	_bleeds.clear()
+	_bursts.clear()
+	_dagger_held.clear()
+
+
+## 점수와 안내 문구를 양쪽에 복제한다.
+func _broadcast_round(new_banner: String) -> void:
+	_receive_round.rpc(scores, new_banner)
+
+
+@rpc("authority", "call_local", "reliable")
+func _receive_round(new_scores: Dictionary, new_banner: String) -> void:
+	scores = new_scores
+	banner = new_banner
+	_update_hud()
+
+
+# ─────────────────────────── 맵 ───────────────────────────
+
+## 맵 지형을 MapRoot 아래에 붙인다. 모든 피어에서 호출된다.
+func _load_map(map_name: String) -> void:
+	for child in map_root.get_children():
+		child.queue_free()
+	_map = null
+	var scene := Maps.scene(map_name)
+	if scene == null:
+		push_error("맵 씬을 찾지 못했습니다: %s" % map_name)
+		return
+	_map = scene.instantiate() as Node2D
+	map_root.add_child(_map)
+	_hazard = _map.get_node_or_null("Hazard") as Area2D
+
+
+## 맵이 들고 있는 스폰 지점. 맵에 없으면 대비값을 쓴다.
+func _spawn_position(index: int) -> Vector2:
+	if _map != null:
+		var marker := _map.get_node_or_null("Spawns/Spawn%d" % (index + 1)) as Marker2D
+		if marker != null:
+			return marker.global_position
+	return SPAWN_POSITIONS[index % SPAWN_POSITIONS.size()]
+
+
+## 서로 마주 보게 둔다. 2P는 왼쪽을 본다.
+func _spawn_facing(index: int) -> int:
+	return -1 if index % 2 == 1 else 1
+
+
+func _on_match_ended() -> void:
+	get_tree().change_scene_to_file("res://scenes/select.tscn")
 
 
 func get_player(peer_id: int) -> Player:
@@ -141,6 +298,8 @@ func _physics_process(_delta: float) -> void:
 	_check_pending_specials()
 	_tick_bleeds()
 	_tick_bursts()
+	_check_falls()
+	_tick_round()
 
 
 ## 쿨타임 상태를 무기 도형 색에 쓰도록 내려준다.
@@ -536,14 +695,18 @@ func _process(_delta: float) -> void:
 	_update_hud()
 
 
-## 체력 표시. 대기실 접속 순서(Lobby.order)가 1P·2P를 정한다.
+## 체력·점수 표시. 대기실 접속 순서(Lobby.order)가 1P·2P를 정한다.
 func _update_hud() -> void:
 	for slot in 2:
 		var bar := $HUD.get_node("P%dBar" % (slot + 1)) as ProgressBar
 		var label := $HUD.get_node("P%dName" % (slot + 1)) as Label
+		var score_label := $HUD.get_node("P%dScore" % (slot + 1)) as Label
 		var player: Player = null
+		var peer_id := 0
 		if slot < Lobby.order.size():
-			player = get_player(Lobby.order[slot])
+			peer_id = Lobby.order[slot]
+			player = get_player(peer_id)
+		score_label.text = _score_text(int(scores.get(peer_id, 0)))
 		if player == null:
 			bar.value = 0.0
 			label.text = "%dP —" % (slot + 1)
@@ -551,6 +714,16 @@ func _update_hud() -> void:
 		bar.max_value = Combat.MAX_HP
 		bar.value = player.hp
 		label.text = "%dP  %s" % [slot + 1, player.weapon_id]
+
+	var banner_label := $HUD.get_node("Banner") as Label
+	banner_label.text = banner
+	banner_label.visible = banner != ""
+
+
+## 딴 점수는 채운 동그라미, 남은 점수는 빈 동그라미로 보여준다 (3점 선취).
+func _score_text(score: int) -> String:
+	var filled := clampi(score, 0, Combat.POINTS_TO_WIN)
+	return "●".repeat(filled) + "○".repeat(Combat.POINTS_TO_WIN - filled)
 
 
 func _unhandled_input(event: InputEvent) -> void:
