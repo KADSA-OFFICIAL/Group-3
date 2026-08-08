@@ -1,28 +1,51 @@
-[gd_scene load_steps=6 format=3 uid="uid://jellyselect01"]
+[gd_scene load_steps=7 format=3 uid="uid://jellyselect01"]
 
 [ext_resource type="Script" path="res://scripts/select.gd" id="1_select"]
 [ext_resource type="PackedScene" uid="uid://jellypanel001" path="res://scenes/player_panel.tscn" id="2_panel"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_go"]
-bg_color = Color(1, 0.78, 0.15, 1)
-corner_radius_top_left = 14
-corner_radius_top_right = 14
-corner_radius_bottom_right = 14
-corner_radius_bottom_left = 14
+bg_color = Color(0.96, 0.55, 0.78, 1)
+border_width_bottom = 6
+border_color = Color(0.85, 0.42, 0.68, 1)
+corner_radius_top_left = 22
+corner_radius_top_right = 22
+corner_radius_bottom_right = 22
+corner_radius_bottom_left = 22
+corner_detail = 14
+shadow_color = Color(0.85, 0.42, 0.68, 0.3)
+shadow_size = 10
+shadow_offset = Vector2(0, 5)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_go_hover"]
-bg_color = Color(1, 0.87, 0.35, 1)
-corner_radius_top_left = 14
-corner_radius_top_right = 14
-corner_radius_bottom_right = 14
-corner_radius_bottom_left = 14
+bg_color = Color(1, 0.66, 0.85, 1)
+border_width_bottom = 6
+border_color = Color(0.85, 0.42, 0.68, 1)
+corner_radius_top_left = 22
+corner_radius_top_right = 22
+corner_radius_bottom_right = 22
+corner_radius_bottom_left = 22
+corner_detail = 14
+shadow_color = Color(0.85, 0.42, 0.68, 0.35)
+shadow_size = 12
+shadow_offset = Vector2(0, 6)
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_mapbox"]
-bg_color = Color(1, 1, 1, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_go_pressed"]
+bg_color = Color(0.89, 0.48, 0.72, 1)
+border_width_top = 4
+border_color = Color(0.85, 0.42, 0.68, 1)
+corner_radius_top_left = 22
+corner_radius_top_right = 22
+corner_radius_bottom_right = 22
+corner_radius_bottom_left = 22
+corner_detail = 14
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_screen"]
+bg_color = Color(0.27, 0.22, 0.32, 1)
+corner_radius_top_left = 18
+corner_radius_top_right = 18
+corner_radius_bottom_right = 18
+corner_radius_bottom_left = 18
+corner_detail = 12
 
 [node name="Select" type="Control"]
 anchor_right = 1.0
@@ -32,7 +55,7 @@ script = ExtResource("1_select")
 [node name="BG" type="ColorRect" parent="."]
 anchor_right = 1.0
 anchor_bottom = 1.0
-color = Color(0.11, 0.27, 0.45, 1)
+color = Color(0.99, 0.95, 0.92, 1)
 
 [node name="HomeButton" type="Button" parent="."]
 offset_left = 16.0
@@ -61,16 +84,15 @@ offset_left = 436.0
 offset_top = 50.0
 offset_right = 716.0
 offset_bottom = 270.0
-theme_override_styles/panel = SubResource("StyleBoxFlat_mapbox")
 
-[node name="ScreenRect" type="ColorRect" parent="MapBox"]
+[node name="ScreenRect" type="Panel" parent="MapBox"]
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 12.0
-offset_top = 12.0
-offset_right = -12.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
 offset_bottom = -56.0
-color = Color(0.05, 0.05, 0.05, 1)
+theme_override_styles/panel = SubResource("StyleBoxFlat_screen")
 
 [node name="QLabel" type="Label" parent="MapBox/ScreenRect"]
 anchor_right = 1.0
@@ -89,7 +111,7 @@ offset_left = 12.0
 offset_top = -48.0
 offset_right = -12.0
 offset_bottom = -8.0
-theme_override_colors/font_color = Color(0.1, 0.12, 0.2, 1)
+theme_override_colors/font_color = Color(0.29, 0.23, 0.32, 1)
 theme_override_font_sizes/font_size = 26
 text = "랜덤"
 horizontal_alignment = 1
@@ -116,7 +138,7 @@ offset_left = 356.0
 offset_top = 492.0
 offset_right = 796.0
 offset_bottom = 526.0
-theme_override_colors/font_color = Color(1, 0.9, 0.6, 1)
+theme_override_colors/font_color = Color(0.55, 0.48, 0.58, 1)
 theme_override_font_sizes/font_size = 20
 text = "상대 대기 중..."
 horizontal_alignment = 1
@@ -126,11 +148,11 @@ offset_left = 456.0
 offset_top = 540.0
 offset_right = 696.0
 offset_bottom = 616.0
-theme_override_colors/font_color = Color(0.3, 0.18, 0, 1)
-theme_override_colors/font_hover_color = Color(0.3, 0.18, 0, 1)
-theme_override_colors/font_pressed_color = Color(0.3, 0.18, 0, 1)
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(1, 0.93, 0.97, 1)
 theme_override_font_sizes/font_size = 42
 theme_override_styles/normal = SubResource("StyleBoxFlat_go")
 theme_override_styles/hover = SubResource("StyleBoxFlat_go_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_go")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_go_pressed")
 text = "GO!"
