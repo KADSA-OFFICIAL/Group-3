@@ -89,8 +89,9 @@ var _skill_held_since := -1.0
 
 ## 그림을 BODY_HEIGHT에 맞추는 배율. 찌그러짐은 여기에 곱해진다.
 var _body_base_scale := Vector2.ONE
-## 그림 좌우 여백이 달라 생기는 치우침 보정. 뒤집으면 부호도 뒤집는다.
-var _body_offset_x := 0.0
+## 배율 1일 때의 여백 보정(원본 픽셀 단위). 실제 보정은 그때그때 배율을 곱해서 쓴다 —
+## 찌그러짐으로 배율이 흔들려도 발밑과 좌우 중심이 그대로 있어야 하기 때문이다.
+var _body_offset_unit := Vector2.ZERO
 ## 무기 그림의 여백 보정. 그림이 없는 무기면 쓰이지 않는다.
 var _weapon_offset := Vector2.ZERO
 ## 이 무기에 그림이 있는가. 없으면 지금까지처럼 임시 막대로 그린다.
@@ -217,9 +218,25 @@ func _apply_character() -> void:
 	sprite.scale = _body_base_scale
 	# 스프라이트는 자기 위치를 중심으로 그려진다 — 여백만큼 밀어서 그림의 좌우 가운데가
 	# 몸 중심에, 아래쪽이 충돌 상자 바닥에 오게 한다.
-	_body_offset_x = (texture_size.x * 0.5 - content.position.x - content.size.x * 0.5) * factor
-	var offset_y := (texture_size.y * 0.5 - content.position.y - content.size.y) * factor
-	sprite.position = Vector2(_body_offset_x, BODY_BOTTOM + offset_y)
+	# 배율을 곱하기 전 값으로 들고 있다가 _place_body()가 그때의 배율로 환산한다.
+	_body_offset_unit = Vector2(
+		texture_size.x * 0.5 - content.position.x - content.size.x * 0.5,
+		texture_size.y * 0.5 - content.position.y - content.size.y)
+	_place_body()
+
+
+## 지금 배율에 맞춰 그림 위치를 잡는다. 발밑이 항상 충돌 상자 바닥에 오게 하는 곳이다.
+##
+## Sprite2D 는 자기 위치를 **중심으로** 확대·축소한다. 그래서 찌그러짐으로 세로 배율이
+## 커지면 머리와 발이 같이 벌어져 발이 바닥을 뚫고, 작아지면 발이 뜬다 (이슈 #85).
+## 배율이 바뀔 때마다 여백 보정을 다시 환산해서 기준점을 발밑으로 되돌린다.
+func _place_body() -> void:
+	var sprite: Sprite2D = $Body
+	var offset := _body_offset_unit * sprite.scale
+	# 뒤집으면 그림이 스프라이트 중심을 기준으로 반전되므로 좌우 보정도 반대로 간다.
+	if sprite.flip_h:
+		offset.x = -offset.x
+	sprite.position = Vector2(offset.x, BODY_BOTTOM + offset.y)
 
 
 ## 젤리 찌그러짐 연출. 서버·클라이언트 모두 복제된 속도·접지값으로 계산한다.
@@ -231,6 +248,8 @@ func _update_squash(grounded: bool, delta: float) -> void:
 	elif absf(velocity.x) > 1.0:
 		target_scale = Vector2(1.1, 0.9)
 	$Body.scale = $Body.scale.lerp(_body_base_scale * target_scale, 12.0 * delta)
+	# 배율이 바뀌었으니 발밑이 바닥에 남아 있도록 위치를 다시 잡는다.
+	_place_body()
 
 
 ## 무기 그림을 붙이고 크기를 맞춘다. 그림이 없는 무기면 막대 쪽을 쓴다.
@@ -326,10 +345,9 @@ func _physics_process(delta: float) -> void:
 	_expire_buffs()
 	_update_weapon_shape()
 	# 바라보는 방향으로 그림을 뒤집는다. facing은 서버가 정해 양쪽에 복제된다.
-	# 뒤집으면 그림이 스프라이트 중심을 기준으로 반전되므로 여백 보정도 반대로 간다.
-	var flipped := facing < 0
-	$Body.flip_h = flipped
-	$Body.position.x = -_body_offset_x if flipped else _body_offset_x
+	# 여백 보정의 부호는 _place_body()가 flip_h를 보고 맞춘다.
+	$Body.flip_h = facing < 0
+	_place_body()
 
 
 ## 자기 입력을 서버로 보낸다.

@@ -6,7 +6,7 @@ extends Node2D
 ## 플레이어의 체력·상태이상은 Player의 server_* 함수로 전달한다.
 ## 통합 가이드: docs/weapon-system.md
 ##
-## 라운드 진행(점수·3점 선취)도 여기가 주인이다. 판정은 전부 서버에서 하고
+## 포인트 진행(쓰러뜨리면 1포인트·3포인트 선취)도 여기가 주인이다. 판정은 전부 서버에서 하고
 ## 결과만 `_receive_round`로 복제한다 — 클라이언트는 점수를 세지 않는다.
 
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
@@ -49,11 +49,27 @@ var banner := ""
 var _map: Node2D = null
 var _hazard: Area2D = null
 
+## 결과 화면(승리·패배 연출)에서 도는 트윈. 화면을 접을 때 전부 끊는다.
+var _result_tweens: Array[Tween] = []
+## 연출로 옮기기 전의 제자리. 첫 재생 때 한 번만 재고 그 뒤로는 여기로 되돌린다.
+var _jelly_home := Vector2.ZERO
+var _label_home := Vector2.ZERO
+var _homes_measured := false
+
+## 승리·패배 글자 색 (ui_theme.tres 팔레트).
+const WIN_COLOR := Color(0.96, 0.55, 0.78)
+const LOSE_COLOR := Color(0.72, 0.70, 0.80)
+
 @onready var map_root: Node2D = $MapRoot
 @onready var players_root: Node2D = $Players
 @onready var projectiles_root: Node2D = $Projectiles
 @onready var player_spawner: MultiplayerSpawner = $PlayerSpawner
 @onready var projectile_spawner: MultiplayerSpawner = $ProjectileSpawner
+@onready var result_overlay: Control = $UI/HUD/ResultOverlay
+## jelly_preview.gd는 class_name이 없어 타입을 붙이지 않는다 (player_panel.gd와 같은 방식).
+@onready var result_jelly = $UI/HUD/ResultOverlay/Jelly
+@onready var result_label: Label = $UI/HUD/ResultOverlay/ResultLabel
+@onready var result_score: Label = $UI/HUD/ResultOverlay/ScoreLabel
 
 
 func _ready() -> void:
@@ -139,31 +155,39 @@ func _on_peer_left(peer_id: int) -> void:
 
 # ─────────────────────────── 라운드 진행 (서버 판정) ───────────────────────────
 
-## 죽은 쪽의 상대가 1점을 얻는다. 3점이면 경기가 끝나고, 아니면 다음 라운드를 예약한다.
+## 죽은 쪽의 상대가 1포인트를 얻는다. 3포인트면 경기가 끝나고, 아니면 다음 판을 예약한다.
+## 화면에는 "누가 이겼다"가 아니라 "누가 1포인트를 얻었다"로 보여준다.
 func _on_player_died(peer_id: int) -> void:
 	if not multiplayer.is_server() or _match_over:
 		return
-	# 이미 이번 라운드의 승패가 갈렸다 — 대기 중에 남은 쪽이 또 떨어져도 점수를 주지 않는다.
+	# 이미 이번 판의 포인트가 나갔다 — 대기 중에 남은 쪽이 또 떨어져도 점수를 주지 않는다.
 	if _round_restart_at > 0.0:
 		return
-	var winner := _opponent_of(peer_id)
-	if winner != null:
-		var id := winner.owner_peer_id
-		scores[id] = int(scores.get(id, 0)) + 1
+	var scorer := _opponent_of(peer_id)
+	if scorer == null:
+		_round_restart_at = _now() + Combat.ROUND_RESTART_DELAY
+		_broadcast_round("")
+		return
 
-	if winner != null and int(scores[winner.owner_peer_id]) >= Combat.POINTS_TO_WIN:
+	var id := scorer.owner_peer_id
+	scores[id] = int(scores.get(id, 0)) + 1
+
+	if int(scores[id]) >= Combat.POINTS_TO_WIN:
 		_match_over = true
 		_return_at = _now() + Combat.MATCH_END_DELAY
-		_broadcast_round("%s 승리!" % winner.player_name)
+		_broadcast_round("%s 승리!  %d포인트 달성" % [scorer.player_name, Combat.POINTS_TO_WIN])
+		# 점수를 먼저 보내고 결과를 알린다 — 결과 화면이 최종 점수를 읽는다.
+		_receive_match_result.rpc(id)
 		return
 
 	_round_restart_at = _now() + Combat.ROUND_RESTART_DELAY
-	_broadcast_round("다음 라운드...")
+	_broadcast_round("%s +1 포인트" % scorer.player_name)
 
 
 ## 양쪽을 되살리고 판을 깨끗이 만든다. 여기서 안 지운 값은 다음 라운드로 새어 나간다.
 func _start_round() -> void:
 	_round_restart_at = 0.0
+	_hide_result()
 
 	for projectile in projectiles_root.get_children():
 		projectile.queue_free()
@@ -220,6 +244,7 @@ func _server_reset_match() -> void:
 		projectile.queue_free()
 	scores.clear()
 	banner = ""
+	_hide_result()
 	_match_over = false
 	_round_restart_at = 0.0
 	_next_hit_at.clear()
@@ -240,6 +265,151 @@ func _receive_round(new_scores: Dictionary, new_banner: String) -> void:
 	scores = new_scores
 	banner = new_banner
 	_update_hud()
+
+
+# ─────────────────────────── 결과 화면 (승리·패배 연출) ───────────────────────────
+## 연출은 피어마다 **자기 기준**으로 만든다 — 같은 신호를 받고도 이긴 쪽은 승리,
+## 진 쪽은 패배 화면을 본다. 판정은 서버가 하고 여기서는 보여주기만 한다.
+
+## 경기 결과를 모든 피어에 알린다. 승자 peer만 넘기면 각자 자기 화면을 만들 수 있다.
+@rpc("authority", "call_local", "reliable")
+func _receive_match_result(winner_peer: int) -> void:
+	var me := multiplayer.get_unique_id()
+	var my_player := get_player(me)
+	if my_player == null:
+		return   # 전용 서버처럼 자기 플레이어가 없는 피어는 보여줄 것이 없다
+	_play_result(winner_peer == me, my_player.character_id)
+
+
+func _play_result(is_winner: bool, character_id: String) -> void:
+	_kill_result_tweens()
+	result_jelly.character_id = character_id
+	result_score.text = _final_score_text()
+	_reset_result_visuals()
+
+	result_overlay.visible = true
+	result_overlay.modulate.a = 0.0
+	var fade := create_tween()
+	fade.tween_property(result_overlay, "modulate:a", 1.0, 0.25)
+	_result_tweens.append(fade)
+
+	# 점수는 결과 글자가 자리를 잡은 뒤에 뒤따라 나온다.
+	var score_in := create_tween()
+	score_in.tween_interval(0.5)
+	score_in.tween_property(result_score, "modulate:a", 1.0, 0.3)
+	_result_tweens.append(score_in)
+
+	if is_winner:
+		_play_win()
+	else:
+		_play_lose()
+
+
+## 승리 — 젤리가 계속 통통 튀고 글자가 팝업으로 튀어나온다.
+func _play_win() -> void:
+	result_label.text = "승리!"
+	result_label.add_theme_color_override("font_color", WIN_COLOR)
+	result_label.scale = Vector2(0.2, 0.2)
+
+	# 발밑(pivot)을 축으로 늘었다 눌렸다 하며 뛴다.
+	var hop := create_tween().set_loops()
+	hop.tween_property(result_jelly, "position:y", _jelly_home.y - 46.0, 0.34) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	hop.parallel().tween_property(result_jelly, "scale", Vector2(0.92, 1.12), 0.34)
+	hop.tween_property(result_jelly, "position:y", _jelly_home.y, 0.26) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	hop.parallel().tween_property(result_jelly, "scale", Vector2(1.18, 0.82), 0.26)
+	hop.tween_property(result_jelly, "scale", Vector2.ONE, 0.2) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_result_tweens.append(hop)
+
+	var pop := create_tween()
+	pop.tween_property(result_label, "scale", Vector2(1.15, 1.15), 0.45) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	pop.tween_property(result_label, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_SINE)
+	# 팝업이 끝난 뒤부터 숨 쉬듯 맥동한다. 팝업을 반복하면 계속 튀어 산만하다.
+	pop.tween_callback(_start_win_pulse)
+	_result_tweens.append(pop)
+
+
+func _start_win_pulse() -> void:
+	var pulse := create_tween().set_loops()
+	pulse.tween_property(result_label, "scale", Vector2(1.06, 1.06), 0.5).set_trans(Tween.TRANS_SINE)
+	pulse.tween_property(result_label, "scale", Vector2.ONE, 0.5).set_trans(Tween.TRANS_SINE)
+	_result_tweens.append(pulse)
+
+
+## 패배 — 젤리가 색이 빠지며 기울어 주저앉고 글자가 위에서 천천히 내려온다.
+func _play_lose() -> void:
+	result_label.text = "패배..."
+	result_label.add_theme_color_override("font_color", LOSE_COLOR)
+	result_label.modulate.a = 0.0
+	result_label.position.y = _label_home.y - 60.0
+
+	var droop := create_tween()
+	droop.tween_property(result_jelly, "modulate", Color(0.62, 0.58, 0.66), 0.8)
+	droop.parallel().tween_property(result_jelly, "rotation", deg_to_rad(14.0), 0.9) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	droop.parallel().tween_property(result_jelly, "scale", Vector2(1.08, 0.86), 0.9) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	droop.parallel().tween_property(result_jelly, "position:y", _jelly_home.y + 26.0, 0.9) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	droop.tween_callback(_start_lose_sway)
+	_result_tweens.append(droop)
+
+	var drop := create_tween()
+	drop.tween_interval(0.25)
+	drop.tween_property(result_label, "modulate:a", 1.0, 0.5)
+	drop.parallel().tween_property(result_label, "position:y", _label_home.y, 0.6) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_result_tweens.append(drop)
+
+
+func _start_lose_sway() -> void:
+	var sway := create_tween().set_loops()
+	sway.tween_property(result_jelly, "rotation", deg_to_rad(17.0), 1.1).set_trans(Tween.TRANS_SINE)
+	sway.tween_property(result_jelly, "rotation", deg_to_rad(11.0), 1.1).set_trans(Tween.TRANS_SINE)
+	_result_tweens.append(sway)
+
+
+## 연출로 건드리는 값을 전부 제자리로 돌린다. 제자리는 첫 재생 때 한 번만 잰다 —
+## 그 뒤에 재면 이전 연출이 옮겨 놓은 위치를 제자리로 착각한다.
+func _reset_result_visuals() -> void:
+	if not _homes_measured:
+		_jelly_home = result_jelly.position
+		_label_home = result_label.position
+		_homes_measured = true
+	result_jelly.position = _jelly_home
+	result_jelly.scale = Vector2.ONE
+	result_jelly.rotation = 0.0
+	result_jelly.modulate = Color.WHITE
+	result_label.position = _label_home
+	result_label.scale = Vector2.ONE
+	result_label.modulate = Color.WHITE
+	result_score.modulate.a = 0.0
+
+
+func _hide_result() -> void:
+	_kill_result_tweens()
+	result_overlay.visible = false
+
+
+func _kill_result_tweens() -> void:
+	for tween in _result_tweens:
+		if tween.is_valid():
+			tween.kill()
+	_result_tweens.clear()
+
+
+## 결과 화면 아래에 적는 최종 점수. 대기실 순서대로 1P : 2P.
+func _final_score_text() -> String:
+	var out: Array[String] = []
+	for slot in 2:
+		var peer_id := 0
+		if slot < Lobby.order.size():
+			peer_id = Lobby.order[slot]
+		out.append(str(int(scores.get(peer_id, 0))))
+	return "%s  :  %s" % out
 
 
 # ─────────────────────────── 맵 ───────────────────────────
@@ -702,9 +872,9 @@ func _process(_delta: float) -> void:
 ## 체력·점수 표시. 대기실 접속 순서(Lobby.order)가 1P·2P를 정한다.
 func _update_hud() -> void:
 	for slot in 2:
-		var bar := $HUD.get_node("P%dBar" % (slot + 1)) as ProgressBar
-		var label := $HUD.get_node("P%dName" % (slot + 1)) as Label
-		var score_label := $HUD.get_node("P%dScore" % (slot + 1)) as Label
+		var bar := $UI/HUD.get_node("P%dBar" % (slot + 1)) as ProgressBar
+		var label := $UI/HUD.get_node("P%dName" % (slot + 1)) as Label
+		var score_label := $UI/HUD.get_node("P%dScore" % (slot + 1)) as Label
 		var player: Player = null
 		var peer_id := 0
 		if slot < Lobby.order.size():
@@ -719,15 +889,18 @@ func _update_hud() -> void:
 		bar.value = player.hp
 		label.text = "%dP  %s" % [slot + 1, player.weapon_id]
 
-	var banner_label := $HUD.get_node("Banner") as Label
+	var banner_label := $UI/HUD.get_node("Banner") as Label
 	banner_label.text = banner
-	banner_label.visible = banner != ""
+	# 결과 화면이 떠 있으면 그쪽 글자와 겹치므로 배너는 접는다.
+	banner_label.visible = banner != "" and not result_overlay.visible
 
 
-## 딴 점수는 채운 동그라미, 남은 점수는 빈 동그라미로 보여준다 (3점 선취).
+## 딴 포인트는 채운 동그라미, 남은 포인트는 빈 동그라미로 보여주고 숫자를 함께 적는다.
+## 동그라미만 있으면 몇 포인트 중 몇 포인트인지 한눈에 안 읽힌다 (3포인트 선취).
 func _score_text(score: int) -> String:
 	var filled := clampi(score, 0, Combat.POINTS_TO_WIN)
-	return "●".repeat(filled) + "○".repeat(Combat.POINTS_TO_WIN - filled)
+	var dots := "●".repeat(filled) + "○".repeat(Combat.POINTS_TO_WIN - filled)
+	return "%s  %d / %d" % [dots, filled, Combat.POINTS_TO_WIN]
 
 
 func _unhandled_input(event: InputEvent) -> void:
