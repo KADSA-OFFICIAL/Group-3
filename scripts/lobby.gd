@@ -11,7 +11,8 @@ signal match_starting
 ## 경기가 끝나 대기실로 돌아가라는 서버 지시.
 signal match_ended
 
-const DEFAULT_MAP := "평지"
+## 대기실 기본 맵. 실제 맵 목록은 Maps 표가 들고 있다.
+const DEFAULT_MAP := Maps.RANDOM
 
 ## 접속 순서. 먼저 들어온 peer가 1P(슬롯 0)다.
 var order: Array = []
@@ -54,6 +55,12 @@ func submit_config(config: Dictionary) -> void:
 ## 내 준비 여부를 서버에 알린다 (클라이언트에서 호출).
 func submit_ready(flag: bool) -> void:
 	_receive_ready.rpc_id(1, flag)
+
+
+## 맵 선택을 서버에 알린다 (클라이언트에서 호출). 맵은 둘이 공유하는 하나뿐이라
+## 누가 바꾸든 양쪽에 적용된다.
+func submit_map(new_map: String) -> void:
+	_receive_map.rpc_id(1, new_map)
 
 
 # ─────────────────────────── 서버 전용 ───────────────────────────
@@ -103,6 +110,19 @@ func _receive_ready(flag: bool) -> void:
 	_check_start()
 
 
+@rpc("any_peer", "call_remote", "reliable")
+func _receive_map(new_map: String) -> void:
+	if not multiplayer.is_server():
+		return
+	if not order.has(multiplayer.get_remote_sender_id()):
+		return
+	# 목록에 없는 값은 무시한다 — "랜덤"은 실제 맵이 아니지만 선택지로는 유효하다.
+	if new_map != Maps.RANDOM and not Maps.has(new_map):
+		return
+	map_name = new_map
+	_broadcast()
+
+
 ## 클라이언트가 보낸 값이 목록에 있는 값인지 확인한다.
 func _sanitize(config: Dictionary, slot: int) -> Dictionary:
 	var base := default_config(slot)
@@ -131,6 +151,8 @@ func _check_start() -> void:
 		var config: Dictionary = configs[peer_id]
 		config["weapon"] = _resolve_weapon(config["weapon"])
 		configs[peer_id] = config
+	# 맵 "랜덤"도 여기서 확정해야 양쪽이 같은 지형을 깐다.
+	map_name = Maps.resolve(map_name)
 	_broadcast()
 	_begin_match.rpc()
 
