@@ -12,7 +12,12 @@ const JOIN_TIMEOUT_SEC := 8.0
 @onready var address_edit: LineEdit = $AddressEdit
 @onready var status_label: Label = $StatusLabel
 @onready var start_button: Button = $StartButton
-@onready var room_buttons: Array[Button] = [$Room1Button, $Room2Button]
+@onready var room_box: HBoxContainer = $RoomBox
+## 씬에 놓인 방 버튼 1개. 나머지 방 버튼은 이걸 복제해서 만든다.
+@onready var room_button_template: Button = $RoomBox/RoomButton
+
+## 방 버튼들 (Network.ROOMS 와 같은 순서). _setup_room_buttons() 에서 채운다.
+var room_buttons: Array[Button] = []
 
 ## 지금 고른 방 (Network.ROOMS 의 인덱스)
 var _room_index := 0
@@ -44,18 +49,22 @@ func _ready() -> void:
 	_setup_room_buttons()
 
 
-## 방 버튼 글자와 개수를 Network.ROOMS 에 맞춘다.
-## 목록보다 버튼이 많으면 남는 버튼은 숨긴다 — 방을 줄여도 화면이 깨지지 않도록.
+## 방 버튼을 Network.ROOMS 개수만큼 만든다 — 목록에 줄을 추가하면 버튼도 같이 늘어난다.
+## 씬의 RoomButton 이 첫 방이자 나머지의 원본이고, 복제본은 스타일과 ButtonGroup 을 그대로 물려받는다.
 func _setup_room_buttons() -> void:
+	room_buttons = [room_button_template]
+	for i in range(1, Network.ROOMS.size()):
+		var extra := room_button_template.duplicate() as Button
+		room_box.add_child(extra)
+		room_buttons.append(extra)
+
 	for i in room_buttons.size():
 		var button := room_buttons[i]
-		if i >= Network.ROOMS.size():
-			button.visible = false
-			continue
-		button.text = Network.ROOMS[i]["name"]
+		var room_name: String = Network.ROOMS[i]["name"]
+		button.text = room_name
 		button.pressed.connect(_on_room_selected.bind(i))
 
-	_room_index = clampi(_room_index, 0, Network.ROOMS.size() - 1)
+	_room_index = clampi(_room_index, 0, room_buttons.size() - 1)
 	room_buttons[_room_index].button_pressed = true
 
 
