@@ -45,8 +45,35 @@ func _refresh() -> void:
 		if slot < Lobby.order.size():
 			panel.apply_config(Lobby.config_for(Lobby.order[slot]))
 
-	map_name_label.text = Lobby.map_name
+	_refresh_maps()
+	_refresh_weapons()
 	_update_status()
+
+
+## 양쪽이 고른 무기를 가운데 카드에 보여준다.
+## 그림이 있는 무기는 7종뿐이라 이름 라벨은 항상 채운다 — 나머지는 이름만 보인다.
+func _refresh_weapons() -> void:
+	for slot in panels.size():
+		var preview: Control = $WeaponBox.get_node("P%dPreview" % (slot + 1))
+		var name_label := $WeaponBox.get_node("P%dName" % (slot + 1)) as Label
+		if slot >= Lobby.order.size():
+			preview.weapon_id = ""
+			name_label.text = "—"
+			continue
+		var weapon := Lobby.weapon_of(Lobby.order[slot])
+		preview.weapon_id = weapon
+		name_label.text = weapon
+
+
+## 양쪽이 고른 맵을 나란히 보여준다. 실제로 쓸 맵은 시작할 때 서버가 둘 중 하나를 뽑는다.
+func _refresh_maps() -> void:
+	var picks: Array[String] = []
+	for slot in panels.size():
+		if slot < Lobby.order.size():
+			picks.append("%dP  %s" % [slot + 1, Lobby.map_of(Lobby.order[slot])])
+		else:
+			picks.append("%dP  —" % (slot + 1))
+	map_name_label.text = "\n".join(picks)
 
 
 func _update_status() -> void:
@@ -76,10 +103,14 @@ func _ready_text(flag: bool) -> String:
 	return "준비 완료" if flag else "선택 중"
 
 
-## 맵 목록을 한 칸 옮겨 서버에 알린다. 표시는 서버가 보낸 값을 받아서 갱신된다.
+## 내 맵 선택을 한 칸 옮겨 서버에 알린다. 상대 선택은 바뀌지 않는다.
+## 표시는 서버가 보낸 값을 받아서 갱신된다.
 func _cycle_map(step: int) -> void:
+	var me := multiplayer.get_unique_id()
+	if Lobby.slot_of(me) < 0:
+		return
 	var maps := GameState.MAPS
-	var index := maxi(maps.find(Lobby.map_name), 0)
+	var index := maxi(maps.find(Lobby.map_of(me)), 0)
 	Lobby.submit_map(maps[posmod(index + step, maps.size())])
 
 
