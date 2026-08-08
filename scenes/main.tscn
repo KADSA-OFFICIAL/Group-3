@@ -26,24 +26,26 @@ spawn_path = NodePath("../Players")
 [node name="ProjectileSpawner" type="MultiplayerSpawner" parent="."]
 spawn_path = NodePath("../Projectiles")
 
-[node name="HUD" type="Control" parent="."]
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="HUD" type="Control" parent="UI"]
 anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 
-[node name="P1Card" type="Panel" parent="HUD"]
+[node name="P1Card" type="Panel" parent="UI/HUD"]
 offset_left = 8.0
 offset_top = 40.0
 offset_right = 328.0
 offset_bottom = 100.0
 
-[node name="P2Card" type="Panel" parent="HUD"]
+[node name="P2Card" type="Panel" parent="UI/HUD"]
 offset_left = 824.0
 offset_top = 40.0
 offset_right = 1144.0
 offset_bottom = 100.0
 
-[node name="P1Name" type="Label" parent="HUD"]
+[node name="P1Name" type="Label" parent="UI/HUD"]
 offset_left = 16.0
 offset_top = 44.0
 offset_right = 216.0
@@ -51,14 +53,14 @@ offset_bottom = 68.0
 theme_override_font_sizes/font_size = 16
 text = "1P"
 
-[node name="P1Bar" type="ProgressBar" parent="HUD"]
+[node name="P1Bar" type="ProgressBar" parent="UI/HUD"]
 offset_left = 16.0
 offset_top = 68.0
 offset_right = 316.0
 offset_bottom = 92.0
 value = 100.0
 
-[node name="P2Name" type="Label" parent="HUD"]
+[node name="P2Name" type="Label" parent="UI/HUD"]
 offset_left = 836.0
 offset_top = 44.0
 offset_right = 1136.0
@@ -67,7 +69,7 @@ theme_override_font_sizes/font_size = 16
 text = "2P"
 horizontal_alignment = 2
 
-[node name="P2Bar" type="ProgressBar" parent="HUD"]
+[node name="P2Bar" type="ProgressBar" parent="UI/HUD"]
 offset_left = 836.0
 offset_top = 68.0
 offset_right = 1136.0
@@ -75,7 +77,7 @@ offset_bottom = 92.0
 theme_override_styles/fill = SubResource("StyleBoxFlat_bar_fill_p2")
 value = 100.0
 
-[node name="P1Score" type="Label" parent="HUD"]
+[node name="P1Score" type="Label" parent="UI/HUD"]
 offset_left = 16.0
 offset_top = 96.0
 offset_right = 216.0
@@ -83,7 +85,7 @@ offset_bottom = 126.0
 theme_override_font_sizes/font_size = 22
 text = "○○○"
 
-[node name="P2Score" type="Label" parent="HUD"]
+[node name="P2Score" type="Label" parent="UI/HUD"]
 offset_left = 936.0
 offset_top = 96.0
 offset_right = 1136.0
@@ -92,7 +94,7 @@ theme_override_font_sizes/font_size = 22
 text = "○○○"
 horizontal_alignment = 2
 
-[node name="Banner" type="Label" parent="HUD"]
+[node name="Banner" type="Label" parent="UI/HUD"]
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -300.0
@@ -107,19 +109,19 @@ visible = false
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="ResultOverlay" type="Control" parent="HUD"]
+[node name="ResultOverlay" type="Control" parent="UI/HUD"]
 visible = false
 anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 
-[node name="Dim" type="ColorRect" parent="HUD/ResultOverlay"]
+[node name="Dim" type="ColorRect" parent="UI/HUD/ResultOverlay"]
 anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 color = Color(0.29, 0.23, 0.32, 0.55)
 
-[node name="Jelly" type="Control" parent="HUD/ResultOverlay"]
+[node name="Jelly" type="Control" parent="UI/HUD/ResultOverlay"]
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -130.0
@@ -131,7 +133,7 @@ pivot_offset = Vector2(130, 260)
 script = ExtResource("3_preview")
 fill_ratio = 0.95
 
-[node name="ResultLabel" type="Label" parent="HUD/ResultOverlay"]
+[node name="ResultLabel" type="Label" parent="UI/HUD/ResultOverlay"]
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -340.0
@@ -148,7 +150,7 @@ text = "승리!"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="ScoreLabel" type="Label" parent="HUD/ResultOverlay"]
+[node name="ScoreLabel" type="Label" parent="UI/HUD/ResultOverlay"]
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -300.0
