@@ -1,4 +1,4 @@
-[gd_scene load_steps=6 format=3 uid="uid://jellytitle001"]
+[gd_scene load_steps=10 format=3 uid="uid://jellytitle001"]
 
 [ext_resource type="Script" path="res://scripts/title.gd" id="1_title"]
 [ext_resource type="Script" path="res://scripts/jelly_preview.gd" id="2_preview"]
@@ -38,6 +38,38 @@ corner_radius_top_right = 22
 corner_radius_bottom_right = 22
 corner_radius_bottom_left = 22
 corner_detail = 14
+
+[sub_resource type="ButtonGroup" id="ButtonGroup_room"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_room"]
+bg_color = Color(1, 1, 1, 1)
+border_width_bottom = 4
+border_color = Color(0.86, 0.81, 0.86, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+corner_detail = 12
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_room_hover"]
+bg_color = Color(0.99, 0.96, 0.99, 1)
+border_width_bottom = 4
+border_color = Color(0.85, 0.42, 0.68, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+corner_detail = 12
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_room_on"]
+bg_color = Color(0.96, 0.55, 0.78, 1)
+border_width_bottom = 4
+border_color = Color(0.85, 0.42, 0.68, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+corner_detail = 12
 
 [node name="Title" type="Control"]
 anchor_right = 1.0
@@ -97,9 +129,9 @@ horizontal_alignment = 1
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -300.0
-offset_top = 360.0
+offset_top = 330.0
 offset_right = 300.0
-offset_bottom = 386.0
+offset_bottom = 356.0
 theme_override_colors/font_color = Color(0.55, 0.48, 0.58, 1)
 theme_override_font_sizes/font_size = 18
 text = "서버 주소"
@@ -109,20 +141,57 @@ horizontal_alignment = 1
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -180.0
-offset_top = 390.0
+offset_top = 360.0
 offset_right = 180.0
-offset_bottom = 430.0
+offset_bottom = 400.0
 theme_override_font_sizes/font_size = 20
 placeholder_text = "127.0.0.1"
 alignment = 1
+
+[node name="RoomLabel" type="Label" parent="."]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+offset_top = 408.0
+offset_right = 300.0
+offset_bottom = 432.0
+theme_override_colors/font_color = Color(0.55, 0.48, 0.58, 1)
+theme_override_font_sizes/font_size = 18
+text = "방 선택"
+horizontal_alignment = 1
+
+[node name="RoomBox" type="HBoxContainer" parent="."]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -180.0
+offset_top = 436.0
+offset_right = 180.0
+offset_bottom = 486.0
+theme_override_constants/separation = 16
+
+[node name="RoomButton" type="Button" parent="RoomBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+button_group = SubResource("ButtonGroup_room")
+theme_override_colors/font_color = Color(0.45, 0.38, 0.48, 1)
+theme_override_colors/font_hover_color = Color(0.89, 0.35, 0.66, 1)
+theme_override_colors/font_pressed_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_pressed_color = Color(1, 1, 1, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("StyleBoxFlat_room")
+theme_override_styles/hover = SubResource("StyleBoxFlat_room_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_room_on")
+theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_room_on")
+text = "1번 방"
 
 [node name="StartButton" type="Button" parent="."]
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -140.0
-offset_top = 444.0
+offset_top = 496.0
 offset_right = 140.0
-offset_bottom = 514.0
+offset_bottom = 556.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
 theme_override_colors/font_pressed_color = Color(1, 0.93, 0.97, 1)
@@ -136,9 +205,9 @@ text = "접속"
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -400.0
-offset_top = 524.0
+offset_top = 564.0
 offset_right = 400.0
-offset_bottom = 552.0
+offset_bottom = 592.0
 theme_override_colors/font_color = Color(0.85, 0.47, 0.25, 1)
 theme_override_font_sizes/font_size = 18
 horizontal_alignment = 1
