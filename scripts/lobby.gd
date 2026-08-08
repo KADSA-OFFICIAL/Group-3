@@ -16,7 +16,9 @@ const DEFAULT_MAP := Maps.RANDOM
 
 ## 접속 순서. 먼저 들어온 peer가 1P(슬롯 0)다.
 var order: Array = []
-## peer_id -> {"weapon": String, "character": String}
+## peer_id -> {"weapon": String, "character": String, "map": String}
+##
+## 맵은 **플레이어마다 하나씩** 고르고, 시작할 때 서버가 둘 중 하나를 뽑는다 (`_pick_map`).
 var configs: Dictionary = {}
 ## peer_id -> bool
 var ready_flags: Dictionary = {}
@@ -32,6 +34,7 @@ func default_config(slot: int) -> Dictionary:
 	return {
 		"weapon": Weapons.RANDOM,
 		"character": Characters.id_at(slot),
+		"map": Maps.RANDOM,
 	}
 
 
@@ -57,10 +60,16 @@ func submit_ready(flag: bool) -> void:
 	_receive_ready.rpc_id(1, flag)
 
 
-## 맵 선택을 서버에 알린다 (클라이언트에서 호출). 맵은 둘이 공유하는 하나뿐이라
-## 누가 바꾸든 양쪽에 적용된다.
+## 내 맵 선택을 서버에 알린다 (클라이언트에서 호출). 상대 선택은 건드리지 않는다.
 func submit_map(new_map: String) -> void:
 	_receive_map.rpc_id(1, new_map)
+
+
+## 이 플레이어가 고른 맵. 아직 없으면 슬롯 기본값.
+## 표에서 꺼낸 값은 Variant라 명시 타입으로 받는다.
+func map_of(peer_id: int) -> String:
+	var picked: String = config_for(peer_id).get("map", DEFAULT_MAP)
+	return picked
 
 
 # ─────────────────────────── 서버 전용 ───────────────────────────
@@ -110,16 +119,17 @@ func _receive_ready(flag: bool) -> void:
 	_check_start()
 
 
+## 보낸 사람의 맵 선택만 바꾼다. 상대 것은 건드리지 않는다.
 @rpc("any_peer", "call_remote", "reliable")
 func _receive_map(new_map: String) -> void:
 	if not multiplayer.is_server():
 		return
-	if not order.has(multiplayer.get_remote_sender_id()):
+	var sender := multiplayer.get_remote_sender_id()
+	if not order.has(sender):
 		return
-	# 목록에 없는 값은 무시한다 — "랜덤"은 실제 맵이 아니지만 선택지로는 유효하다.
-	if new_map != Maps.RANDOM and not Maps.has(new_map):
-		return
-	map_name = new_map
+	var config: Dictionary = configs.get(sender, default_config(order.find(sender)))
+	config["map"] = new_map
+	configs[sender] = _sanitize(config, order.find(sender))
 	_broadcast()
 
 
@@ -128,9 +138,12 @@ func _sanitize(config: Dictionary, slot: int) -> Dictionary:
 	var base := default_config(slot)
 	var weapon: String = config.get("weapon", base["weapon"])
 	var character: String = config.get("character", base["character"])
+	var map: String = config.get("map", base["map"])
 	return {
 		"weapon": weapon if GameState.WEAPONS.has(weapon) else base["weapon"],
 		"character": character if Characters.has(character) else base["character"],
+		# "랜덤"은 실제 맵이 아니지만 선택지로는 유효하다.
+		"map": map if GameState.MAPS.has(map) else base["map"],
 	}
 
 
@@ -139,6 +152,19 @@ func _sanitize(config: Dictionary, slot: int) -> Dictionary:
 ## 뽑기 자체는 무기 표가 들고 있다 — 무기 시스템 통합 가이드: docs/weapon-system.md
 func _resolve_weapon(weapon: String) -> String:
 	return Weapons.resolve(weapon)
+
+
+## 둘이 고른 맵 중 하나를 뽑는다. **서버에서만 호출한다.**
+##
+## 각자의 "랜덤"을 먼저 실제 맵으로 확정한 뒤에 뽑는다 — 순서를 바꾸면 "랜덤"이
+## 그대로 후보가 되어 한 번 더 뽑기가 일어난다.
+func _pick_map() -> String:
+	var picks: Array[String] = []
+	for peer_id in order:
+		picks.append(Maps.resolve(map_of(peer_id)))
+	if picks.is_empty():
+		return Maps.resolve(Maps.RANDOM)
+	return picks.pick_random()
 
 
 func _check_start() -> void:
@@ -151,8 +177,8 @@ func _check_start() -> void:
 		var config: Dictionary = configs[peer_id]
 		config["weapon"] = _resolve_weapon(config["weapon"])
 		configs[peer_id] = config
-	# 맵 "랜덤"도 여기서 확정해야 양쪽이 같은 지형을 깐다.
-	map_name = Maps.resolve(map_name)
+	# 맵도 여기서 확정해야 양쪽이 같은 지형을 깐다.
+	map_name = _pick_map()
 	_broadcast()
 	_begin_match.rpc()
 
