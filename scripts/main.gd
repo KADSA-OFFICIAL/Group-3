@@ -188,7 +188,11 @@ func _check_falls() -> void:
 	if _match_over:
 		return
 	var screen := Vector2(get_viewport_rect().size)
-	var drowning := _hazard.get_overlapping_bodies() if _hazard != null else []
+	# 삼항으로 받으면 안 된다 — get_overlapping_bodies()는 Array[Node2D]인데
+	# 빈 배열 갈래는 타입 없는 Array라 대입에서 터진다.
+	var drowning: Array[Node2D] = []
+	if _hazard != null:
+		drowning = _hazard.get_overlapping_bodies()
 	for player: Player in players_root.get_children():
 		if not player.alive:
 			continue

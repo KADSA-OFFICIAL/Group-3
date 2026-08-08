@@ -70,7 +70,18 @@ title(서버 주소 입력 후 `StartButton`으로 접속) → select(대기실 
 
 ### 개발 시 주의
 
-- 이 환경에는 Godot 바이너리가 없음 — 실행 검증(F5)은 사용자가 수동으로 한다. 정적 검증(경로·상수 대조 등)을 기록하고 PR을 연 뒤 사용자 확인을 기다린다.
+- **Godot 바이너리가 있다** — `~/Downloads/Godot_v4.6.2-stable_win64.exe/Godot_v4.6.2-stable_win64_console.exe`. **커밋 전에 반드시 돌린다:**
+
+  ```
+  timeout 20s "<godot>" --headless --path . 2>&1 | grep -E "SCRIPT ERROR|\.gd:|Parse Error|Compile Error"
+  ```
+
+  헤드리스로 뜨면 서버가 시작되어 계속 떠 있으므로 `timeout`으로 끊는다. 끊을 때 나오는
+  `BUG: Unreferenced static string ...`은 엔진 종료 잡음이니 무시하고, 위 필터에 걸리는 것만 본다.
+  경로·상수 대조 같은 정적 확인만으로는 **타입 추론 실패·타입 불일치가 잡히지 않는다**(이슈 #66·#69에서 두 번 놓쳤다).
+  `--check-only --script`는 오토로드를 안 올려서 `Lobby` 같은 식별자를 못 찾는다고 헛짚으니 쓰지 말 것.
+- 그래도 **화면으로 봐야 아는 것**(색·배치·발판 높이·조작감)은 사용자 F5 확인이 필요하다. 헤드리스 실행은 오류 유무만 알려준다.
+- `_ready()`에서 `change_scene_to_file()`을 바로 부르면 "Parent node is busy" 오류가 난다 — `call_deferred`로 미룬다.
 - 배포본(export)이 아직 없고 `export_presets.cfg`도 없다. 유저 실행용 빌드는 별도 이슈로 진행 예정.
 - `README.md`는 프로젝트와 무관한 외부 유저가 보는 문서다 — 폴더 구조, 확장 가이드, 엔진 실행·검증 방법을 넣지 않는다(이슈 #4·#8·#11). 개발자용 정보는 이 파일과 `docs/`에 둔다. 현재 README에는 리셋과 함께 폴더 구조·실행 방법이 다시 들어가 있어 정리가 필요하다.
 - **표(`Weapons.LIST`·`Characters.LIST`·`Maps.LIST`)에서 꺼낸 값은 `Variant`다.** `var path := DIR + dict.get("file", "")`처럼 `:=`로 받으면 타입 추론이 실패해 **스크립트가 파싱되지 않고 게임이 아예 뜨지 않는다**(이슈 #66). 반드시 `var file: String = ...`처럼 명시 타입으로 받는다. 정적 검증이 잡아내지 못하는 종류라 표를 다루는 코드를 쓸 때마다 확인한다.
