@@ -60,10 +60,14 @@ static func resolve(map_name: String) -> String:
 
 ## 맵 지형 씬. 이름이 목록에 없거나 파일이 없으면 첫 맵으로 대신한다 —
 ## 맵을 못 불러와서 허공에서 시작하는 것보다 낫다.
+## 표에서 꺼낸 값은 Variant라서 **반드시 명시 타입으로 받는다** —
+## `var x := DIR + dict.get(...)`처럼 쓰면 타입 추론이 실패해 스크립트가 파싱되지 않는다.
 static func scene(map_name: String) -> PackedScene:
-	var path := DIR + get_map(map_name).get("file", "")
-	if not ResourceLoader.exists(path):
-		path = DIR + LIST[0]["file"]
+	var file: String = get_map(map_name).get("file", "")
+	var path: String = DIR + file
+	if file.is_empty() or not ResourceLoader.exists(path):
+		var fallback: String = LIST[0]["file"]
+		path = DIR + fallback
 	if not ResourceLoader.exists(path):
 		return null
 	return load(path)
