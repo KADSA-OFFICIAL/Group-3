@@ -72,6 +72,12 @@ func map_of(peer_id: int) -> String:
 	return picked
 
 
+## 이 플레이어가 고른 무기. 시작 전에는 "랜덤"일 수 있다.
+func weapon_of(peer_id: int) -> String:
+	var picked: String = config_for(peer_id).get("weapon", Weapons.RANDOM)
+	return picked
+
+
 # ─────────────────────────── 서버 전용 ───────────────────────────
 
 func _on_peer_joined(peer_id: int) -> void:
