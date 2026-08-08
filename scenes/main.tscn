@@ -1,6 +1,7 @@
-[gd_scene load_steps=3 format=3 uid="uid://jellymain0001"]
+[gd_scene load_steps=4 format=3 uid="uid://jellymain0001"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="2_mainscript"]
+[ext_resource type="Script" path="res://scripts/jelly_preview.gd" id="3_preview"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar_fill_p2"]
 bg_color = Color(0.56, 0.59, 0.91, 1)
@@ -103,6 +104,63 @@ theme_override_colors/font_outline_color = Color(0.1, 0.12, 0.2, 1)
 theme_override_constants/outline_size = 12
 theme_override_font_sizes/font_size = 56
 visible = false
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ResultOverlay" type="Control" parent="HUD"]
+visible = false
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="Dim" type="ColorRect" parent="HUD/ResultOverlay"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(0.29, 0.23, 0.32, 0.55)
+
+[node name="Jelly" type="Control" parent="HUD/ResultOverlay"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -130.0
+offset_top = 110.0
+offset_right = 130.0
+offset_bottom = 370.0
+mouse_filter = 2
+pivot_offset = Vector2(130, 260)
+script = ExtResource("3_preview")
+fill_ratio = 0.95
+
+[node name="ResultLabel" type="Label" parent="HUD/ResultOverlay"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -340.0
+offset_top = 380.0
+offset_right = 340.0
+offset_bottom = 480.0
+mouse_filter = 2
+pivot_offset = Vector2(340, 50)
+theme_override_colors/font_color = Color(0.96, 0.55, 0.78, 1)
+theme_override_colors/font_outline_color = Color(0.29, 0.23, 0.32, 1)
+theme_override_constants/outline_size = 14
+theme_override_font_sizes/font_size = 80
+text = "승리!"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ScoreLabel" type="Label" parent="HUD/ResultOverlay"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+offset_top = 486.0
+offset_right = 300.0
+offset_bottom = 530.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.29, 0.23, 0.32, 1)
+theme_override_constants/outline_size = 8
+theme_override_font_sizes/font_size = 30
+text = "3  :  0"
 horizontal_alignment = 1
 vertical_alignment = 1
 
