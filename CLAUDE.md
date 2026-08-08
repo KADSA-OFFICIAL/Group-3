@@ -43,7 +43,7 @@ title(서버 주소 입력 후 `StartButton`으로 접속) → select(대기실 
   - **권한 검증**: 입력 RPC 세 개가 모두 `_is_owner_input()`을 거친다 — `multiplayer.get_remote_sender_id() != owner_peer_id`이면 무시한다. 없으면 남의 플레이어를 조작할 수 있다.
   - 전투 상태(`hp`·`alive`·`facing`·무적·기절·게이지·버프·강제 이동)는 **서버가 정하고** `server_*` 함수가 결과를 `@rpc("authority", "call_local", "reliable")`로 양쪽에 복제한다. 판정 자체는 여기가 아니라 `main.gd`에 있다.
   - 방패의 짧게/길게는 **서버가 누른 시간을 잰다**(`_check_long_press()`) — 클라이언트는 눌렀다/뗐다만 보낸다.
-  - 몸은 `Body`(Sprite2D)에 캐릭터 그림을 붙인다. 원화가 정사각 캔버스에 여백을 두고 그려져 있어 `Characters.content_rect()`로 **투명 여백을 뺀 실제 그림 영역**을 재고, 그 높이를 `BODY_HEIGHT`(72px)에 맞춰 배율과 위치를 정해 발을 충돌 상자 바닥에 붙인다. 찌그러짐은 그 기본 배율에 곱하고, 좌우 반전은 복제된 `facing`으로 `flip_h`를 켜며 이때 여백 보정(`_body_offset_x`)의 부호도 뒤집는다.
+  - 몸은 `Body`(Sprite2D)에 캐릭터 그림을 붙인다. 원화가 정사각 캔버스에 여백을 두고 그려져 있어 `Characters.content_rect()`로 **투명 여백을 뺀 실제 그림 영역**을 재고, 그 높이를 `BODY_HEIGHT`(72px)에 맞춰 배율과 위치를 정해 발을 충돌 상자 바닥에 붙인다. 찌그러짐은 그 기본 배율에 곱하고, 좌우 반전은 복제된 `facing`으로 `flip_h`를 켠다. **배율이나 반전이 바뀌면 반드시 `_place_body()`를 부른다**(이슈 #85) — Sprite2D는 자기 위치를 *중심으로* 확대·축소하므로 세로로 늘어나면 발이 바닥을 뚫고 납작해지면 발이 뜬다. 그래서 여백 보정은 배율을 곱하기 전 값(`_body_offset_unit`)으로 들고 있다가 `_place_body()`가 그때의 배율로 환산해 **발밑을 항상 `BODY_BOTTOM`에 고정**하고, `flip_h`를 보고 좌우 보정의 부호도 맞춘다.
   - 젤리 찌그러짐은 복제된 속도·접지값으로 각 피어가 계산한다.
   - 무기는 그림이 있으면 `WeaponSprite`에 세워서 바라보는 쪽에 놓고(`WEAPON_HEIGHT` 56px), 쿨타임 상태는 밝기로 나타낸다. 그림이 없는 10종은 여전히 `WeaponShape` 임시 막대이며 길이가 사거리·색이 쿨타임 상태다. 어느 쪽을 쓸지는 `_apply_weapon()`이 정한다.
 - `scripts/weapons.gd`(`class_name Weapons`) = **무기 표 17종**. 이름·기본/특수 데미지·쿨타임·넉백 등 모든 무기 수치의 유일한 출처. `RANDOM` 상수와 `resolve()`(서버 전용 랜덤 확정)도 여기 있다. 그림이 있는 7종은 `file` 필드를 갖고 `texture()`가 `assets/weapons/`에서 꺼내 온다 — 없으면 null이고 부르는 쪽이 막대로 대신한다.
