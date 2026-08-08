@@ -6,7 +6,7 @@ extends Node2D
 ## 플레이어의 체력·상태이상은 Player의 server_* 함수로 전달한다.
 ## 통합 가이드: docs/weapon-system.md
 ##
-## 라운드 진행(점수·3점 선취)도 여기가 주인이다. 판정은 전부 서버에서 하고
+## 포인트 진행(쓰러뜨리면 1포인트·3포인트 선취)도 여기가 주인이다. 판정은 전부 서버에서 하고
 ## 결과만 `_receive_round`로 복제한다 — 클라이언트는 점수를 세지 않는다.
 
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
@@ -139,26 +139,31 @@ func _on_peer_left(peer_id: int) -> void:
 
 # ─────────────────────────── 라운드 진행 (서버 판정) ───────────────────────────
 
-## 죽은 쪽의 상대가 1점을 얻는다. 3점이면 경기가 끝나고, 아니면 다음 라운드를 예약한다.
+## 죽은 쪽의 상대가 1포인트를 얻는다. 3포인트면 경기가 끝나고, 아니면 다음 판을 예약한다.
+## 화면에는 "누가 이겼다"가 아니라 "누가 1포인트를 얻었다"로 보여준다.
 func _on_player_died(peer_id: int) -> void:
 	if not multiplayer.is_server() or _match_over:
 		return
-	# 이미 이번 라운드의 승패가 갈렸다 — 대기 중에 남은 쪽이 또 떨어져도 점수를 주지 않는다.
+	# 이미 이번 판의 포인트가 나갔다 — 대기 중에 남은 쪽이 또 떨어져도 점수를 주지 않는다.
 	if _round_restart_at > 0.0:
 		return
-	var winner := _opponent_of(peer_id)
-	if winner != null:
-		var id := winner.owner_peer_id
-		scores[id] = int(scores.get(id, 0)) + 1
+	var scorer := _opponent_of(peer_id)
+	if scorer == null:
+		_round_restart_at = _now() + Combat.ROUND_RESTART_DELAY
+		_broadcast_round("")
+		return
 
-	if winner != null and int(scores[winner.owner_peer_id]) >= Combat.POINTS_TO_WIN:
+	var id := scorer.owner_peer_id
+	scores[id] = int(scores.get(id, 0)) + 1
+
+	if int(scores[id]) >= Combat.POINTS_TO_WIN:
 		_match_over = true
 		_return_at = _now() + Combat.MATCH_END_DELAY
-		_broadcast_round("%s 승리!" % winner.player_name)
+		_broadcast_round("%s 승리!  %d포인트 달성" % [scorer.player_name, Combat.POINTS_TO_WIN])
 		return
 
 	_round_restart_at = _now() + Combat.ROUND_RESTART_DELAY
-	_broadcast_round("다음 라운드...")
+	_broadcast_round("%s +1 포인트" % scorer.player_name)
 
 
 ## 양쪽을 되살리고 판을 깨끗이 만든다. 여기서 안 지운 값은 다음 라운드로 새어 나간다.
@@ -724,10 +729,12 @@ func _update_hud() -> void:
 	banner_label.visible = banner != ""
 
 
-## 딴 점수는 채운 동그라미, 남은 점수는 빈 동그라미로 보여준다 (3점 선취).
+## 딴 포인트는 채운 동그라미, 남은 포인트는 빈 동그라미로 보여주고 숫자를 함께 적는다.
+## 동그라미만 있으면 몇 포인트 중 몇 포인트인지 한눈에 안 읽힌다 (3포인트 선취).
 func _score_text(score: int) -> String:
 	var filled := clampi(score, 0, Combat.POINTS_TO_WIN)
-	return "●".repeat(filled) + "○".repeat(Combat.POINTS_TO_WIN - filled)
+	var dots := "●".repeat(filled) + "○".repeat(Combat.POINTS_TO_WIN - filled)
+	return "%s  %d / %d" % [dots, filled, Combat.POINTS_TO_WIN]
 
 
 func _unhandled_input(event: InputEvent) -> void:
