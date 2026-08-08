@@ -65,11 +65,11 @@ const LOSE_COLOR := Color(0.72, 0.70, 0.80)
 @onready var projectiles_root: Node2D = $Projectiles
 @onready var player_spawner: MultiplayerSpawner = $PlayerSpawner
 @onready var projectile_spawner: MultiplayerSpawner = $ProjectileSpawner
-@onready var result_overlay: Control = $HUD/ResultOverlay
+@onready var result_overlay: Control = $UI/HUD/ResultOverlay
 ## jelly_preview.gd는 class_name이 없어 타입을 붙이지 않는다 (player_panel.gd와 같은 방식).
-@onready var result_jelly = $HUD/ResultOverlay/Jelly
-@onready var result_label: Label = $HUD/ResultOverlay/ResultLabel
-@onready var result_score: Label = $HUD/ResultOverlay/ScoreLabel
+@onready var result_jelly = $UI/HUD/ResultOverlay/Jelly
+@onready var result_label: Label = $UI/HUD/ResultOverlay/ResultLabel
+@onready var result_score: Label = $UI/HUD/ResultOverlay/ScoreLabel
 
 
 func _ready() -> void:
@@ -872,9 +872,9 @@ func _process(_delta: float) -> void:
 ## 체력·점수 표시. 대기실 접속 순서(Lobby.order)가 1P·2P를 정한다.
 func _update_hud() -> void:
 	for slot in 2:
-		var bar := $HUD.get_node("P%dBar" % (slot + 1)) as ProgressBar
-		var label := $HUD.get_node("P%dName" % (slot + 1)) as Label
-		var score_label := $HUD.get_node("P%dScore" % (slot + 1)) as Label
+		var bar := $UI/HUD.get_node("P%dBar" % (slot + 1)) as ProgressBar
+		var label := $UI/HUD.get_node("P%dName" % (slot + 1)) as Label
+		var score_label := $UI/HUD.get_node("P%dScore" % (slot + 1)) as Label
 		var player: Player = null
 		var peer_id := 0
 		if slot < Lobby.order.size():
@@ -889,7 +889,7 @@ func _update_hud() -> void:
 		bar.value = player.hp
 		label.text = "%dP  %s" % [slot + 1, player.weapon_id]
 
-	var banner_label := $HUD.get_node("Banner") as Label
+	var banner_label := $UI/HUD.get_node("Banner") as Label
 	banner_label.text = banner
 	# 결과 화면이 떠 있으면 그쪽 글자와 겹치므로 배너는 접는다.
 	banner_label.visible = banner != "" and not result_overlay.visible
