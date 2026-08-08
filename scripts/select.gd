@@ -16,9 +16,10 @@ func _ready() -> void:
 	$HomeButton.pressed.connect(_on_home_pressed)
 	go_button.pressed.connect(_on_ready_pressed)
 
-	# 맵은 서버가 정한다. 현재 평지만 구현되어 있어 좌우 화살표는 비활성.
-	$LeftArrow.disabled = true
-	$RightArrow.disabled = true
+	# 맵은 둘이 공유하는 하나뿐이라 누가 바꾸든 양쪽에 적용된다.
+	# 값을 정하는 것은 서버이고 여기서는 "다음/이전" 요청만 보낸다.
+	$LeftArrow.pressed.connect(_cycle_map.bind(-1))
+	$RightArrow.pressed.connect(_cycle_map.bind(1))
 
 	for panel in panels:
 		panel.config_changed.connect(_on_my_config_changed)
@@ -73,6 +74,13 @@ func _update_status() -> void:
 
 func _ready_text(flag: bool) -> String:
 	return "준비 완료" if flag else "선택 중"
+
+
+## 맵 목록을 한 칸 옮겨 서버에 알린다. 표시는 서버가 보낸 값을 받아서 갱신된다.
+func _cycle_map(step: int) -> void:
+	var maps := GameState.MAPS
+	var index := maxi(maps.find(Lobby.map_name), 0)
+	Lobby.submit_map(maps[posmod(index + step, maps.size())])
 
 
 func _on_my_config_changed() -> void:

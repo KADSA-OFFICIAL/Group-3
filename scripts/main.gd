@@ -11,6 +11,7 @@ extends Node2D
 
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
 const PROJECTILE_SCENE := preload("res://scenes/projectile.tscn")
+## 맵에 Spawns가 없을 때만 쓰는 대비값. 정상 경로에서는 맵 씬이 위치를 들고 있다.
 const SPAWN_POSITIONS := [Vector2(300, 500), Vector2(852, 500)]
 
 ## 근접 "닿으면" 판정 거리. 젤리 몸통이 48px이므로 두 몸통이 맞닿는 거리다.
@@ -44,6 +45,11 @@ var scores := {}
 ## 화면 가운데 안내. ""이면 아무것도 표시하지 않는다.
 var banner := ""
 
+## 현재 깔린 맵 지형과 그 즉사 구역 (물·용암). 없는 맵이면 _hazard가 null이다.
+var _map: Node2D = null
+var _hazard: Area2D = null
+
+@onready var map_root: Node2D = $MapRoot
 @onready var players_root: Node2D = $Players
 @onready var projectiles_root: Node2D = $Projectiles
 @onready var player_spawner: MultiplayerSpawner = $PlayerSpawner
@@ -52,6 +58,9 @@ var banner := ""
 
 func _ready() -> void:
 	$MapLabel.text = "맵: " + Lobby.map_name
+	# 지형은 모든 피어에서 똑같이 깔려야 한다 — 스폰보다 먼저 붙인다.
+	# 서버가 대기실에서 "랜덤"을 확정해 두므로 양쪽이 같은 맵을 받는다.
+	_load_map(Lobby.map_name)
 	# 스폰 함수는 모든 피어에서 등록되어야 한다 — 서버 판정보다 먼저 설정한다.
 	player_spawner.spawn_function = _spawn_player
 	projectile_spawner.spawn_function = _spawn_projectile
@@ -173,13 +182,17 @@ func _start_round() -> void:
 	_broadcast_round("")
 
 
-## 화면 밖으로 나가면 낙사. 좌우 벽이 있는 맵에서는 일어나지 않는다.
+## 낙사 — 화면 밖으로 나가거나 즉사 구역(물·용암)에 닿으면 죽는다.
+## 좌우 벽이 있고 즉사 구역이 없는 맵(평지·벽돌)에서는 일어나지 않는다.
 func _check_falls() -> void:
 	if _match_over:
 		return
 	var screen := Vector2(get_viewport_rect().size)
+	var drowning := _hazard.get_overlapping_bodies() if _hazard != null else []
 	for player: Player in players_root.get_children():
-		if player.alive and Combat.is_out_of_bounds(player.global_position, screen):
+		if not player.alive:
+			continue
+		if Combat.is_out_of_bounds(player.global_position, screen) or drowning.has(player):
 			player.server_kill()
 
 
@@ -225,7 +238,28 @@ func _receive_round(new_scores: Dictionary, new_banner: String) -> void:
 	_update_hud()
 
 
+# ─────────────────────────── 맵 ───────────────────────────
+
+## 맵 지형을 MapRoot 아래에 붙인다. 모든 피어에서 호출된다.
+func _load_map(map_name: String) -> void:
+	for child in map_root.get_children():
+		child.queue_free()
+	_map = null
+	var scene := Maps.scene(map_name)
+	if scene == null:
+		push_error("맵 씬을 찾지 못했습니다: %s" % map_name)
+		return
+	_map = scene.instantiate() as Node2D
+	map_root.add_child(_map)
+	_hazard = _map.get_node_or_null("Hazard") as Area2D
+
+
+## 맵이 들고 있는 스폰 지점. 맵에 없으면 대비값을 쓴다.
 func _spawn_position(index: int) -> Vector2:
+	if _map != null:
+		var marker := _map.get_node_or_null("Spawns/Spawn%d" % (index + 1)) as Marker2D
+		if marker != null:
+			return marker.global_position
 	return SPAWN_POSITIONS[index % SPAWN_POSITIONS.size()]
 
 

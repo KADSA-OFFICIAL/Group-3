@@ -13,7 +13,11 @@ var CHARACTERS: Array[String] = Characters.names()
 ## 실제 무기 표는 `scripts/weapons.gd`에 있고 여기서는 앞에 "랜덤"만 붙인다 —
 ## **무기를 추가·변경하려면 `Weapons.LIST`를 고친다.** 통합 가이드: docs/weapon-system.md
 var WEAPONS: Array[String] = _selectable_weapons()
-const MAPS := ["랜덤", "평지", "냉장고", "봉지 속", "위 속"]
+## 선택 가능한 맵 목록. 0번 "랜덤"은 실제 맵이 아니며 서버가 확정한다.
+##
+## 실제 맵 표는 `scripts/maps.gd`에 있고 여기서는 앞에 "랜덤"만 붙인다 —
+## **맵을 추가·변경하려면 `Maps.LIST`를 고친다.**
+var MAPS: Array[String] = _selectable_maps()
 
 var p1_config := {"weapon": Weapons.RANDOM, "character": Characters.id_at(0)}
 var p2_config := {"weapon": Weapons.RANDOM, "character": Characters.id_at(1)}
@@ -28,4 +32,11 @@ func get_config(prefix: String) -> Dictionary:
 static func _selectable_weapons() -> Array[String]:
 	var out: Array[String] = [Weapons.RANDOM]
 	out.append_array(Weapons.names())
+	return out
+
+
+## "랜덤" + 맵 표 전체. 마찬가지로 Maps에서 만들어 쓴다.
+static func _selectable_maps() -> Array[String]:
+	var out: Array[String] = [Maps.RANDOM]
+	out.append_array(Maps.names())
 	return out
