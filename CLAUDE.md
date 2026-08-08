@@ -9,23 +9,30 @@
 
 2026-07-28에 한 기기 2인 로컬에서 온라인 구조로 전환 중이다(로드맵 이슈 #32). 전용 헤드리스 서버가 권위를 갖고, 클라이언트 2대가 Tailscale로 접속한다. 서버 주소는 **저장소가 공개이므로 코드에 적지 않는다** — 접속 화면에서 입력받고 커밋되는 기본값은 `127.0.0.1`이다.
 
+**방 하나 = 포트 하나 = 서버 프로세스 하나**다(이슈 #89). 방 2개를 쓰려면 `--port=`를 달리해 서버를 두 번 띄운다. 방끼리 완전히 독립적이고 한 방이 죽어도 다른 방은 멀쩡하다. 실행 명령·방화벽·문제 해결은 `docs/server.md`에 있다.
+
 `main` 브랜치는 2026-07-26에 새 구현(커밋 `e2a7dcb`)으로 교체되었다. 이전 구현(`autoload/game_manager.gd`, `scripts/weapons/`, `scenes/maps/` 등)은 `backup/main-before-reset` 브랜치에만 있고 현재 코드베이스에는 없다 — 그 경로를 참조하지 말 것.
 
 ### 씬 흐름
 
-title(서버 주소 입력 후 `StartButton`으로 접속) → select(대기실 겸 무기 선택, 둘 다 준비하면 서버가 시작 지시) → main(평지 전투, 서버가 플레이어 스폰) → **3점 선취 시 서버가 select로 되돌린다**(`Lobby.match_ended`). 전투 중 ESC(`ui_cancel`)로 접속 종료 후 title 복귀
+title(방을 고르고 서버 주소를 입력해 `StartButton`으로 접속) → select(대기실 겸 무기 선택, 둘 다 준비하면 서버가 시작 지시) → main(평지 전투, 서버가 플레이어 스폰) → **3점 선취 시 서버가 select로 되돌린다**(`Lobby.match_ended`). 전투 중 ESC(`ui_cancel`)로 접속 종료 후 title 복귀
 
 헤드리스로 실행되면 `Network`가 서버를 시작하고 title이 UI 없이 곧바로 main으로 넘어간다. **전용 서버는 select를 거치지 않고 계속 main에 머문다** — 대기실 상태는 씬이 아니라 `Lobby` 오토로드가 들고 있기 때문이다.
 
 ### 구조 요약
 
-- `scripts/network.gd` = 오토로드 싱글턴 `Network`: 연결 수립과 피어 알림만 담당(게임 로직 없음). `PORT = 7777`(서버컴 방화벽 UDP 규칙과 일치), `MAX_CLIENTS = 2`, `DEFAULT_ADDRESS = "127.0.0.1"`. `should_run_as_server()`가 헤드리스 또는 `--server` 인자를 감지해 `_ready()`에서 자동으로 서버를 연다. 시그널 `server_started`·`join_succeeded`·`join_failed`·`peer_joined`·`peer_left`. **포트는 여기에만 정의한다.**
+- `scripts/network.gd` = 오토로드 싱글턴 `Network`: 연결 수립과 피어 알림만 담당(게임 로직 없음). `ROOMS`(1번 방 7777·2번 방 7778 — 서버컴 방화벽 UDP 규칙과 일치), **방 하나당** `MAX_CLIENTS = 2`, `DEFAULT_ADDRESS = "127.0.0.1"`. `should_run_as_server()`가 헤드리스 또는 `--server` 인자를 감지해 `_ready()`에서 자동으로 서버를 열고, 포트는 `port_from_cmdline()`이 `--port=7778` 인자에서 읽는다(없으면 첫 방). 시그널 `server_started`·`join_succeeded`·`join_failed`·`peer_joined`·`peer_left`.
+  - **방 구성은 `ROOMS`가 유일한 출처다** — 포트도 방 이름도 여기 말고 다른 곳에 적지 않는다. 줄을 추가하면 접속 화면 버튼도 따라 늘어나므로 씬은 손대지 않아도 된다(이슈 #90).
+  - **포트를 못 열면 `get_tree().quit(1)`로 프로세스를 끝낸다**(이슈 #90). 안 끝내면 `is_server`가 false인 채로 살아남아 클라이언트 취급을 받는데, 헤드리스라 화면도 없어서 "서버 떠 있음"으로 착각하게 된다. 같은 방을 두 번 띄우거나 2번 방을 `--port=` 없이 띄웠을 때 실제로 걸린다.
 - `scripts/lobby.gd` = 오토로드 싱글턴 `Lobby`: 대기실 상태를 **서버가 권위로** 보관한다. `order`(접속 순서, 먼저 들어온 쪽이 1P), `configs`(peer_id → weapon·character·map), `ready_flags`, `map_name`(시작할 때 확정되는 실제 맵). 클라이언트는 `submit_config()`·`submit_ready()`·`submit_map()`으로 자기 값만 보내고, 서버가 `_receive_lobby`로 전체를 복제한다. **무기 "랜덤" 확정과 맵 뽑기, 시작 판정은 서버에서만** 실행되어 양쪽이 같은 값을 갖는다. **맵은 플레이어마다 하나씩 고르고** 시작할 때 `_pick_map()`이 둘 중 하나를 뽑는다 — 각자의 "랜덤"을 먼저 실제 맵으로 확정한 뒤 뽑아야 뽑기가 두 번 일어나지 않는다. 클라이언트가 보낸 값은 `_sanitize()`로 목록에 있는 값인지 검사한다. 경기가 끝나면 서버가 `server_end_match()`로 준비를 풀고 양쪽을 대기실로 돌려보낸다(안 풀면 도착하자마자 다시 시작한다). 시그널 `lobby_changed`·`match_starting`·`match_ended`.
   - **상태를 받는 것은 밀어주기만 믿지 않는다**(이슈 #93). 클라이언트가 `request_state()`로 청하면 서버가 `_request_state`에서 그 피어에게만 지금 상태를 보낸다 — 상태를 바꾸지 않으니 몇 번을 청해도 안전하다. 접속 순간의 브로드캐스트 한 번만 믿으면 그것을 놓쳤을 때 `order`에 내 peer id가 없는 채로 굳는데, 그러면 대기실 화면이 통째로 잠기고 되돌릴 방법이 없다.
   - `reset()`은 클라이언트가 들고 있던 상태를 버린다. 옛 접속의 `order`가 남으면 새 접속에서 **"2명이 있는데 그중에 나는 없는"** 상태가 되고, 이건 화면상 정상과 구별되지 않는다.
   - 이 둘의 서버 판정은 `multiplayer.is_server()`가 아니라 **`Network.is_server`로 한다** — 접속이 끊기면 peer가 없어 내 id가 1이 되므로 클라이언트가 자기를 서버로 착각한다.
 - `scripts/game_state.gd` = 오토로드 싱글턴 `GameState`: 화면 간 선택 정보 전달. `CHARACTERS`(`Characters.names()` 5종 — 사본을 두지 않고 캐릭터 표에서 만든다), `WEAPONS`("랜덤" + `Weapons.names()` 17종 — 마찬가지), `MAPS`("랜덤" + `Maps.names()` 4종 — 마찬가지), `p1_config`/`p2_config`(weapon·character), `map_name`, `get_config(prefix)`.
-- `scenes/title.tscn` + `scripts/title.gd` = 타이틀 겸 접속 화면. `AddressEdit`(기본 `127.0.0.1`)·`StartButton`("접속")·`StatusLabel`(접속 중/실패 표시). 접속 성공 시 main으로 전환한다. 좌우 `JellyLeft`/`JellyRight`는 미리보기 장식.
+- `scenes/title.tscn` + `scripts/title.gd` = 타이틀 겸 접속 화면. `AddressEdit`(기본 `127.0.0.1`)·`RoomBox`(방 선택)·`StartButton`("접속")·`StatusLabel`(접속 중/실패 표시). 접속 성공 시 select로 전환한다. 좌우 `JellyLeft`/`JellyRight`는 미리보기 장식.
+  - **방 버튼은 씬에 박아 두지 않고 `Network.ROOMS` 개수만큼 만든다**(이슈 #90). `RoomBox`(HBoxContainer) 아래 `RoomButton` 하나가 첫 방이자 나머지의 원본이고, `_setup_room_buttons()`가 `duplicate()`로 복제한다 — 스타일과 `ButtonGroup`이 그대로 딸려 오므로 라디오 동작과 모양이 자동으로 맞는다. 버튼은 `size_flags_horizontal = 3`이라 방이 몇 개든 같은 폭에 균등하게 나뉜다.
+  - `AddressEdit`에 `주소:포트`로 적으면 고른 방보다 그쪽을 우선한다.
+  - **방이 꽉 차면 ENet이 거절 신호를 보내지 않고 조용히 무시한다** — `connection_failed`조차 오지 않아 "접속 중..."에서 영원히 멈춘다. 그래서 `JOIN_TIMEOUT_SEC`(8초) 타이머로 직접 실패 처리한다. 이 타이머를 지우면 증상이 되살아난다.
 - `scenes/select.tscn` + `scripts/select.gd` = 대기실 겸 무기 선택. `P1Panel`/`P2Panel`은 흰 카드(`Card`) 위에 얹히며 `Lobby.order` 슬롯에 대응하고 **자기 슬롯만 조작 가능**하고 상대 패널은 서버가 보낸 값을 표시만 한다. `StatusLabel`에 "상대 대기 중" 또는 양쪽 준비 상태, `GoButton`은 준비 토글. **씬 전환은 클라이언트가 스스로 하지 않고 `Lobby.match_starting`(서버 지시)을 받아서 한다.** 좌우 화살표는 **자기 맵 선택만** 바꾼다(`Lobby.submit_map()`) — `MapBox`에 양쪽 선택이 나란히 보이고, 실제로 쓸 맵은 시작할 때 서버가 둘 중 하나를 뽑는다. 그 아래 `WeaponBox`에 양쪽이 고른 무기 그림과 이름이 나란히 보인다.
   - **화면에 들어오면 대기실 상태를 서버에서 새로 받는다**(`_start_sync()`, 이슈 #93) — 들고 있던 것을 `Lobby.reset()`으로 버리고 `Lobby.request_state()`로 청한다. 답도 유실될 수 있어 내 자리를 받을 때까지 `SYNC_RETRY_SEC`(1초)마다 다시 청한다.
   - **내 자리가 아직 없으면(`slot_of(me) < 0`) `GoButton`을 잠그고 "대기실 정보를 받는 중..."을 띄운다.** 그 상태에서는 준비를 보내도 서버가 버리므로, 버튼을 켜 두면 "눌리는데 아무 일도 안 일어난다"로만 보인다. 이때는 양쪽 패널도 잠겨 있다 — 화면 전체가 죽은 것처럼 보이는 유일한 경우다.
