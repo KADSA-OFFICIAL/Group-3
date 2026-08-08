@@ -9,8 +9,9 @@ extends Control
 
 func _ready() -> void:
 	# 서버는 Network 오토로드에서 이미 시작됐다 — 접속 UI가 필요 없다.
+	# _ready() 시점에는 트리가 아직 자식을 붙이는 중이라 씬을 바로 갈아치울 수 없다.
 	if Network.is_server:
-		get_tree().change_scene_to_file("res://scenes/main.tscn")
+		get_tree().change_scene_to_file.call_deferred("res://scenes/main.tscn")
 		return
 
 	address_edit.text = Network.DEFAULT_ADDRESS
