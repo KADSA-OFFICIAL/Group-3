@@ -1,4 +1,4 @@
-[gd_scene load_steps=6 format=3 uid="uid://jellypanel001"]
+[gd_scene load_steps=6 format=3 uid="uid://bnruslf487aii"]
 
 [ext_resource type="Script" path="res://scripts/player_panel.gd" id="1_panel"]
 [ext_resource type="Script" path="res://scripts/jelly_preview.gd" id="2_preview"]

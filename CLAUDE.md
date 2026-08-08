@@ -87,6 +87,7 @@ title(서버 주소 입력 후 `StartButton`으로 접속) → select(대기실 
 - **표(`Weapons.LIST`·`Characters.LIST`·`Maps.LIST`)에서 꺼낸 값은 `Variant`다.** `var path := DIR + dict.get("file", "")`처럼 `:=`로 받으면 타입 추론이 실패해 **스크립트가 파싱되지 않고 게임이 아예 뜨지 않는다**(이슈 #66). 반드시 `var file: String = ...`처럼 명시 타입으로 받는다. 정적 검증이 잡아내지 못하는 종류라 표를 다루는 코드를 쓸 때마다 확인한다.
 - .gd 스크립트를 새로 만들면 사용자 에디터가 .uid 파일을 생성한다 — 발견 시 해당 이슈 브랜치에 커밋한다.
 - .tscn의 `load_steps`는 Godot 4.6이 더 이상 기록하지 않는다 — 이미 있는 파일에서는 값을 유지하고(= ext_resource 수 + sub_resource 수 + 1), 없는 파일에 손으로 추가하지 않는다.
+- **사용자가 에디터에서 씬을 만지면 파일이 정규화된다** — `load_steps`가 빠지고, 노드에 `layout_mode`·`anchors_preset`·`unique_id`가 붙고, 손으로 적어 둔 자리표시 UID(`uid://jellyselect01` 같은 것)가 진짜 UID로 교체된다. 실제 변경은 몇 줄인데 diff가 크게 보이니 놀라지 말 것. 이때 **참조 쪽만 새 UID로 바뀌고 선언 쪽은 옛 UID로 남아 어긋날 수 있다**(#72에서 `player_panel.tscn`이 그랬다) — 씬을 커밋하기 전에 선언과 참조를 대조한다. 아직 자리표시 UID인 씬(`main`·`player`·`title`·`projectile`)도 열어 저장하는 순간 같은 일이 일어난다.
 - .tscn의 `uid://`는 손으로 바꾸지 않는다. 씬의 자기 UID를 바꾸면 그 씬을 참조하는 `ext_resource`의 UID도 같이 고쳐야 한다. stale `.godot` 캐시 상태로 에디터가 UID를 재생성하면 참조가 끊길 수 있으니(이슈 #27), 그런 변경은 커밋하지 말고 `git restore`로 되돌린다.
 - `main`이 리셋된 이력이 있다. `dev`는 2026-07-26에 `main`(`e2a7dcb`) 지점으로 재정렬했다. 옛 히스토리가 필요하면 `backup/main-before-reset`을 참조한다.
 
