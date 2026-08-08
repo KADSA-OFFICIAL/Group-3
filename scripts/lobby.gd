@@ -65,6 +65,33 @@ func submit_map(new_map: String) -> void:
 	_receive_map.rpc_id(1, new_map)
 
 
+## 대기실 상태를 서버에 다시 청한다 (클라이언트에서 호출).
+##
+## 접속 순간 서버가 보내는 브로드캐스트 한 번만 믿으면, 그것을 놓쳤을 때 클라이언트가
+## 옛 상태에 갇힌다 — order 에 내 peer id 가 없으니 자기 패널을 못 찾아 대기실의
+## 모든 조작이 죽고, 다시 받을 방법도 없다(이슈 #93). 그래서 받는 쪽에서도 청한다.
+## 서버 판정은 Network.is_server 로 한다 — 접속이 끊긴 뒤에는 peer 가 없어
+## multiplayer.is_server() 가 참이 되어(내 id 가 1) 클라이언트를 서버로 착각한다.
+func request_state() -> void:
+	if Network.is_server:
+		return
+	_request_state.rpc_id(1)
+
+
+## 들고 있던 대기실 상태를 버린다 (클라이언트에서 호출).
+##
+## 옛 접속의 order 가 남아 있으면 새 접속에서 내 새 peer id 가 목록에 없는 채로
+## "2명이 있는데 그중에 나는 없는" 상태가 된다. 그 상태는 화면상 정상과 구별되지 않는다.
+func reset() -> void:
+	if Network.is_server:
+		return
+	order = []
+	configs = {}
+	ready_flags = {}
+	map_name = DEFAULT_MAP
+	lobby_changed.emit()
+
+
 ## 이 플레이어가 고른 맵. 아직 없으면 슬롯 기본값.
 ## 표에서 꺼낸 값은 Variant라 명시 타입으로 받는다.
 func map_of(peer_id: int) -> String:
@@ -123,6 +150,14 @@ func _receive_ready(flag: bool) -> void:
 	ready_flags[sender] = flag
 	_broadcast()
 	_check_start()
+
+
+## 청한 피어에게만 지금 상태를 보낸다. 상태를 바꾸지 않으므로 몇 번을 청해도 안전하다.
+@rpc("any_peer", "call_remote", "reliable")
+func _request_state() -> void:
+	if not multiplayer.is_server():
+		return
+	_receive_lobby.rpc_id(multiplayer.get_remote_sender_id(), order, configs, ready_flags, map_name)
 
 
 ## 보낸 사람의 맵 선택만 바꾼다. 상대 것은 건드리지 않는다.

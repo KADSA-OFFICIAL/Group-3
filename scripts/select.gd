@@ -4,12 +4,16 @@ extends Control
 ## 자기 패널만 조작할 수 있고 상대 패널에는 서버가 보낸 상대 선택이 표시된다.
 ## 둘 다 준비되면 **서버 지시로** 전투 화면으로 전환된다.
 
+## 대기실 정보를 다시 청하는 간격(초). 내 자리를 받을 때까지 반복한다.
+const SYNC_RETRY_SEC := 1.0
+
 @onready var panels := [$P1Panel, $P2Panel]
 @onready var status_label: Label = $StatusLabel
 @onready var go_button: Button = $GoButton
 @onready var map_name_label: Label = $MapBox/MapName
 
 var _my_panel: Control = null
+var _sync_timer: Timer = null
 
 
 func _ready() -> void:
@@ -29,6 +33,35 @@ func _ready() -> void:
 	Network.join_failed.connect(_on_disconnected)
 
 	_refresh()
+	_start_sync()
+
+
+## 대기실 상태를 서버에서 새로 받아 온다.
+##
+## 들고 있던 것을 먼저 버리는 이유는 옛 접속의 order 가 남아 있을 수 있어서다 — 그러면
+## 내 새 peer id 가 목록에 없는 채로 화면이 통째로 잠긴다(이슈 #93).
+## 청한 답도 유실될 수 있으므로 내 자리를 받을 때까지 되풀이한다.
+func _start_sync() -> void:
+	if Network.is_server:
+		return
+
+	Lobby.reset()
+
+	# 이 노드에 붙여두면 씬이 바뀔 때 타이머도 같이 사라진다.
+	_sync_timer = Timer.new()
+	_sync_timer.wait_time = SYNC_RETRY_SEC
+	_sync_timer.timeout.connect(_on_sync_retry)
+	add_child(_sync_timer)
+	_sync_timer.start()
+
+	Lobby.request_state()
+
+
+func _on_sync_retry() -> void:
+	if Lobby.slot_of(multiplayer.get_unique_id()) >= 0:
+		_sync_timer.stop()
+		return
+	Lobby.request_state()
 
 
 func _refresh() -> void:
@@ -78,6 +111,14 @@ func _refresh_maps() -> void:
 
 func _update_status() -> void:
 	var me := multiplayer.get_unique_id()
+
+	# 목록에 내 자리가 없으면 준비를 보내도 서버가 버린다 — 눌러도 아무 일 없는
+	# 버튼을 활성화해 두면 "전부 클릭이 안 된다"로만 보인다(이슈 #93).
+	if Lobby.slot_of(me) < 0:
+		status_label.text = "대기실 정보를 받는 중..."
+		go_button.disabled = true
+		go_button.text = "준비"
+		return
 
 	if Lobby.order.size() < 2:
 		status_label.text = "상대 대기 중..."
