@@ -108,6 +108,38 @@ offset_bottom = 92.0
 theme_override_styles/fill = SubResource("StyleBoxFlat_bar_fill_p2")
 value = 100.0
 
+[node name="P1Score" type="Label" parent="HUD"]
+offset_left = 16.0
+offset_top = 96.0
+offset_right = 216.0
+offset_bottom = 126.0
+theme_override_font_sizes/font_size = 22
+text = "○○○"
+
+[node name="P2Score" type="Label" parent="HUD"]
+offset_left = 936.0
+offset_top = 96.0
+offset_right = 1136.0
+offset_bottom = 126.0
+theme_override_font_sizes/font_size = 22
+text = "○○○"
+horizontal_alignment = 2
+
+[node name="Banner" type="Label" parent="HUD"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+offset_top = 210.0
+offset_right = 300.0
+offset_bottom = 290.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.1, 0.12, 0.2, 1)
+theme_override_constants/outline_size = 12
+theme_override_font_sizes/font_size = 56
+visible = false
+horizontal_alignment = 1
+vertical_alignment = 1
+
 [node name="ControlsHint" type="Label" parent="."]
 offset_left = 16.0
 offset_top = 12.0

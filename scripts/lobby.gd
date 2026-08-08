@@ -8,6 +8,8 @@ extends Node
 
 signal lobby_changed
 signal match_starting
+## 경기가 끝나 대기실로 돌아가라는 서버 지시.
+signal match_ended
 
 const DEFAULT_MAP := "평지"
 
@@ -133,6 +135,17 @@ func _check_start() -> void:
 	_begin_match.rpc()
 
 
+## 경기가 끝나면 준비를 풀고 양쪽을 대기실로 돌려보낸다 (서버에서만 호출).
+## 준비를 풀지 않으면 대기실에 도착하자마자 다시 시작해 버린다.
+func server_end_match() -> void:
+	if not multiplayer.is_server():
+		return
+	for peer_id in ready_flags:
+		ready_flags[peer_id] = false
+	_broadcast()
+	_end_match.rpc()
+
+
 func _broadcast() -> void:
 	_receive_lobby.rpc(order, configs, ready_flags, map_name)
 	lobby_changed.emit()
@@ -152,3 +165,8 @@ func _receive_lobby(new_order: Array, new_configs: Dictionary, new_ready: Dictio
 @rpc("authority", "call_remote", "reliable")
 func _begin_match() -> void:
 	match_starting.emit()
+
+
+@rpc("authority", "call_remote", "reliable")
+func _end_match() -> void:
+	match_ended.emit()

@@ -25,6 +25,13 @@ const ROUND_START_GRACE := 2.0
 ## 3점 선취 승리 (계획서).
 const POINTS_TO_WIN := 3
 
+## 한쪽이 죽고 다음 라운드가 시작되기까지의 대기 시간.
+## 죽은 순간 바로 재배치되면 무슨 일이 있었는지 보이지 않는다.
+const ROUND_RESTART_DELAY := 2.0
+
+## 3점에 도달해 승리가 표시된 뒤 대기실로 돌아가기까지의 시간.
+const MATCH_END_DELAY := 4.0
+
 enum Knockback { WEAK, MEDIUM, STRONG }
 
 ## 넉백 세기(px/s). 플레이어 이동 속도 320 기준.

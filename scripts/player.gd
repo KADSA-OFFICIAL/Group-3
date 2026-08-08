@@ -490,6 +490,13 @@ func server_kill() -> void:
 	_receive_dot.rpc(0.0)
 
 
+## 다음 라운드를 위해 되살린다. 위치·방향은 맵의 스폰 지점을 서버가 정해서 넘긴다.
+func server_reset(spawn_position: Vector2, spawn_facing: int) -> void:
+	if not multiplayer.is_server():
+		return
+	_receive_reset.rpc(spawn_position, spawn_facing)
+
+
 ## 사거리·크기·관통 버프.
 func server_apply_buff(kind: String, value: float, duration: float) -> void:
 	if not multiplayer.is_server():
@@ -557,6 +564,42 @@ func _check_death() -> void:
 	modulate.a = 0.35
 	if multiplayer.is_server():
 		died.emit(owner_peer_id)
+
+
+## 라운드 초기화. 전투 중에 붙는 상태를 **하나도 남기지 않고** 되돌린다 —
+## 여기서 빠뜨린 값은 다음 라운드로 새어 나간다(기절인 채로 시작, 버프 유지 등).
+@rpc("authority", "call_local", "reliable")
+func _receive_reset(spawn_position: Vector2, spawn_facing: int) -> void:
+	hp = Combat.MAX_HP
+	alive = true
+	facing = spawn_facing
+	gauge = 0.0
+	special_ready = true
+	forced_mode = ""
+	modulate.a = 1.0
+
+	global_position = spawn_position
+	_target_position = spawn_position
+	velocity = Vector2.ZERO
+	_remote_on_floor = false
+
+	var grace := _now() + Combat.ROUND_START_GRACE
+	_invuln_until = {"basic": grace, "special": grace}
+	_stun_until = 0.0
+	_pierce_until = 0.0
+	_reach_multiplier = 1.0
+	_reach_until = 0.0
+	_size_multiplier = 1.0
+	_size_until = 0.0
+	_forced_deadline = 0.0
+	_knockback_until = 0.0
+
+	# 들고 있던 입력도 지운다 — 죽는 순간 누르고 있던 키가 이어지지 않도록.
+	_input_direction = 0.0
+	_input_fast_fall = false
+	_jump_queued = false
+	_skill_held_since = -1.0
+	_skill_was_pressed = false
 
 
 @rpc("authority", "call_local", "reliable")

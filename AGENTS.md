@@ -5,7 +5,7 @@
 ## 게임 정보 (젤리 워즈)
 
 2기기 **1 VS 1 온라인 대전** 액션, **Godot 4.6 (GL Compatibility)**. 3조(스틱매너) 개발기획서 기반. `project.godot`의 `config/name`은 "Jelly Wars", 메인 씬은 `scenes/title.tscn`.
-기획 핵심 루프는 무기 선택 → 맵 → 전투 → 3점 선취 승리지만, **현재는 접속·스폰·평지 이동까지만 구현**되어 있다.
+기획 핵심 루프는 무기 선택 → 맵 → 전투 → 3점 선취 승리이며, **맵이 평지 하나뿐인 것을 빼면 루프가 돈다.**
 
 2026-07-28에 한 기기 2인 로컬에서 온라인 구조로 전환 중이다(로드맵 이슈 #32). 전용 헤드리스 서버가 권위를 갖고, 클라이언트 2대가 Tailscale로 접속한다. 서버 주소는 **저장소가 공개이므로 코드에 적지 않는다** — 접속 화면에서 입력받고 커밋되는 기본값은 `127.0.0.1`이다.
 
@@ -13,14 +13,14 @@
 
 ### 씬 흐름
 
-title(서버 주소 입력 후 `StartButton`으로 접속) → select(대기실 겸 무기 선택, 둘 다 준비하면 서버가 시작 지시) → main(평지 전투, 서버가 플레이어 스폰) → ESC(`ui_cancel`)로 접속 종료 후 title 복귀
+title(서버 주소 입력 후 `StartButton`으로 접속) → select(대기실 겸 무기 선택, 둘 다 준비하면 서버가 시작 지시) → main(평지 전투, 서버가 플레이어 스폰) → **3점 선취 시 서버가 select로 되돌린다**(`Lobby.match_ended`). 전투 중 ESC(`ui_cancel`)로 접속 종료 후 title 복귀
 
 헤드리스로 실행되면 `Network`가 서버를 시작하고 title이 UI 없이 곧바로 main으로 넘어간다. **전용 서버는 select를 거치지 않고 계속 main에 머문다** — 대기실 상태는 씬이 아니라 `Lobby` 오토로드가 들고 있기 때문이다.
 
 ### 구조 요약
 
 - `scripts/network.gd` = 오토로드 싱글턴 `Network`: 연결 수립과 피어 알림만 담당(게임 로직 없음). `PORT = 7777`(서버컴 방화벽 UDP 규칙과 일치), `MAX_CLIENTS = 2`, `DEFAULT_ADDRESS = "127.0.0.1"`. `should_run_as_server()`가 헤드리스 또는 `--server` 인자를 감지해 `_ready()`에서 자동으로 서버를 연다. 시그널 `server_started`·`join_succeeded`·`join_failed`·`peer_joined`·`peer_left`. **포트는 여기에만 정의한다.**
-- `scripts/lobby.gd` = 오토로드 싱글턴 `Lobby`: 대기실 상태를 **서버가 권위로** 보관한다. `order`(접속 순서, 먼저 들어온 쪽이 1P), `configs`(peer_id → weapon·head·color1·color2), `ready_flags`, `map_name`. 클라이언트는 `submit_config()`·`submit_ready()`로 자기 값만 보내고, 서버가 `_receive_lobby`로 전체를 복제한다. **무기 "랜덤" 확정과 시작 판정은 서버에서만** 실행되어 양쪽이 같은 값을 갖는다. 클라이언트가 보낸 값은 `_sanitize()`로 목록에 있는 값인지 검사한다. 시그널 `lobby_changed`·`match_starting`.
+- `scripts/lobby.gd` = 오토로드 싱글턴 `Lobby`: 대기실 상태를 **서버가 권위로** 보관한다. `order`(접속 순서, 먼저 들어온 쪽이 1P), `configs`(peer_id → weapon·head·color1·color2), `ready_flags`, `map_name`. 클라이언트는 `submit_config()`·`submit_ready()`로 자기 값만 보내고, 서버가 `_receive_lobby`로 전체를 복제한다. **무기 "랜덤" 확정과 시작 판정은 서버에서만** 실행되어 양쪽이 같은 값을 갖는다. 클라이언트가 보낸 값은 `_sanitize()`로 목록에 있는 값인지 검사한다. 경기가 끝나면 서버가 `server_end_match()`로 준비를 풀고 양쪽을 대기실로 돌려보낸다(안 풀면 도착하자마자 다시 시작한다). 시그널 `lobby_changed`·`match_starting`·`match_ended`.
 - `scripts/game_state.gd` = 오토로드 싱글턴 `GameState`: 화면 간 선택 정보 전달. `CHARACTERS`(`Characters.names()` 5종 — 사본을 두지 않고 캐릭터 표에서 만든다), `WEAPONS`("랜덤" + `Weapons.names()` 17종 — 마찬가지), `MAPS`(랜덤·평지·냉장고·봉지 속·위 속), `p1_config`/`p2_config`(weapon·character), `map_name`, `get_config(prefix)`.
 - `scenes/title.tscn` + `scripts/title.gd` = 타이틀 겸 접속 화면. `AddressEdit`(기본 `127.0.0.1`)·`StartButton`("접속")·`StatusLabel`(접속 중/실패 표시). 접속 성공 시 main으로 전환한다. 좌우 `JellyLeft`/`JellyRight`는 미리보기 장식.
 - `scenes/select.tscn` + `scripts/select.gd` = 대기실 겸 무기 선택. `P1Panel`/`P2Panel`은 흰 카드(`Card`) 위에 얹히며 `Lobby.order` 슬롯에 대응하고 **자기 슬롯만 조작 가능**하고 상대 패널은 서버가 보낸 값을 표시만 한다. `StatusLabel`에 "상대 대기 중" 또는 양쪽 준비 상태, `GoButton`은 준비 토글. **씬 전환은 클라이언트가 스스로 하지 않고 `Lobby.match_starting`(서버 지시)을 받아서 한다.** 맵은 서버가 정하며 평지만 구현되어 있어 좌우 화살표는 비활성이다.
@@ -30,7 +30,9 @@ title(서버 주소 입력 후 `StartButton`으로 접속) → select(대기실 
 - `scenes/main.tscn` + `scripts/main.gd` = 전투 화면이자 **공격 판정의 주인**. `Ground`/`WallLeft`/`WallRight`(StaticBody2D + CollisionShape2D + ColorRect) 지형, `MapLabel`에 `Lobby.map_name` 표시, `HUD`에 양쪽 체력 막대(흰 카드 위, 1P 핑크·2P 라벤더), ESC로 접속 종료.
   - **플레이어는 씬에 배치되어 있지 않고 서버가 런타임에 스폰한다** — `PlayerSpawner`(MultiplayerSpawner, `spawn_path = ../Players`)와 `Players` 노드가 담당. 클라이언트는 씬 준비 후 `_notify_ready()`를 서버로 RPC하고, 서버가 그때 `spawn()`한다(접속 직후 스폰하면 클라이언트가 씬 로드 전이라 놓칠 수 있다). 노드 이름은 `Player_<peer_id>`.
   - 투사체도 같은 방식이다 — `ProjectileSpawner`(`spawn_path = ../Projectiles`). 서버에서 `queue_free()`하면 클라이언트에서도 같이 사라진다.
-  - `_physics_process()`가 `multiplayer.is_server()` 하나로 전투 틱 전체를 감싼다: `_check_basic_attacks()`(근접 접촉·원거리 자동 발사) → `_check_pending_specials()`(강제 이동 중 명중) → `_tick_bleeds()`(출혈) → `_tick_bursts()`(소총 연사). 특수 공격은 `Player.special_requested` 신호를 받아 `_execute_special()`에서 무기별로 분기한다.
+  - `_physics_process()`가 `multiplayer.is_server()` 하나로 전투 틱 전체를 감싼다: `_check_basic_attacks()`(근접 접촉·원거리 자동 발사) → `_check_pending_specials()`(강제 이동 중 명중) → `_tick_bleeds()`(출혈) → `_tick_bursts()`(소총 연사) → `_check_falls()`(낙사) → `_tick_round()`(예약된 라운드 재시작·대기실 복귀). 특수 공격은 `Player.special_requested` 신호를 받아 `_execute_special()`에서 무기별로 분기한다.
+  - **라운드 진행도 여기가 주인이다.** `_on_player_died()`가 상대에게 1점을 주고, `Combat.POINTS_TO_WIN`(3점)에 닿으면 승리를 표시한 뒤 `Lobby.server_end_match()`로 양쪽을 대기실로 돌려보낸다. 아니면 `ROUND_RESTART_DELAY`(2초) 뒤 `_start_round()`가 투사체·서버 타이머를 비우고 `Player.server_reset()`으로 양쪽을 되살린다. 점수(`scores`)와 안내 문구(`banner`)는 서버가 정해 `_receive_round`로 복제하며 **클라이언트는 점수를 세지 않는다.**
+  - 전용 서버는 씬을 벗어나지 않으므로 경기가 끝나면 `_server_reset_match()`가 직접 판을 비운다 — 안 하면 다음 경기에 점수가 이어지고 플레이어가 다시 스폰되지 않는다.
 - `scenes/player.tscn` + `scripts/player.gd`(CharacterBody2D, `class_name Player`): **서버 권위 이동 + 서버 권위 전투**. `owner_peer_id`·`player_name`·`character_id`·`weapon_id` export. SPEED 320, JUMP_VELOCITY -560, FAST_FALL_MULTIPLIER 2.0, INTERPOLATION_SPEED 20.
   - 클라이언트: `read_input()`(**`Input`을 읽는 유일한 지점**) → `_receive_move_input`(unreliable_ordered)·`_receive_jump`·`_receive_skill`(reliable, 엣지 입력이라 유실되면 안 됨)로 서버 전송. 물리를 계산하지 않고 `_receive_state`로 받은 위치로 lerp 보간만 한다.
   - 서버: `apply_movement(input, delta)`로 위치를 정하고(`move_and_slide()`는 여기서만 호출) `_receive_state`(authority, unreliable_ordered)로 위치·속도·접지·`facing`을 복제한다.
@@ -42,7 +44,7 @@ title(서버 주소 입력 후 `StartButton`으로 접속) → select(대기실 
   - 무기는 그림이 있으면 `WeaponSprite`에 세워서 바라보는 쪽에 놓고(`WEAPON_HEIGHT` 56px), 쿨타임 상태는 밝기로 나타낸다. 그림이 없는 10종은 여전히 `WeaponShape` 임시 막대이며 길이가 사거리·색이 쿨타임 상태다. 어느 쪽을 쓸지는 `_apply_weapon()`이 정한다.
 - `scripts/weapons.gd`(`class_name Weapons`) = **무기 표 17종**. 이름·기본/특수 데미지·쿨타임·넉백 등 모든 무기 수치의 유일한 출처. `RANDOM` 상수와 `resolve()`(서버 전용 랜덤 확정)도 여기 있다. 그림이 있는 7종은 `file` 필드를 갖고 `texture()`가 `assets/weapons/`에서 꺼내 온다 — 없으면 null이고 부르는 쪽이 막대로 대신한다.
 - `scripts/art.gd`(`class_name Art`) = 그림 공통 처리. `content_rect()`가 **투명 여백을 뺀 실제 그림 영역**을 잰다. 캐릭터·무기 원화가 모두 정사각 캔버스에 여백을 두고 그려져 있어 크기와 위치를 잡을 때 항상 이 값을 기준으로 한다.
-- `scripts/combat.gd`(`class_name Combat`) = 전투 공통 수치. MAX_HP 100, INVULNERABLE_TIME 0.1, MELEE_HIT_INTERVAL 0.3, ROUND_START_GRACE 2.0, 넉백 3단계(200/400/700), PROJECTILE_SPEED 1120.
+- `scripts/combat.gd`(`class_name Combat`) = 전투 공통 수치. MAX_HP 100, INVULNERABLE_TIME 0.1, MELEE_HIT_INTERVAL 0.6, ROUND_START_GRACE 2.0, POINTS_TO_WIN 3, ROUND_RESTART_DELAY 2.0, MATCH_END_DELAY 4.0, 넉백 3단계(200/400/700), PROJECTILE_SPEED 1120, 낙사 경계 `is_out_of_bounds()`.
 - `scenes/projectile.tscn` + `scripts/projectile.gd`(Area2D, `class_name Projectile`) = 허공을 나는 것(화살·총알·표창·던진 단검·폭탄). 이동·판정은 서버만 하고 위치는 `MultiplayerSynchronizer`로 복제된다. 상대 무기에 막히지 않고 공유 무적도 타지 않는다.
 - `docs/weapon-system.md` = 무기 추가·수정 방법과 지켜야 할 계약. `docs/무기_수치_초안.md` = 수치가 정해진 근거와 미확정 항목.
 - `resources/korean_font.tres` = 한글 폰트 리소스 (SystemFont).
@@ -56,8 +58,8 @@ title(서버 주소 입력 후 `StartButton`으로 접속) → select(대기실 
 
 ### 미구현 (로드맵 #32 기준)
 
-점수·3점 선취 승리와 라운드 진행(5단계), 추가 맵(냉장고·봉지 속·위 속), 낙사 판정.
-죽으면 반투명해질 뿐 다음 라운드가 없다 — `main.gd`의 `_on_player_died()`가 5단계를 붙일 자리다.
+추가 맵 — 맵 시스템 자체가 없다. `main.tscn`에 평지 지형이 직접 박혀 있고 스폰 위치도 `main.gd` 상수라 맵을 늘릴 자리가 없다(이슈 #62에서 바다·용암·벽돌 추가 예정, `GameState.MAPS`의 냉장고·봉지 속·위 속은 그때 교체된다).
+라운드마다 무기를 다시 고르는 방식(기획서)은 아직 없다 — 한 번 고른 무기로 경기가 끝날 때까지 싸운다.
 무기별로 남은 것(표창의 파란 표창, 삼지창 회수 연출, 미확정 수치)은 `docs/weapon-system.md`의 "아직 안 된 것"에 정리되어 있다.
 지연 보상(prediction·rollback)은 로드맵 Non-goal이라 입력 지연이 왕복 시간만큼 발생한다.
 
