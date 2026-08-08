@@ -1,37 +1,75 @@
-[gd_scene load_steps=8 format=3 uid="uid://jellytitle001"]
+[gd_scene load_steps=9 format=3 uid="uid://jellytitle001"]
 
 [ext_resource type="Script" path="res://scripts/title.gd" id="1_title"]
 [ext_resource type="Script" path="res://scripts/jelly_preview.gd" id="2_preview"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_start"]
-bg_color = Color(1, 0.78, 0.15, 1)
-corner_radius_top_left = 16
-corner_radius_top_right = 16
-corner_radius_bottom_right = 16
-corner_radius_bottom_left = 16
+bg_color = Color(0.96, 0.55, 0.78, 1)
+border_width_bottom = 6
+border_color = Color(0.85, 0.42, 0.68, 1)
+corner_radius_top_left = 22
+corner_radius_top_right = 22
+corner_radius_bottom_right = 22
+corner_radius_bottom_left = 22
+corner_detail = 14
+shadow_color = Color(0.85, 0.42, 0.68, 0.3)
+shadow_size = 10
+shadow_offset = Vector2(0, 5)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_start_hover"]
-bg_color = Color(1, 0.87, 0.35, 1)
-corner_radius_top_left = 16
-corner_radius_top_right = 16
-corner_radius_bottom_right = 16
-corner_radius_bottom_left = 16
+bg_color = Color(1, 0.66, 0.85, 1)
+border_width_bottom = 6
+border_color = Color(0.85, 0.42, 0.68, 1)
+corner_radius_top_left = 22
+corner_radius_top_right = 22
+corner_radius_bottom_right = 22
+corner_radius_bottom_left = 22
+corner_detail = 14
+shadow_color = Color(0.85, 0.42, 0.68, 0.35)
+shadow_size = 12
+shadow_offset = Vector2(0, 6)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_start_pressed"]
+bg_color = Color(0.89, 0.48, 0.72, 1)
+border_width_top = 4
+border_color = Color(0.85, 0.42, 0.68, 1)
+corner_radius_top_left = 22
+corner_radius_top_right = 22
+corner_radius_bottom_right = 22
+corner_radius_bottom_left = 22
+corner_detail = 14
 
 [sub_resource type="ButtonGroup" id="ButtonGroup_room"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_room"]
-bg_color = Color(0.17, 0.35, 0.55, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
+bg_color = Color(1, 1, 1, 1)
+border_width_bottom = 4
+border_color = Color(0.86, 0.81, 0.86, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+corner_detail = 12
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_room_hover"]
+bg_color = Color(0.99, 0.96, 0.99, 1)
+border_width_bottom = 4
+border_color = Color(0.85, 0.42, 0.68, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+corner_detail = 12
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_room_on"]
-bg_color = Color(0.35, 0.72, 0.95, 1)
-corner_radius_top_left = 10
-corner_radius_top_right = 10
-corner_radius_bottom_right = 10
-corner_radius_bottom_left = 10
+bg_color = Color(0.96, 0.55, 0.78, 1)
+border_width_bottom = 4
+border_color = Color(0.85, 0.42, 0.68, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+corner_detail = 12
 
 [node name="Title" type="Control"]
 anchor_right = 1.0
@@ -41,7 +79,7 @@ script = ExtResource("1_title")
 [node name="BG" type="ColorRect" parent="."]
 anchor_right = 1.0
 anchor_bottom = 1.0
-color = Color(0.11, 0.27, 0.45, 1)
+color = Color(0.99, 0.95, 0.92, 1)
 
 [node name="JellyLeft" type="Control" parent="."]
 offset_left = 110.0
@@ -49,7 +87,8 @@ offset_top = 220.0
 offset_right = 300.0
 offset_bottom = 480.0
 script = ExtResource("2_preview")
-body_color = Color(0.25, 0.95, 0.95, 1)
+character_id = "분홍"
+fill_ratio = 0.85
 
 [node name="JellyRight" type="Control" parent="."]
 offset_left = 852.0
@@ -57,7 +96,8 @@ offset_top = 220.0
 offset_right = 1042.0
 offset_bottom = 480.0
 script = ExtResource("2_preview")
-body_color = Color(1, 0.9, 0.2, 1)
+character_id = "파랑"
+fill_ratio = 0.85
 
 [node name="TitleLabel" type="Label" parent="."]
 anchor_left = 0.5
@@ -66,9 +106,9 @@ offset_left = -450.0
 offset_top = 110.0
 offset_right = 450.0
 offset_bottom = 270.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_outline_color = Color(0.08, 0.14, 0.28, 1)
-theme_override_constants/outline_size = 20
+theme_override_colors/font_color = Color(0.89, 0.35, 0.66, 1)
+theme_override_colors/font_outline_color = Color(1, 1, 1, 1)
+theme_override_constants/outline_size = 22
 theme_override_font_sizes/font_size = 110
 text = "젤리 워즈"
 horizontal_alignment = 1
@@ -80,7 +120,7 @@ offset_left = -300.0
 offset_top = 272.0
 offset_right = 300.0
 offset_bottom = 310.0
-theme_override_colors/font_color = Color(0.75, 0.85, 1, 1)
+theme_override_colors/font_color = Color(0.55, 0.48, 0.58, 1)
 theme_override_font_sizes/font_size = 24
 text = "JELLY WARS  —  스틱매너"
 horizontal_alignment = 1
@@ -92,7 +132,7 @@ offset_left = -300.0
 offset_top = 330.0
 offset_right = 300.0
 offset_bottom = 356.0
-theme_override_colors/font_color = Color(0.75, 0.85, 1, 1)
+theme_override_colors/font_color = Color(0.55, 0.48, 0.58, 1)
 theme_override_font_sizes/font_size = 18
 text = "서버 주소"
 horizontal_alignment = 1
@@ -115,7 +155,7 @@ offset_left = -300.0
 offset_top = 408.0
 offset_right = 300.0
 offset_bottom = 432.0
-theme_override_colors/font_color = Color(0.75, 0.85, 1, 1)
+theme_override_colors/font_color = Color(0.55, 0.48, 0.58, 1)
 theme_override_font_sizes/font_size = 18
 text = "방 선택"
 horizontal_alignment = 1
@@ -130,13 +170,15 @@ offset_bottom = 486.0
 toggle_mode = true
 button_pressed = true
 button_group = SubResource("ButtonGroup_room")
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
-theme_override_colors/font_pressed_color = Color(0.08, 0.2, 0.35, 1)
+theme_override_colors/font_color = Color(0.45, 0.38, 0.48, 1)
+theme_override_colors/font_hover_color = Color(0.89, 0.35, 0.66, 1)
+theme_override_colors/font_pressed_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_pressed_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 24
 theme_override_styles/normal = SubResource("StyleBoxFlat_room")
-theme_override_styles/hover = SubResource("StyleBoxFlat_room")
+theme_override_styles/hover = SubResource("StyleBoxFlat_room_hover")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_room_on")
+theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_room_on")
 text = "1번 방"
 
 [node name="Room2Button" type="Button" parent="."]
@@ -148,13 +190,15 @@ offset_right = 180.0
 offset_bottom = 486.0
 toggle_mode = true
 button_group = SubResource("ButtonGroup_room")
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
-theme_override_colors/font_pressed_color = Color(0.08, 0.2, 0.35, 1)
+theme_override_colors/font_color = Color(0.45, 0.38, 0.48, 1)
+theme_override_colors/font_hover_color = Color(0.89, 0.35, 0.66, 1)
+theme_override_colors/font_pressed_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_pressed_color = Color(1, 1, 1, 1)
 theme_override_font_sizes/font_size = 24
 theme_override_styles/normal = SubResource("StyleBoxFlat_room")
-theme_override_styles/hover = SubResource("StyleBoxFlat_room")
+theme_override_styles/hover = SubResource("StyleBoxFlat_room_hover")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_room_on")
+theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_room_on")
 text = "2번 방"
 
 [node name="StartButton" type="Button" parent="."]
@@ -164,13 +208,13 @@ offset_left = -140.0
 offset_top = 496.0
 offset_right = 140.0
 offset_bottom = 556.0
-theme_override_colors/font_color = Color(0.3, 0.18, 0, 1)
-theme_override_colors/font_hover_color = Color(0.3, 0.18, 0, 1)
-theme_override_colors/font_pressed_color = Color(0.3, 0.18, 0, 1)
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(1, 0.93, 0.97, 1)
 theme_override_font_sizes/font_size = 34
 theme_override_styles/normal = SubResource("StyleBoxFlat_start")
 theme_override_styles/hover = SubResource("StyleBoxFlat_start_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_start")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_start_pressed")
 text = "접속"
 
 [node name="StatusLabel" type="Label" parent="."]
@@ -180,6 +224,6 @@ offset_left = -400.0
 offset_top = 564.0
 offset_right = 400.0
 offset_bottom = 592.0
-theme_override_colors/font_color = Color(1, 0.9, 0.6, 1)
+theme_override_colors/font_color = Color(0.85, 0.47, 0.25, 1)
 theme_override_font_sizes/font_size = 18
 horizontal_alignment = 1

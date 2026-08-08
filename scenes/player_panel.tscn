@@ -1,14 +1,58 @@
-[gd_scene load_steps=3 format=3 uid="uid://jellypanel001"]
+[gd_scene load_steps=6 format=3 uid="uid://bnruslf487aii"]
 
 [ext_resource type="Script" path="res://scripts/player_panel.gd" id="1_panel"]
 [ext_resource type="Script" path="res://scripts/jelly_preview.gd" id="2_preview"]
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_random"]
+bg_color = Color(0.56, 0.59, 0.91, 1)
+border_width_bottom = 5
+border_color = Color(0.44, 0.47, 0.8, 1)
+corner_radius_top_left = 18
+corner_radius_top_right = 18
+corner_radius_bottom_right = 18
+corner_radius_bottom_left = 18
+corner_detail = 12
+shadow_color = Color(0.44, 0.47, 0.8, 0.28)
+shadow_size = 8
+shadow_offset = Vector2(0, 4)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_random_hover"]
+bg_color = Color(0.66, 0.69, 0.96, 1)
+border_width_bottom = 5
+border_color = Color(0.44, 0.47, 0.8, 1)
+corner_radius_top_left = 18
+corner_radius_top_right = 18
+corner_radius_bottom_right = 18
+corner_radius_bottom_left = 18
+corner_detail = 12
+shadow_color = Color(0.44, 0.47, 0.8, 0.32)
+shadow_size = 10
+shadow_offset = Vector2(0, 5)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_random_pressed"]
+bg_color = Color(0.5, 0.53, 0.85, 1)
+border_width_top = 3
+border_color = Color(0.44, 0.47, 0.8, 1)
+corner_radius_top_left = 18
+corner_radius_top_right = 18
+corner_radius_bottom_right = 18
+corner_radius_bottom_left = 18
+corner_detail = 12
+
 [node name="PlayerPanel" type="Control"]
 script = ExtResource("1_panel")
+
+[node name="Card" type="Panel" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
 
 [node name="HBox" type="HBoxContainer" parent="."]
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_left = 18.0
+offset_top = 18.0
+offset_right = -18.0
+offset_bottom = -18.0
 theme_override_constants/separation = 12
 
 [node name="IconColumn" type="VBoxContainer" parent="HBox"]
@@ -23,23 +67,11 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 18
 text = "무기"
 
-[node name="HeadButton" type="Button" parent="HBox/IconColumn"]
+[node name="CharacterButton" type="Button" parent="HBox/IconColumn"]
 custom_minimum_size = Vector2(0, 62)
 layout_mode = 2
 theme_override_font_sizes/font_size = 18
-text = "머리"
-
-[node name="Color1Button" type="Button" parent="HBox/IconColumn"]
-custom_minimum_size = Vector2(0, 62)
-layout_mode = 2
-theme_override_font_sizes/font_size = 18
-text = "색상 1"
-
-[node name="Color2Button" type="Button" parent="HBox/IconColumn"]
-custom_minimum_size = Vector2(0, 62)
-layout_mode = 2
-theme_override_font_sizes/font_size = 18
-text = "색상 2"
+text = "캐릭터"
 
 [node name="Center" type="VBoxContainer" parent="HBox"]
 layout_mode = 2
@@ -61,5 +93,11 @@ script = ExtResource("2_preview")
 custom_minimum_size = Vector2(230, 48)
 layout_mode = 2
 size_flags_horizontal = 4
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.94, 0.95, 1, 1)
 theme_override_font_sizes/font_size = 22
+theme_override_styles/normal = SubResource("StyleBoxFlat_random")
+theme_override_styles/hover = SubResource("StyleBoxFlat_random_hover")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_random_pressed")
 text = "랜덤 🎲"

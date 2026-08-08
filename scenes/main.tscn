@@ -1,58 +1,178 @@
 [gd_scene load_steps=4 format=3 uid="uid://jellymain0001"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="2_mainscript"]
+[ext_resource type="Script" path="res://scripts/jelly_preview.gd" id="3_preview"]
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_ground"]
-size = Vector2(1152, 96)
-
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_wall"]
-size = Vector2(40, 648)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar_fill_p2"]
+bg_color = Color(0.56, 0.59, 0.91, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+corner_detail = 10
 
 [node name="Main" type="Node2D"]
 script = ExtResource("2_mainscript")
 
-[node name="Background" type="ColorRect" parent="."]
-offset_right = 1152.0
-offset_bottom = 648.0
-color = Color(0.53, 0.81, 0.92, 1)
-
-[node name="Ground" type="StaticBody2D" parent="."]
-position = Vector2(576, 600)
-
-[node name="GroundRect" type="ColorRect" parent="Ground"]
-offset_left = -576.0
-offset_top = -48.0
-offset_right = 576.0
-offset_bottom = 48.0
-color = Color(0.36, 0.66, 0.32, 1)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Ground"]
-shape = SubResource("RectangleShape2D_ground")
-
-[node name="WallLeft" type="StaticBody2D" parent="."]
-position = Vector2(-20, 324)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="WallLeft"]
-shape = SubResource("RectangleShape2D_wall")
-
-[node name="WallRight" type="StaticBody2D" parent="."]
-position = Vector2(1172, 324)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="WallRight"]
-shape = SubResource("RectangleShape2D_wall")
+[node name="MapRoot" type="Node2D" parent="."]
 
 [node name="Players" type="Node2D" parent="."]
 
 [node name="PlayerSpawner" type="MultiplayerSpawner" parent="."]
 spawn_path = NodePath("../Players")
 
+[node name="Projectiles" type="Node2D" parent="."]
+
+[node name="ProjectileSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../Projectiles")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="HUD" type="Control" parent="UI"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="P1Card" type="Panel" parent="UI/HUD"]
+offset_left = 8.0
+offset_top = 40.0
+offset_right = 328.0
+offset_bottom = 100.0
+
+[node name="P2Card" type="Panel" parent="UI/HUD"]
+offset_left = 824.0
+offset_top = 40.0
+offset_right = 1144.0
+offset_bottom = 100.0
+
+[node name="P1Name" type="Label" parent="UI/HUD"]
+offset_left = 16.0
+offset_top = 44.0
+offset_right = 216.0
+offset_bottom = 68.0
+theme_override_font_sizes/font_size = 16
+text = "1P"
+
+[node name="P1Bar" type="ProgressBar" parent="UI/HUD"]
+offset_left = 16.0
+offset_top = 68.0
+offset_right = 316.0
+offset_bottom = 92.0
+value = 100.0
+
+[node name="P2Name" type="Label" parent="UI/HUD"]
+offset_left = 836.0
+offset_top = 44.0
+offset_right = 1136.0
+offset_bottom = 68.0
+theme_override_font_sizes/font_size = 16
+text = "2P"
+horizontal_alignment = 2
+
+[node name="P2Bar" type="ProgressBar" parent="UI/HUD"]
+offset_left = 836.0
+offset_top = 68.0
+offset_right = 1136.0
+offset_bottom = 92.0
+theme_override_styles/fill = SubResource("StyleBoxFlat_bar_fill_p2")
+value = 100.0
+
+[node name="P1Score" type="Label" parent="UI/HUD"]
+offset_left = 16.0
+offset_top = 96.0
+offset_right = 216.0
+offset_bottom = 126.0
+theme_override_font_sizes/font_size = 22
+text = "○○○"
+
+[node name="P2Score" type="Label" parent="UI/HUD"]
+offset_left = 936.0
+offset_top = 96.0
+offset_right = 1136.0
+offset_bottom = 126.0
+theme_override_font_sizes/font_size = 22
+text = "○○○"
+horizontal_alignment = 2
+
+[node name="Banner" type="Label" parent="UI/HUD"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+offset_top = 210.0
+offset_right = 300.0
+offset_bottom = 290.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.1, 0.12, 0.2, 1)
+theme_override_constants/outline_size = 12
+theme_override_font_sizes/font_size = 56
+visible = false
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ResultOverlay" type="Control" parent="UI/HUD"]
+visible = false
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="Dim" type="ColorRect" parent="UI/HUD/ResultOverlay"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(0.29, 0.23, 0.32, 0.55)
+
+[node name="Jelly" type="Control" parent="UI/HUD/ResultOverlay"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -130.0
+offset_top = 110.0
+offset_right = 130.0
+offset_bottom = 370.0
+mouse_filter = 2
+pivot_offset = Vector2(130, 260)
+script = ExtResource("3_preview")
+fill_ratio = 0.95
+
+[node name="ResultLabel" type="Label" parent="UI/HUD/ResultOverlay"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -340.0
+offset_top = 380.0
+offset_right = 340.0
+offset_bottom = 480.0
+mouse_filter = 2
+pivot_offset = Vector2(340, 50)
+theme_override_colors/font_color = Color(0.96, 0.55, 0.78, 1)
+theme_override_colors/font_outline_color = Color(0.29, 0.23, 0.32, 1)
+theme_override_constants/outline_size = 14
+theme_override_font_sizes/font_size = 80
+text = "승리!"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ScoreLabel" type="Label" parent="UI/HUD/ResultOverlay"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+offset_top = 486.0
+offset_right = 300.0
+offset_bottom = 530.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.29, 0.23, 0.32, 1)
+theme_override_constants/outline_size = 8
+theme_override_font_sizes/font_size = 30
+text = "3  :  0"
+horizontal_alignment = 1
+vertical_alignment = 1
+
 [node name="ControlsHint" type="Label" parent="."]
 offset_left = 16.0
 offset_top = 12.0
-offset_right = 600.0
+offset_right = 700.0
 offset_bottom = 40.0
 theme_override_font_sizes/font_size = 16
-text = "이동: A·D / ←·→   |   점프: W / ↑   |   빠른 낙하: S / ↓   |   ESC: 접속 종료"
+text = "이동: A·D / ←·→   |   점프: W / ↑   |   빠른 낙하: S / ↓   |   특수 공격: Shift / Space   |   ESC: 접속 종료"
 
 [node name="MapLabel" type="Label" parent="."]
 offset_left = 986.0

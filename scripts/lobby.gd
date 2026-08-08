@@ -8,12 +8,17 @@ extends Node
 
 signal lobby_changed
 signal match_starting
+## 경기가 끝나 대기실로 돌아가라는 서버 지시.
+signal match_ended
 
-const DEFAULT_MAP := "평지"
+## 대기실 기본 맵. 실제 맵 목록은 Maps 표가 들고 있다.
+const DEFAULT_MAP := Maps.RANDOM
 
 ## 접속 순서. 먼저 들어온 peer가 1P(슬롯 0)다.
 var order: Array = []
-## peer_id -> {"weapon": String, "head": String, "color1": Color, "color2": Color}
+## peer_id -> {"weapon": String, "character": String, "map": String}
+##
+## 맵은 **플레이어마다 하나씩** 고르고, 시작할 때 서버가 둘 중 하나를 뽑는다 (`_pick_map`).
 var configs: Dictionary = {}
 ## peer_id -> bool
 var ready_flags: Dictionary = {}
@@ -27,10 +32,9 @@ func _ready() -> void:
 
 func default_config(slot: int) -> Dictionary:
 	return {
-		"weapon": GameState.WEAPONS[0],
-		"head": GameState.HEADS[0],
-		"color1": GameState.COLORS[slot % GameState.COLORS.size()],
-		"color2": GameState.COLORS[8],
+		"weapon": Weapons.RANDOM,
+		"character": Characters.id_at(slot),
+		"map": Maps.RANDOM,
 	}
 
 
@@ -54,6 +58,24 @@ func submit_config(config: Dictionary) -> void:
 ## 내 준비 여부를 서버에 알린다 (클라이언트에서 호출).
 func submit_ready(flag: bool) -> void:
 	_receive_ready.rpc_id(1, flag)
+
+
+## 내 맵 선택을 서버에 알린다 (클라이언트에서 호출). 상대 선택은 건드리지 않는다.
+func submit_map(new_map: String) -> void:
+	_receive_map.rpc_id(1, new_map)
+
+
+## 이 플레이어가 고른 맵. 아직 없으면 슬롯 기본값.
+## 표에서 꺼낸 값은 Variant라 명시 타입으로 받는다.
+func map_of(peer_id: int) -> String:
+	var picked: String = config_for(peer_id).get("map", DEFAULT_MAP)
+	return picked
+
+
+## 이 플레이어가 고른 무기. 시작 전에는 "랜덤"일 수 있다.
+func weapon_of(peer_id: int) -> String:
+	var picked: String = config_for(peer_id).get("weapon", Weapons.RANDOM)
+	return picked
 
 
 # ─────────────────────────── 서버 전용 ───────────────────────────
@@ -103,27 +125,52 @@ func _receive_ready(flag: bool) -> void:
 	_check_start()
 
 
+## 보낸 사람의 맵 선택만 바꾼다. 상대 것은 건드리지 않는다.
+@rpc("any_peer", "call_remote", "reliable")
+func _receive_map(new_map: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if not order.has(sender):
+		return
+	var config: Dictionary = configs.get(sender, default_config(order.find(sender)))
+	config["map"] = new_map
+	configs[sender] = _sanitize(config, order.find(sender))
+	_broadcast()
+
+
 ## 클라이언트가 보낸 값이 목록에 있는 값인지 확인한다.
 func _sanitize(config: Dictionary, slot: int) -> Dictionary:
 	var base := default_config(slot)
 	var weapon: String = config.get("weapon", base["weapon"])
-	var head: String = config.get("head", base["head"])
+	var character: String = config.get("character", base["character"])
+	var map: String = config.get("map", base["map"])
 	return {
 		"weapon": weapon if GameState.WEAPONS.has(weapon) else base["weapon"],
-		"head": head if GameState.HEADS.has(head) else base["head"],
-		"color1": config.get("color1", base["color1"]),
-		"color2": config.get("color2", base["color2"]),
+		"character": character if Characters.has(character) else base["character"],
+		# "랜덤"은 실제 맵이 아니지만 선택지로는 유효하다.
+		"map": map if GameState.MAPS.has(map) else base["map"],
 	}
 
 
 ## "랜덤"을 실제 무기로 확정한다. 서버에서만 호출되므로 양쪽이 같은 값을 받는다.
-## 클라이언트가 각자 뽑으면 서로 다른 무기가 되므로 이 위치를 옮기지 말 것.
-## 무기 시스템 통합 가이드: docs/weapon-system.md
+## 클라이언트가 각자 뽑으면 서로 다른 무기가 되므로 이 호출을 클라이언트로 옮기지 말 것.
+## 뽑기 자체는 무기 표가 들고 있다 — 무기 시스템 통합 가이드: docs/weapon-system.md
 func _resolve_weapon(weapon: String) -> String:
-	if weapon != GameState.WEAPONS[0]:
-		return weapon
-	var pool: Array = GameState.WEAPONS.slice(1)
-	return pool[randi() % pool.size()]
+	return Weapons.resolve(weapon)
+
+
+## 둘이 고른 맵 중 하나를 뽑는다. **서버에서만 호출한다.**
+##
+## 각자의 "랜덤"을 먼저 실제 맵으로 확정한 뒤에 뽑는다 — 순서를 바꾸면 "랜덤"이
+## 그대로 후보가 되어 한 번 더 뽑기가 일어난다.
+func _pick_map() -> String:
+	var picks: Array[String] = []
+	for peer_id in order:
+		picks.append(Maps.resolve(map_of(peer_id)))
+	if picks.is_empty():
+		return Maps.resolve(Maps.RANDOM)
+	return picks.pick_random()
 
 
 func _check_start() -> void:
@@ -136,8 +183,21 @@ func _check_start() -> void:
 		var config: Dictionary = configs[peer_id]
 		config["weapon"] = _resolve_weapon(config["weapon"])
 		configs[peer_id] = config
+	# 맵도 여기서 확정해야 양쪽이 같은 지형을 깐다.
+	map_name = _pick_map()
 	_broadcast()
 	_begin_match.rpc()
+
+
+## 경기가 끝나면 준비를 풀고 양쪽을 대기실로 돌려보낸다 (서버에서만 호출).
+## 준비를 풀지 않으면 대기실에 도착하자마자 다시 시작해 버린다.
+func server_end_match() -> void:
+	if not multiplayer.is_server():
+		return
+	for peer_id in ready_flags:
+		ready_flags[peer_id] = false
+	_broadcast()
+	_end_match.rpc()
 
 
 func _broadcast() -> void:
@@ -159,3 +219,8 @@ func _receive_lobby(new_order: Array, new_configs: Dictionary, new_ready: Dictio
 @rpc("authority", "call_remote", "reliable")
 func _begin_match() -> void:
 	match_starting.emit()
+
+
+@rpc("authority", "call_remote", "reliable")
+func _end_match() -> void:
+	match_ended.emit()

@@ -1,0 +1,222 @@
+class_name Weapons
+extends RefCounted
+## 무기 표. "무기 리스트(정리본).docx" 의 설명 + docs/무기_수치_초안.md 에서 확정한 수치.
+##
+## 문서에 적힌 무기는 17종이며, 기존 코드에 있던 "의자"와 "우산"은 이 목록에 없다.
+##
+## 필드
+##   basic_damage    기본 공격 데미지. 0 이면 기본 공격 없음 (문서에 "X" — 폭탄·샷건)
+##   basic_interval  기본 공격 간격(초). 0 이면 접촉 판정(피격 무적 시간에만 걸림)
+##   basic_kind      "melee" 근접 / "melee_dot" 근접 지속 / "ranged" 원거리
+##   special_damage  특수 공격 데미지. 0 이면 데미지 없는 능력 부여형
+##   special_cooldown 특수 공격 쿨타임(초)
+##   knockback       넉백 단계 — Combat.Knockback
+
+## 실제 무기가 아닌 특수값. 서버가 실제 무기 하나로 확정한다 (resolve 참고).
+const RANDOM := "랜덤"
+
+## 무기 그림 폴더. `file` 필드가 있는 무기만 전투 화면에 그림이 나오고,
+## 없는 무기는 지금까지처럼 임시 막대로 그려진다.
+const ART_DIR := "res://assets/weapons/"
+
+const LIST: Array[Dictionary] = [
+	{
+		"name": "검",
+		"file": "sword.png",
+		"basic": "닿으면 일정 데미지",
+		"special": "일정 체력 비례 데미지 + 이펙트",
+		"basic_damage": 10.0, "basic_interval": 0.0, "basic_kind": "melee",
+		"special_damage": 0.0, "special_cooldown": 6.0, "knockback": 1,
+		# 상대의 "현재 체력" 에 비례한다 (확정).
+		"special_hp_ratio": 0.15,
+	},
+	{
+		"name": "단검",
+		"file": "dagger.png",
+		"basic": "드랍된 단검을 주우면 자동으로 상대 피격",
+		"special": "자동 재수집 (피격 가능)",
+		"basic_damage": 15.0, "basic_interval": 0.0, "basic_kind": "ranged",
+		"special_damage": 0.0, "special_cooldown": 5.0, "knockback": 0,
+		# 주우면 자동으로 상대를 향해 날아간다 — 조준 불필요 (확정).
+		"homing": true,
+	},
+	{
+		"name": "광선검",
+		"basic": "닿으면 일정 지속 데미지",
+		"special": "일정 시간 관통 능력 부여",
+		# 특수가 능력 부여라 기본 지속 데미지만으로 싸운다 — 12 → 20 (#55).
+		"basic_damage": 20.0, "basic_interval": 1.0, "basic_kind": "melee_dot",
+		"special_damage": 0.0, "special_cooldown": 8.0, "knockback": 0,
+		"special_duration": 3.0,
+	},
+	{
+		"name": "전기톱",
+		"file": "chainsaw.png",
+		"basic": "닿으면 일정 지속 데미지",
+		"special": "관통 돌진 후 일정 시간 출혈",
+		"basic_damage": 15.0, "basic_interval": 1.0, "basic_kind": "melee_dot",
+		"special_damage": 20.0, "special_cooldown": 7.0, "knockback": 1,
+		"bleed_damage": 4.0, "bleed_duration": 3.0,
+	},
+	{
+		"name": "망치",
+		"file": "hammer.png",
+		"basic": "닿으면 일정 데미지",
+		"special": "닿으면 일정 시간 피격 시 기절 효과 부여",
+		"basic_damage": 14.0, "basic_interval": 0.0, "basic_kind": "melee",
+		"special_damage": 16.0, "special_cooldown": 8.0, "knockback": 2,
+		"stun_duration": 1.2,
+	},
+	{
+		"name": "대포 총",
+		"file": "cannon.png",
+		"basic": "일정 시간 일정 데미지",
+		"special": "추가 데미지 + 넉백 미사일 발사",
+		# 6 → 7 (#55). 원거리 계열 중 가장 낮아서 조금 올렸다.
+		"basic_damage": 7.0, "basic_interval": 0.5, "basic_kind": "ranged",
+		"special_damage": 25.0, "special_cooldown": 6.0, "knockback": 2,
+	},
+	{
+		"name": "폭탄",
+		"file": "bomb.png",
+		"basic": "",  # 문서에 "X" — 기본 공격 없음
+		"special": "피격하거나 일정 시간이 지나면 터지는 폭탄 투하 (일정 확률로 데미지·넉백 증가 폭탄 등장)",
+		"basic_damage": 0.0, "basic_interval": 0.0, "basic_kind": "",
+		# 기본 공격이 없어 특수 하나로 싸운다 — 22 → 32, 쿨타임 5 → 3.5 (#55).
+		"special_damage": 32.0, "special_cooldown": 3.5, "knockback": 1,
+		"empowered_chance": 0.20, "empowered_damage": 48.0, "empowered_knockback": 2,
+	},
+	{
+		"name": "활",
+		"file": "bow.png",
+		"basic": "일정 시간 일정 데미지",
+		"special": "동시 다중 관통 화살 발사",
+		"basic_damage": 10.0, "basic_interval": 0.7, "basic_kind": "ranged",
+		"special_damage": 12.0, "special_cooldown": 6.0, "knockback": 0,
+		"special_projectiles": 3,
+	},
+	{
+		"name": "삼지창",
+		"basic": "닿으면 일정 데미지",
+		"special": "던지고 피격 시 일정 데미지 + 기절 효과 부여, 자동 회수",
+		"basic_damage": 12.0, "basic_interval": 0.0, "basic_kind": "melee",
+		"special_damage": 18.0, "special_cooldown": 7.0, "knockback": 1,
+		"stun_duration": 0.8,
+	},
+	{
+		"name": "글러브",
+		"basic": "닿으면 일정 데미지",
+		"special": "단거리 주먹 발사 + 넉백 효과 부여",
+		"basic_damage": 9.0, "basic_interval": 0.0, "basic_kind": "melee",
+		"special_damage": 14.0, "special_cooldown": 4.0, "knockback": 2,
+	},
+	{
+		"name": "표창",
+		"basic": "닿으면 일정 데미지",
+		"special": "표창 던지기 (중력 영향) (일정 확률로 파란 표창 등장, 피격 시 1P·2P 위치 변경)",
+		"basic_damage": 8.0, "basic_interval": 0.0, "basic_kind": "melee",
+		"special_damage": 14.0, "special_cooldown": 3.0, "knockback": 0,
+		"blue_chance": 0.15,  # 파란 표창: 데미지 없이 1P·2P 위치 교환
+	},
+	{
+		"name": "너클",
+		"basic": "닿으면 일정 데미지",
+		"special": "게이지 비례 강펀치 데미지 + 넉백 (피격 시 게이지 충전)",
+		"basic_damage": 9.0, "basic_interval": 0.0, "basic_kind": "melee",
+		"special_damage": 0.0, "special_cooldown": 5.0, "knockback": 2,
+		"gauge_min_damage": 10.0, "gauge_max_damage": 40.0,
+		"gauge_per_hit": 10.0, "gauge_max": 100.0,
+	},
+	{
+		"name": "양날 도끼",
+		"basic": "닿으면 일정 데미지",
+		"special": "고속 상승 후 고속 낙하 데미지",
+		"basic_damage": 13.0, "basic_interval": 0.0, "basic_kind": "melee",
+		"special_damage": 28.0, "special_cooldown": 9.0, "knockback": 2,
+	},
+	{
+		"name": "샷건",
+		"basic": "",  # 문서에 "X" — 기본 공격 없음
+		"special": "샷건 발사 (+장전 쿨타임)",
+		"basic_damage": 0.0, "basic_interval": 0.0, "basic_kind": "",
+		# 기본 공격이 없어 특수 하나로 싸운다 — 30 → 34, 쿨타임 4 → 3 (#55).
+		"special_damage": 34.0, "special_cooldown": 3.0, "knockback": 1,
+		"falloff_min_damage": 14.0,  # 거리에 따라 34 → 14 로 감소
+	},
+	{
+		"name": "장대",
+		"basic": "닿으면 일정 데미지",
+		"special": "봉 길이 증가",
+		# 특수가 사거리 증가뿐이라 기본 데미지로만 싸운다 — 8 → 10 (#55).
+		"basic_damage": 10.0, "basic_interval": 0.0, "basic_kind": "melee",
+		"special_damage": 0.0, "special_cooldown": 10.0, "knockback": 0,
+		"reach_multiplier": 1.6, "special_duration": 5.0,
+	},
+	{
+		"name": "소총",
+		"basic": "일정 시간 일정 데미지",
+		"special": "스킬 누르고 있으면 연사",
+		"basic_damage": 5.0, "basic_interval": 0.4, "basic_kind": "ranged",
+		"special_damage": 1.5, "special_cooldown": 8.0, "knockback": 0,
+		# 발당 3 → 1.5 로 낮춤 (확정).
+		# 연사 지속시간도 3초 → 2초 로 줄였다 (확정) — 개별 무적이 되면서 다 맞으면 너무 셌다.
+		"burst_interval": 0.1, "burst_duration": 2.0,
+	},
+	{
+		"name": "방패",
+		"basic": "닿으면 일정 데미지",
+		"special": "방패 크기 증가 or 방패 던지기",
+		"basic_damage": 7.0, "basic_interval": 0.0, "basic_kind": "melee",
+		"special_damage": 16.0, "special_cooldown": 5.0, "knockback": 1,
+		# 짧게 누르면 던지기(16), 길게 누르고 있으면 크기 증가 (확정).
+		# TODO: 짧게/길게를 가르는 시간이 아직 안 정해졌다.
+		"size_multiplier": 2.0, "special_duration": 4.0,
+	},
+]
+
+
+static func names() -> Array[String]:
+	var out: Array[String] = []
+	for weapon: Dictionary in LIST:
+		out.append(weapon["name"])
+	return out
+
+
+static func get_weapon(weapon_name: String) -> Dictionary:
+	for weapon: Dictionary in LIST:
+		if weapon["name"] == weapon_name:
+			return weapon
+	return {}
+
+
+## 기본 공격이 없는 무기 (문서에 "X" 로 표기된 폭탄·샷건).
+static func has_basic_attack(weapon_name: String) -> bool:
+	var weapon := get_weapon(weapon_name)
+	return not weapon.is_empty() and weapon["basic_damage"] > 0.0
+
+
+## "랜덤" 을 실제 무기 이름으로 바꾼다.
+## **서버에서만 호출한다** — 클라이언트가 각자 뽑으면 양쪽이 다른 무기를 갖는다.
+## 무기 그림. 그림이 없는 무기이거나 파일이 아직 없으면 null을 돌려준다 —
+## 부르는 쪽이 임시 막대로 대신 그린다.
+static func texture(weapon_name: String) -> Texture2D:
+	var file: String = get_weapon(weapon_name).get("file", "")
+	if file.is_empty():
+		return null
+	var path := ART_DIR + file
+	if not ResourceLoader.exists(path):
+		return null
+	return load(path)
+
+
+static func resolve(weapon_name: String) -> String:
+	if weapon_name == RANDOM:
+		return names().pick_random()
+	return weapon_name
+
+
+## 라운드마다 제시할 후보를 겹치지 않게 뽑는다 (계획서: 모든 무기 중 랜덤 3개).
+static func random_choices(count: int) -> Array[String]:
+	var pool := names()
+	pool.shuffle()
+	return pool.slice(0, count)
