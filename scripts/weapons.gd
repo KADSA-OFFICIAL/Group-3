@@ -49,7 +49,8 @@ const LIST: Array[Dictionary] = [
 		"basic": "닿으면 일정 지속 데미지",
 		"special": "일정 시간 관통 능력 부여",
 		# 특수가 능력 부여라 기본 지속 데미지만으로 싸운다 — 12 → 20 (#55).
-		"basic_damage": 20.0, "basic_interval": 1.0, "basic_kind": "melee_dot",
+		# 초당 20은 그대로 두고 0.2초마다 4씩 촘촘하게 넣는다 (#103).
+		"basic_damage": 4.0, "basic_interval": 0.2, "basic_kind": "melee_dot",
 		"special_damage": 0.0, "special_cooldown": 8.0, "knockback": 0,
 		"special_duration": 3.0,
 	},
