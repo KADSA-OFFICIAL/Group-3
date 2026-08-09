@@ -44,6 +44,9 @@ const BODY_HEIGHT := 72.0
 const BODY_BOTTOM := 28.0
 ## 무기 그림을 그릴 높이(px). 캐릭터보다 조금 작아야 손에 든 것처럼 보인다.
 const WEAPON_HEIGHT := 56.0
+## 무기 그림의 최대 가로(px). 가로로 긴 원화(전기톱·대포 총)가 몸통(48px)을 덮지 않게 한다.
+## 세로로 긴 무기는 여기에 걸리지 않아 WEAPON_HEIGHT 그대로다.
+const WEAPON_MAX_WIDTH := 80.0
 ## 무기를 몸 중심에서 얼마나 옆으로 둘지. 바라보는 쪽에 놓인다.
 const WEAPON_OFFSET_X := 26.0
 ## 무기 그림의 세로 중심. 몸 한가운데쯤이다.
@@ -272,10 +275,12 @@ func _apply_weapon() -> void:
 		return
 	var texture_size := Vector2(texture.get_size())
 	var content := Art.content_rect(texture)
-	if content.size.y <= 0.0:
+	if content.size.y <= 0.0 or content.size.x <= 0.0:
 		_weapon_has_art = false
 		return
-	var factor := WEAPON_HEIGHT / content.size.y
+	# 세로를 WEAPON_HEIGHT에 맞추되 가로가 WEAPON_MAX_WIDTH를 넘지 않게 한다.
+	# 세로만 맞추면 가로로 긴 원화(전기톱 2.69:1)가 몸통 3배 폭으로 터진다 (이슈 #105).
+	var factor := minf(WEAPON_HEIGHT / content.size.y, WEAPON_MAX_WIDTH / content.size.x)
 	sprite.scale = Vector2.ONE * factor
 	# 캐릭터와 마찬가지로 여백을 뺀 실제 그림의 가운데를 기준으로 놓는다.
 	_weapon_offset = Vector2(
