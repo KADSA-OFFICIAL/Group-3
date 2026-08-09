@@ -11,6 +11,7 @@ extends Node2D
 
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
 const PROJECTILE_SCENE := preload("res://scenes/projectile.tscn")
+const LIGHT_BURST_SCENE := preload("res://scenes/light_burst.tscn")
 ## 맵에 Spawns가 없을 때만 쓰는 대비값. 정상 경로에서는 맵 씬이 위치를 들고 있다.
 const SPAWN_POSITIONS := [Vector2(300, 500), Vector2(852, 500)]
 
@@ -63,6 +64,7 @@ const LOSE_COLOR := Color(0.72, 0.70, 0.80)
 @onready var map_root: Node2D = $MapRoot
 @onready var players_root: Node2D = $Players
 @onready var projectiles_root: Node2D = $Projectiles
+@onready var effects_root: Node2D = $Effects
 @onready var player_spawner: MultiplayerSpawner = $PlayerSpawner
 @onready var projectile_spawner: MultiplayerSpawner = $ProjectileSpawner
 @onready var result_overlay: Control = $UI/HUD/ResultOverlay
@@ -707,9 +709,18 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 	var peer_id: int = attacker.owner_peer_id
 	match weapon["name"]:
 		"검":
-			# 상대의 "현재 체력"에 비례.
-			return _melee_special(attacker, target, target.hp * weapon["special_hp_ratio"],
-				weapon["knockback"])
+			# 일정 거리 안에 상대가 있을 때만 쓸 수 있다. 밖이면 발동 자체를 안 해서
+			# 쿨타임도 돌지 않는다 — 허공에 대고 쿨타임만 날리는 일이 없게 한다.
+			var sword_range: float = weapon["special_range"]
+			if attacker.global_position.distance_to(target.global_position) > sword_range:
+				return false
+			# 거리만 맞으면 들어간다. 빛기둥이 상대에게 꽂히는 연출이라 휘두르는 방향이나
+			# 상대 무기의 막기(is_blocked)는 따지지 않는다.
+			var hp_ratio: float = weapon["special_hp_ratio"]
+			target.server_apply_hit(target.hp * hp_ratio, weapon["knockback"],
+				attacker.global_position.x, 0.0, "special")
+			_play_light_burst.rpc(target.global_position + Vector2(0.0, Player.BODY_BOTTOM))
+			return true
 		"망치":
 			return _melee_special(attacker, target, weapon["special_damage"],
 				weapon["knockback"], weapon["stun_duration"])
@@ -852,6 +863,19 @@ func _melee_special(attacker: Player, target: Player, damage: float, knockback: 
 		return true  # 상대 무기에 막힘
 	target.server_apply_hit(damage, knockback, attacker.global_position.x, stun, "special")
 	return true
+
+
+# ─────────────────────────── 연출 ───────────────────────────
+## 판정에 관여하지 않는 그림만. 서버가 결과를 정한 뒤 각 피어가 자기 화면에 띄운다.
+## 투사체와 달리 MultiplayerSpawner를 쓰지 않는다 — 잠깐 떴다 스스로 사라지고
+## 아무것도 맞히지 않아서, 위치를 계속 맞출 것도 나중에 지워 줄 것도 없다.
+
+## 검 특수의 빛기둥. `at`은 맞은 젤리의 발밑이다.
+@rpc("authority", "call_local", "reliable")
+func _play_light_burst(at: Vector2) -> void:
+	var burst := LIGHT_BURST_SCENE.instantiate()
+	effects_root.add_child(burst)
+	burst.global_position = at
 
 
 ## 돌진이 벽 없는 맵에서 무한히 이어지지 않게 하는 안전장치.
