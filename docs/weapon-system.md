@@ -40,7 +40,8 @@
 3. 기본 공격은 `basic_kind`가 `"melee"` / `"melee_dot"` / `"ranged"`면 자동으로 동작합니다.
    - `"melee"` — `basic_interval`에 **0.6초 바닥**(`Combat.MELEE_HIT_INTERVAL`)이 걸립니다.
    - `"melee_dot"` — 바닥 없이 `basic_interval` 그대로 들어갑니다. 데미지는 **한 틱당** 값이므로
-     초당 데미지는 `basic_damage / basic_interval`입니다 (광선검 = 4 / 0.2 = 초당 20).
+     초당 데미지는 `basic_damage / basic_interval`입니다
+     (광선검 = 4 / 0.2 = 초당 20, 전기톱 = 3 / 0.2 = 초당 15).
      넉백만 0.6초마다 한 번 주고 나머지 틱은 넉백 없이 들어갑니다 — 매 틱 밀어내면
      상대 조작이 잠기고 지속 무기가 자기 사거리 밖으로 상대를 내보냅니다 (이슈 #103).
 4. 그림이 있으면 `assets/weapons/`에 넣고 항목에 `"file": "이름.png"` 한 줄을 더합니다.

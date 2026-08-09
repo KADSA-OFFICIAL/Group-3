@@ -59,7 +59,8 @@ const LIST: Array[Dictionary] = [
 		"file": "chainsaw.png",
 		"basic": "닿으면 일정 지속 데미지",
 		"special": "관통 돌진 후 일정 시간 출혈",
-		"basic_damage": 15.0, "basic_interval": 1.0, "basic_kind": "melee_dot",
+		# 초당 15는 그대로 두고 0.2초마다 3씩 촘촘하게 넣는다 (#105, 광선검과 같은 방식).
+		"basic_damage": 3.0, "basic_interval": 0.2, "basic_kind": "melee_dot",
 		"special_damage": 20.0, "special_cooldown": 7.0, "knockback": 1,
 		"bleed_damage": 4.0, "bleed_duration": 3.0,
 	},
