@@ -45,6 +45,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "광선검",
+		"file": "laser_sword.png",
 		"basic": "닿으면 일정 지속 데미지",
 		"special": "일정 시간 관통 능력 부여",
 		# 특수가 능력 부여라 기본 지속 데미지만으로 싸운다 — 12 → 20 (#55).

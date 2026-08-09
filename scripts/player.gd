@@ -48,6 +48,14 @@ const WEAPON_HEIGHT := 56.0
 const WEAPON_OFFSET_X := 26.0
 ## 무기 그림의 세로 중심. 몸 한가운데쯤이다.
 const WEAPON_CENTER_Y := -8.0
+
+## 관통(광선검 특수) 중임을 알리는 빛. 광선검 날에 맞춘 민트빛이다.
+const PIERCE_COLOR := Color(0.55, 0.95, 0.85)
+## 관통 중 무기에 곱하는 색. 1을 넘겨서 날이 타오르게 만든다.
+const PIERCE_TINT := Color(0.8, 1.5, 1.35)
+## 빛무리 크기와 그 중심(몸 한가운데). 몸이 48x72라 이 정도면 몸을 감싼다.
+const PIERCE_AURA_RADIUS := 58.0
+const PIERCE_AURA_CENTER := Vector2(0.0, -8.0)
 ## 넉백 직후 좌우 입력이 속도를 덮어쓰지 못하는 시간.
 ##
 ## 서버가 매 프레임 velocity.x를 입력값으로 덮어쓰기 때문에, 이 잠금이 없으면
@@ -73,6 +81,8 @@ var _invuln_until := {"basic": 0.0, "special": 0.0}
 var _stun_until := 0.0
 ## 광선검 특수 — 상대 무기의 막기를 무시한다. 지형은 통과하지 못한다.
 var _pierce_until := 0.0
+## 지난 프레임에 관통 빛을 그렸는가. 꺼진 프레임에 한 번 더 다시 그려 지우려고 들고 있다.
+var _aura_shown := false
 var _reach_multiplier := 1.0
 var _reach_until := 0.0
 var _size_multiplier := 1.0
@@ -274,6 +284,36 @@ func _apply_weapon() -> void:
 	)
 
 
+## 관통 빛은 매 프레임 모양이 바뀌니 켜져 있는 동안 계속 다시 그린다.
+## 꺼진 프레임에도 한 번 더 그려야 화면에서 지워진다 — 안 그러면 마지막 모양이 남는다.
+func _update_pierce_aura() -> void:
+	var piercing := is_piercing()
+	if piercing or _aura_shown:
+		_aura_shown = piercing
+		queue_redraw()
+
+
+## 관통(광선검 특수) 중에 몸 뒤로 도는 빛.
+##
+## 자식 노드(`Body`)보다 **먼저** 그려져서 젤리 뒤에 깔린다 — 그래서 별도 노드가 필요 없다.
+## 씬 루트에 걸린 가산 혼합은 이 그리기에만 적용되고 자식 스프라이트에는 영향이 없다.
+##
+## `_pierce_until`이 `_receive_buff`로 양쪽 피어에 복제되므로 두 화면에 똑같이 뜬다.
+func _draw() -> void:
+	if not is_piercing():
+		return
+	var pulse := 0.72 + 0.28 * sin(_now() * 9.0)
+	# 맵 배경이 밝은 편(평지 잔디가 0.36·0.66·0.32)이라 가산 혼합이 쉽게 묻힌다.
+	# 넓고 옅은 것 위에 좁고 진한 것을 겹쳐야 잔디 위에서도 빛으로 읽힌다.
+	Art.draw_glow(self, PIERCE_AURA_CENTER, PIERCE_AURA_RADIUS * (1.25 + 0.12 * pulse),
+		PIERCE_COLOR, 0.5 * pulse)
+	Art.draw_glow(self, PIERCE_AURA_CENTER, PIERCE_AURA_RADIUS * (0.92 + 0.08 * pulse),
+		PIERCE_COLOR, 0.9 * pulse)
+	# 윤곽선을 덧그려 "지금 켜져 있다"가 확실히 보이게 한다.
+	draw_arc(PIERCE_AURA_CENTER, PIERCE_AURA_RADIUS * 0.82, 0.0, TAU, 44,
+		Color(PIERCE_COLOR, 0.95 * pulse), 3.5, true)
+
+
 ## 무기 표시. 그림이 있으면 그림을, 없으면 지금까지의 임시 막대를 쓴다.
 ## 어느 쪽이든 특수 공격 쿨타임 상태를 밝기·색으로 보여준다 (별도 UI 없음).
 func _update_weapon_shape() -> void:
@@ -295,7 +335,9 @@ func _update_weapon_shape() -> void:
 			facing * WEAPON_OFFSET_X + offset_x,
 			WEAPON_CENTER_Y + _weapon_offset.y,
 		)
-		if not can_act():
+		if is_piercing():
+			sprite.modulate = PIERCE_TINT              # 관통 중 — 날이 타오른다
+		elif not can_act():
 			sprite.modulate = Color(0.45, 0.45, 0.5)   # 기절·사망·강제 이동
 		elif special_ready:
 			sprite.modulate = Color.WHITE              # 특수 공격 가능
@@ -311,7 +353,9 @@ func _update_weapon_shape() -> void:
 	shape.size = Vector2(length, thickness)
 	shape.position = Vector2(0.0 if facing > 0 else -length, -thickness * 0.5)
 
-	if not can_act():
+	if is_piercing():
+		shape.color = PIERCE_COLOR             # 관통 중 (그림이 아직 없는 무기용)
+	elif not can_act():
 		shape.color = Color(0.45, 0.45, 0.5)   # 기절·사망·강제 이동
 	elif special_ready:
 		shape.color = Color(0.95, 0.95, 1.0)   # 특수 공격 가능
@@ -343,6 +387,7 @@ func _physics_process(delta: float) -> void:
 		_update_squash(_remote_on_floor, delta)
 
 	_expire_buffs()
+	_update_pierce_aura()
 	_update_weapon_shape()
 	# 바라보는 방향으로 그림을 뒤집는다. facing은 서버가 정해 양쪽에 복제된다.
 	# 여백 보정의 부호는 _place_body()가 flip_h를 보고 맞춘다.

@@ -20,3 +20,17 @@ static func content_rect(texture: Texture2D) -> Rect2:
 	if used.size.x <= 0.0 or used.size.y <= 0.0:
 		return full
 	return used
+
+
+## 가운데가 가장 밝고 가장자리로 갈수록 옅어지는 빛무리를 그린다.
+##
+## 원 하나로 그리면 테두리가 딱 끊겨서 어두운 판때기처럼 보인다. 같은 옅기의 원을
+## 크기만 줄여 가며 겹쳐 쌓으면 겹친 횟수만큼 밝아져서 가운데가 밝은 감쇠가 나온다.
+## `steps`가 클수록 매끄럽고, 작으면 동심원 띠가 보인다.
+static func draw_glow(canvas: CanvasItem, center: Vector2, radius: float,
+		color: Color, alpha: float, steps := 26) -> void:
+	if radius <= 0.0 or alpha <= 0.0:
+		return
+	var step_alpha := alpha / float(steps)
+	for i in range(steps, 0, -1):
+		canvas.draw_circle(center, radius * float(i) / float(steps), Color(color, step_alpha))
