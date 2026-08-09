@@ -551,6 +551,8 @@ func _try_ranged_basic(attacker: Player) -> void:
 			"use_gravity": true,
 			"on_solid": "stay",
 			"pickup_owner": peer_id,
+			# 던진 뒤에도 바닥에서 주워야 해서 손에 들었을 때와 같은 그림으로 그린다.
+			"art": weapon["name"],
 		})
 		return
 

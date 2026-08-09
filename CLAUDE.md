@@ -64,6 +64,7 @@ title(방을 고르고 서버 주소를 입력해 `StartButton`으로 접속) �
 - `scripts/art.gd`(`class_name Art`) = 그림 공통 처리. `content_rect()`가 **투명 여백을 뺀 실제 그림 영역**을 잰다. 캐릭터·무기 원화가 모두 정사각 캔버스에 여백을 두고 그려져 있어 크기와 위치를 잡을 때 항상 이 값을 기준으로 한다.
 - `scripts/combat.gd`(`class_name Combat`) = 전투 공통 수치. MAX_HP 100, INVULNERABLE_TIME 0.1, MELEE_HIT_INTERVAL 0.6, ROUND_START_GRACE 2.0, POINTS_TO_WIN 3, ROUND_RESTART_DELAY 2.0, MATCH_END_DELAY 4.0, 넉백 3단계(200/400/700), PROJECTILE_SPEED 1120, 낙사 경계 `is_out_of_bounds()`.
 - `scenes/projectile.tscn` + `scripts/projectile.gd`(Area2D, `class_name Projectile`) = 허공을 나는 것(화살·총알·표창·던진 단검·폭탄). 이동·판정은 서버만 하고 위치는 `MultiplayerSynchronizer`로 복제된다. 상대 무기에 막히지 않고 공유 무적도 타지 않는다.
+  - 그리기는 기본이 노란 막대(`Visual`)지만, 스폰 데이터에 `art`(무기 이름)가 있으면 `ArtSprite`에 그 무기 그림을 붙이고 진행 방향으로 회전시킨다 — 지금은 단검만 쓴다(이슈 #96). 클라이언트는 속도를 복제받지 않으므로 방향은 **위치 변화**로 잡는다(`_process`). 멈추면 마지막 방향을 유지해 바닥에 꽂힌 모양이 된다. 회전하는 그림이라 여백 보정은 `position`이 아니라 `Sprite2D.offset`으로 넣어야 한다.
 - `docs/weapon-system.md` = 무기 추가·수정 방법과 지켜야 할 계약. `docs/무기_수치_초안.md` = 수치가 정해진 근거와 미확정 항목.
 - `resources/korean_font.tres` = 한글 폰트 리소스 (SystemFont).
 - `resources/ui_theme.tres` = **UI 공통 테마**. `project.godot`의 `gui/theme/custom`으로 프로젝트 전체에 걸려 있어 버튼·라벨·패널·입력칸·진행바의 기본 모양이 여기서 나온다. **색을 바꾸려면 여기를 고친다** — 씬마다 `theme_override`를 넣지 말 것. 젤리 톤 팔레트: 크림 배경 `(0.99, 0.95, 0.92)`, 진한 글자 `(0.29, 0.23, 0.32)`, 보조 글자 `(0.55, 0.48, 0.58)`, 젤리 핑크 `(0.96, 0.55, 0.78)`, 라벤더 `(0.56, 0.59, 0.91)`. 흰 카드 + 큰 둥근 모서리(버튼 18·패널 28) + 부드러운 그림자가 기본형이다.
