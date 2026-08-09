@@ -505,6 +505,9 @@ func _try_melee_basic(attacker: Player, target: Player) -> void:
 		return
 	if target.is_invulnerable() or is_blocked(attacker, target):
 		return
+	# 등 뒤의 상대는 못 때린다. 뒤를 잡으면 일방적으로 때릴 수 있다는 뜻이기도 하다.
+	if not _faces(attacker, target):
+		return
 
 	var reach: float = MELEE_REACH + attacker.current_reach()
 	if attacker.global_position.distance_to(target.global_position) > reach:
@@ -647,6 +650,17 @@ func _tick_bursts() -> void:
 			"damage": info["damage"],
 			"knockback": info["knockback"],
 		})
+
+
+## 공격자가 상대 쪽을 보고 있는가. **근접 공격은 기본·특수 모두 이 방향으로만 들어간다** (이슈 #107).
+##
+## 좌우가 정확히 같은 순간(위아래로 겹쳤을 때)은 어느 쪽도 아니므로 빗나간 것으로 본다.
+## 원거리는 `_server_fire()`가 애초에 바라보는 쪽으로만 쏘므로 여기를 거치지 않고,
+## 강제 이동 중의 특수(돌진·낙하)도 거치지 않는다 — 도끼 낙하는 바로 아래를 때리는 기술이라
+## 좌우를 따지면 영영 안 맞는다.
+func _faces(attacker: Player, target: Player) -> bool:
+	var offset: float = target.global_position.x - attacker.global_position.x
+	return signf(offset) == signf(float(attacker.facing))
 
 
 ## 상대가 나를 보고 있고, 상대 무기가 내 무기보다 길면 막힌다.
@@ -873,8 +887,7 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 ## 빗나가도 발동은 한 것이므로 true — 쿨타임은 돌아간다.
 func _melee_special(attacker: Player, target: Player, damage: float, knockback: int,
 		stun := 0.0, reach_bonus := 1.0) -> bool:
-	var offset: float = target.global_position.x - attacker.global_position.x
-	if signf(offset) != signf(float(attacker.facing)):
+	if not _faces(attacker, target):
 		return true  # 방향이 안 맞아 빗나감
 	var reach: float = (MELEE_REACH + attacker.current_reach()) * reach_bonus
 	if attacker.global_position.distance_to(target.global_position) > reach:
