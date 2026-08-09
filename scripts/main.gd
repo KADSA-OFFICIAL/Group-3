@@ -510,13 +510,33 @@ func _try_melee_basic(attacker: Player, target: Player) -> void:
 	if attacker.global_position.distance_to(target.global_position) > reach:
 		return
 
-	# 지속 데미지 무기는 basic_interval 마다, 나머지는 근접 공격 간격이 정한다.
+	# 지속 데미지 무기는 자기 basic_interval 대로 촘촘히 들어간다.
+	# "닿으면" 무기는 0.6초 바닥을 지킨다 — 근거는 Combat.MELEE_HIT_INTERVAL 주석.
+	var continuous: bool = weapon["basic_kind"] == "melee_dot"
+	var interval: float = weapon["basic_interval"]
+	if not continuous:
+		interval = maxf(interval, Combat.MELEE_HIT_INTERVAL)
+
 	var key := "%d>%d" % [attacker.owner_peer_id, target.owner_peer_id]
 	var now := _now()
 	if now < _next_hit_at.get(key, 0.0):
 		return
-	_next_hit_at[key] = now + maxf(weapon["basic_interval"], Combat.MELEE_HIT_INTERVAL)
+	_next_hit_at[key] = now + interval
 
+	# 넉백은 데미지보다 성기게 준다.
+	#
+	# 촘촘한 지속 데미지에 매번 넉백을 붙이면 두 가지가 망가진다. 상대는
+	# KNOCKBACK_CONTROL_LOCK이 계속 새로 걸려 좌우 조작을 아예 못 하고, 지속 무기는
+	# 자기가 상대를 제 사거리 밖으로 밀어내서 스스로 지속을 끊는다.
+	# 그래서 넉백은 다른 근접 무기와 같은 박자(0.6초)로만 주고 나머지 틱은
+	# 넉백 없는 지속 데미지로 넣는다.
+	#
+	# 간격이 0.6초보다 긴 무기(전기톱 1.0초)는 이 조건이 늘 참이라 지금까지와 똑같다.
+	var knock_key := "knock>" + key
+	if now < _next_hit_at.get(knock_key, 0.0):
+		target.server_apply_dot(weapon["basic_damage"])
+		return
+	_next_hit_at[knock_key] = now + Combat.MELEE_HIT_INTERVAL
 	target.server_apply_hit(weapon["basic_damage"], weapon["knockback"],
 		attacker.global_position.x, 0.0, "basic")
 

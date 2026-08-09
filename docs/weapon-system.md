@@ -38,6 +38,11 @@
    선택 UI·검증·전송이 전부 이 배열을 따라가므로 다른 곳을 손댈 필요가 없습니다.
 2. 특수 공격에 새 동작이 필요하면 `main.gd`의 `_execute_special()`에 `match` 가지를 추가합니다.
 3. 기본 공격은 `basic_kind`가 `"melee"` / `"melee_dot"` / `"ranged"`면 자동으로 동작합니다.
+   - `"melee"` — `basic_interval`에 **0.6초 바닥**(`Combat.MELEE_HIT_INTERVAL`)이 걸립니다.
+   - `"melee_dot"` — 바닥 없이 `basic_interval` 그대로 들어갑니다. 데미지는 **한 틱당** 값이므로
+     초당 데미지는 `basic_damage / basic_interval`입니다 (광선검 = 4 / 0.2 = 초당 20).
+     넉백만 0.6초마다 한 번 주고 나머지 틱은 넉백 없이 들어갑니다 — 매 틱 밀어내면
+     상대 조작이 잠기고 지속 무기가 자기 사거리 밖으로 상대를 내보냅니다 (이슈 #103).
 4. 그림이 있으면 `assets/weapons/`에 넣고 항목에 `"file": "이름.png"` 한 줄을 더합니다.
    `file`이 없는 무기는 전투 화면에서 임시 막대로 그려집니다 (`assets/weapons/README.md` 참고).
 5. 날아가는 것까지 그 그림으로 그리려면 발사할 때 스폰 데이터에 `"art": weapon["name"]`을 넣습니다.
