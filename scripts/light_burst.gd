@@ -149,9 +149,9 @@ func _draw_taper(perp: Vector2, tip: Vector2, half: float, color: Color, alpha: 
 func _draw_core(fade: float) -> void:
 	var grow := _grow(0.0)
 	# 넓고 옅은 것부터 좁고 진한 것까지 겹쳐 가운데로 갈수록 하얗게 태운다.
-	_draw_glow(104.0 * grow, EDGE_COLOR, 0.5 * fade)
-	_draw_glow(40.0 * grow, BEAM_COLOR, 0.7 * fade)
-	_draw_glow(14.0 * grow, CORE_COLOR, 1.0 * fade)
+	Art.draw_glow(self, Vector2.ZERO, 104.0 * grow, EDGE_COLOR, 0.5 * fade, GLOW_STEPS)
+	Art.draw_glow(self, Vector2.ZERO, 40.0 * grow, BEAM_COLOR, 0.7 * fade, GLOW_STEPS)
+	Art.draw_glow(self, Vector2.ZERO, 14.0 * grow, CORE_COLOR, 1.0 * fade, GLOW_STEPS)
 
 	var height := BEAM_LENGTH * 0.88 * grow
 	draw_polygon(
@@ -167,17 +167,6 @@ func _draw_core(fade: float) -> void:
 			Color(CORE_COLOR, 0.0),
 			Color(CORE_COLOR, 0.0),
 		]))
-
-
-## 가운데가 가장 밝고 가장자리로 갈수록 옅어지는 빛무리.
-##
-## 원 하나로 그리면 테두리가 딱 끊겨서 어두운 판때기처럼 보인다. 같은 옅기의 원을
-## 크기만 줄여 가며 겹쳐 쌓으면 겹친 횟수만큼 밝아져서 가운데가 밝은 감쇠가 나온다.
-func _draw_glow(radius: float, color: Color, alpha: float) -> void:
-	var step_alpha := alpha / float(GLOW_STEPS)
-	for i in range(GLOW_STEPS, 0, -1):
-		draw_circle(Vector2.ZERO, radius * float(i) / float(GLOW_STEPS),
-			Color(color, step_alpha))
 
 
 ## 바닥에 누운 빛 고리. 사그라들면서 조금 넓어진다.
