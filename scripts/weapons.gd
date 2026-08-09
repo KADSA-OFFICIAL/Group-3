@@ -11,6 +11,7 @@ extends RefCounted
 ##   special_damage  특수 공격 데미지. 0 이면 데미지 없는 능력 부여형
 ##   special_cooldown 특수 공격 쿨타임(초)
 ##   knockback       넉백 단계 — Combat.Knockback
+##   special_range   이 거리 안에 상대가 있을 때만 특수를 쓸 수 있다. 없으면 거리 제한 없음
 
 ## 실제 무기가 아닌 특수값. 서버가 실제 무기 하나로 확정한다 (resolve 참고).
 const RANDOM := "랜덤"
@@ -29,6 +30,8 @@ const LIST: Array[Dictionary] = [
 		"special_damage": 0.0, "special_cooldown": 6.0, "knockback": 1,
 		# 상대의 "현재 체력" 에 비례한다 (확정).
 		"special_hp_ratio": 0.15,
+		# 이 거리 안에 상대가 있을 때만 쓸 수 있다 — 밖이면 발동도 쿨타임도 없다.
+		"special_range": 150.0,
 	},
 	{
 		"name": "단검",

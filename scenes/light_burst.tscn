@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3 uid="uid://jellyburst001"]
+
+[ext_resource type="Script" path="res://scripts/light_burst.gd" id="1_burst"]
+
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_glow"]
+blend_mode = 1
+
+[node name="LightBurst" type="Node2D"]
+material = SubResource("CanvasItemMaterial_glow")
+script = ExtResource("1_burst")
