@@ -81,6 +81,11 @@ scripts/promote-main.sh 12 "Add player jump"
 
 이 명령은 현재 작업 브랜치를 원격에 다시 푸시하고, GitHub CLI가 준비되어 있으면 `main` 대상 PR을 만듭니다.
 
+이 PR에는 **사람 리뷰가 필요하지 않습니다**(이슈 #115). 에이전트가 작업할 때는 `dev` 머지 후
+검증이 통과하면 이어서 `main`까지 머지합니다. 다만 **화면으로만 판단되는 변경**(UI 색·배치, 조작감)은
+`dev`까지만 머지하고 사용자 F5 확인을 기다립니다 — 자세한 조건은
+[CLAUDE.md](../CLAUDE.md)의 Merge Flow 섹션에 있습니다.
+
 ## PR 규칙
 
 - 작업 PR의 base branch는 `dev`입니다.
