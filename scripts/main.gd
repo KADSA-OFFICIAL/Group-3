@@ -11,6 +11,7 @@ extends Node2D
 
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
 const PROJECTILE_SCENE := preload("res://scenes/projectile.tscn")
+const LIGHT_BURST_SCENE := preload("res://scenes/light_burst.tscn")
 ## 맵에 Spawns가 없을 때만 쓰는 대비값. 정상 경로에서는 맵 씬이 위치를 들고 있다.
 const SPAWN_POSITIONS := [Vector2(300, 500), Vector2(852, 500)]
 
@@ -63,6 +64,7 @@ const LOSE_COLOR := Color(0.72, 0.70, 0.80)
 @onready var map_root: Node2D = $MapRoot
 @onready var players_root: Node2D = $Players
 @onready var projectiles_root: Node2D = $Projectiles
+@onready var effects_root: Node2D = $Effects
 @onready var player_spawner: MultiplayerSpawner = $PlayerSpawner
 @onready var projectile_spawner: MultiplayerSpawner = $ProjectileSpawner
 @onready var result_overlay: Control = $UI/HUD/ResultOverlay
@@ -503,18 +505,41 @@ func _try_melee_basic(attacker: Player, target: Player) -> void:
 		return
 	if target.is_invulnerable() or is_blocked(attacker, target):
 		return
+	# 등 뒤의 상대는 못 때린다. 뒤를 잡으면 일방적으로 때릴 수 있다는 뜻이기도 하다.
+	if not _faces(attacker, target):
+		return
 
 	var reach: float = MELEE_REACH + attacker.current_reach()
 	if attacker.global_position.distance_to(target.global_position) > reach:
 		return
 
-	# 지속 데미지 무기는 basic_interval 마다, 나머지는 근접 공격 간격이 정한다.
+	# 지속 데미지 무기는 자기 basic_interval 대로 촘촘히 들어간다.
+	# "닿으면" 무기는 0.6초 바닥을 지킨다 — 근거는 Combat.MELEE_HIT_INTERVAL 주석.
+	var continuous: bool = weapon["basic_kind"] == "melee_dot"
+	var interval: float = weapon["basic_interval"]
+	if not continuous:
+		interval = maxf(interval, Combat.MELEE_HIT_INTERVAL)
+
 	var key := "%d>%d" % [attacker.owner_peer_id, target.owner_peer_id]
 	var now := _now()
 	if now < _next_hit_at.get(key, 0.0):
 		return
-	_next_hit_at[key] = now + maxf(weapon["basic_interval"], Combat.MELEE_HIT_INTERVAL)
+	_next_hit_at[key] = now + interval
 
+	# 넉백은 데미지보다 성기게 준다.
+	#
+	# 촘촘한 지속 데미지에 매번 넉백을 붙이면 두 가지가 망가진다. 상대는
+	# KNOCKBACK_CONTROL_LOCK이 계속 새로 걸려 좌우 조작을 아예 못 하고, 지속 무기는
+	# 자기가 상대를 제 사거리 밖으로 밀어내서 스스로 지속을 끊는다.
+	# 그래서 넉백은 다른 근접 무기와 같은 박자(0.6초)로만 주고 나머지 틱은
+	# 넉백 없는 지속 데미지로 넣는다.
+	#
+	# 간격이 0.6초보다 긴 무기(전기톱 1.0초)는 이 조건이 늘 참이라 지금까지와 똑같다.
+	var knock_key := "knock>" + key
+	if now < _next_hit_at.get(knock_key, 0.0):
+		target.server_apply_dot(weapon["basic_damage"])
+		return
+	_next_hit_at[knock_key] = now + Combat.MELEE_HIT_INTERVAL
 	target.server_apply_hit(weapon["basic_damage"], weapon["knockback"],
 		attacker.global_position.x, 0.0, "basic")
 
@@ -551,6 +576,8 @@ func _try_ranged_basic(attacker: Player) -> void:
 			"use_gravity": true,
 			"on_solid": "stay",
 			"pickup_owner": peer_id,
+			# 던진 뒤에도 바닥에서 주워야 해서 손에 들었을 때와 같은 그림으로 그린다.
+			"art": weapon["name"],
 		})
 		return
 
@@ -623,6 +650,17 @@ func _tick_bursts() -> void:
 			"damage": info["damage"],
 			"knockback": info["knockback"],
 		})
+
+
+## 공격자가 상대 쪽을 보고 있는가. **근접 공격은 기본·특수 모두 이 방향으로만 들어간다** (이슈 #107).
+##
+## 좌우가 정확히 같은 순간(위아래로 겹쳤을 때)은 어느 쪽도 아니므로 빗나간 것으로 본다.
+## 원거리는 `_server_fire()`가 애초에 바라보는 쪽으로만 쏘므로 여기를 거치지 않고,
+## 강제 이동 중의 특수(돌진·낙하)도 거치지 않는다 — 도끼 낙하는 바로 아래를 때리는 기술이라
+## 좌우를 따지면 영영 안 맞는다.
+func _faces(attacker: Player, target: Player) -> bool:
+	var offset: float = target.global_position.x - attacker.global_position.x
+	return signf(offset) == signf(float(attacker.facing))
 
 
 ## 상대가 나를 보고 있고, 상대 무기가 내 무기보다 길면 막힌다.
@@ -705,9 +743,18 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 	var peer_id: int = attacker.owner_peer_id
 	match weapon["name"]:
 		"검":
-			# 상대의 "현재 체력"에 비례.
-			return _melee_special(attacker, target, target.hp * weapon["special_hp_ratio"],
-				weapon["knockback"])
+			# 일정 거리 안에 상대가 있을 때만 쓸 수 있다. 밖이면 발동 자체를 안 해서
+			# 쿨타임도 돌지 않는다 — 허공에 대고 쿨타임만 날리는 일이 없게 한다.
+			var sword_range: float = weapon["special_range"]
+			if attacker.global_position.distance_to(target.global_position) > sword_range:
+				return false
+			# 거리만 맞으면 들어간다. 빛기둥이 상대에게 꽂히는 연출이라 휘두르는 방향이나
+			# 상대 무기의 막기(is_blocked)는 따지지 않는다.
+			var hp_ratio: float = weapon["special_hp_ratio"]
+			target.server_apply_hit(target.hp * hp_ratio, weapon["knockback"],
+				attacker.global_position.x, 0.0, "special")
+			_play_light_burst.rpc(target.global_position + Vector2(0.0, Player.BODY_BOTTOM))
+			return true
 		"망치":
 			return _melee_special(attacker, target, weapon["special_damage"],
 				weapon["knockback"], weapon["stun_duration"])
@@ -840,8 +887,7 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 ## 빗나가도 발동은 한 것이므로 true — 쿨타임은 돌아간다.
 func _melee_special(attacker: Player, target: Player, damage: float, knockback: int,
 		stun := 0.0, reach_bonus := 1.0) -> bool:
-	var offset: float = target.global_position.x - attacker.global_position.x
-	if signf(offset) != signf(float(attacker.facing)):
+	if not _faces(attacker, target):
 		return true  # 방향이 안 맞아 빗나감
 	var reach: float = (MELEE_REACH + attacker.current_reach()) * reach_bonus
 	if attacker.global_position.distance_to(target.global_position) > reach:
@@ -850,6 +896,19 @@ func _melee_special(attacker: Player, target: Player, damage: float, knockback: 
 		return true  # 상대 무기에 막힘
 	target.server_apply_hit(damage, knockback, attacker.global_position.x, stun, "special")
 	return true
+
+
+# ─────────────────────────── 연출 ───────────────────────────
+## 판정에 관여하지 않는 그림만. 서버가 결과를 정한 뒤 각 피어가 자기 화면에 띄운다.
+## 투사체와 달리 MultiplayerSpawner를 쓰지 않는다 — 잠깐 떴다 스스로 사라지고
+## 아무것도 맞히지 않아서, 위치를 계속 맞출 것도 나중에 지워 줄 것도 없다.
+
+## 검 특수의 빛기둥. `at`은 맞은 젤리의 발밑이다.
+@rpc("authority", "call_local", "reliable")
+func _play_light_burst(at: Vector2) -> void:
+	var burst := LIGHT_BURST_SCENE.instantiate()
+	effects_root.add_child(burst)
+	burst.global_position = at
 
 
 ## 돌진이 벽 없는 맵에서 무한히 이어지지 않게 하는 안전장치.

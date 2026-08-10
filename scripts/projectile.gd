@@ -19,6 +19,8 @@ const SOURCE := "projectile"
 const PICKUP_RANGE := 48.0
 ## 중력을 받는 것(표창·폭탄·떨어진 단검)에 적용할 가속도.
 const GRAVITY := 980.0
+## 무기 그림으로 그릴 때 날 끝에서 손잡이 끝까지의 길이(px). 젤리 몸통(48px)보다 조금 짧다.
+const ART_LENGTH := 40.0
 
 ## 쏜 플레이어의 peer id. 자기 자신은 맞지 않는다.
 var shooter_peer := 0
@@ -41,6 +43,8 @@ var fuse := 0.0
 var explosion_radius := 0.0
 ## 바닥에 남았을 때 이 peer의 주인이 주울 수 있다 (단검).
 var pickup_owner := 0
+## 이 무기의 그림으로 그린다 (단검). 비어 있거나 그림이 없는 무기면 노란 막대로 그린다.
+var art_weapon: String = ""
 
 var velocity := Vector2.ZERO
 
@@ -49,8 +53,11 @@ var _landed := false
 var _origin := Vector2.ZERO
 var _hit_peers := {}
 var _done := false
+var _has_art := false
+var _last_position := Vector2.ZERO
 
 @onready var visual: ColorRect = $Visual
+@onready var art_sprite: Sprite2D = $ArtSprite
 
 
 ## 모든 피어에서 스폰 데이터로 호출된다 (add_child 전).
@@ -68,6 +75,7 @@ func setup(data: Dictionary) -> void:
 	fuse = data.get("fuse", 0.0)
 	explosion_radius = data.get("explosion_radius", 0.0)
 	pickup_owner = data.get("pickup_owner", 0)
+	art_weapon = data.get("art", "")
 	velocity = data["velocity"]
 	position = data["position"]
 	_origin = position
@@ -76,8 +84,51 @@ func setup(data: Dictionary) -> void:
 func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 	_spawn_time = _now()
-	if velocity.x < 0.0:
+	_last_position = position
+	_apply_art()
+	if _has_art:
+		_face(velocity)
+	elif velocity.x < 0.0:
 		visual.position.x = -visual.size.x
+
+
+## 무기 그림을 붙인다. 그림이 없으면 지금까지의 노란 막대를 그대로 쓴다.
+##
+## 원화는 정사각 캔버스에 투명 여백을 두고 그려져 있어 파일 크기를 그대로 쓰면 그림이
+## 한쪽으로 쏠린다. 캐릭터·무기와 같이 `Art.content_rect()`로 여백을 뺀 영역을 기준으로 잡되,
+## 여기서는 회전을 하므로 위치가 아니라 `Sprite2D.offset`(회전과 함께 도는 값)으로 보정한다.
+func _apply_art() -> void:
+	if art_weapon.is_empty():
+		return
+	var texture := Weapons.texture(art_weapon)
+	if texture == null:
+		return
+	var content := Art.content_rect(texture)
+	if content.size.y <= 0.0:
+		return
+	var texture_size := Vector2(texture.get_size())
+	art_sprite.texture = texture
+	art_sprite.offset = texture_size * 0.5 - content.position - content.size * 0.5
+	art_sprite.scale = Vector2.ONE * (ART_LENGTH / content.size.y)
+	_has_art = true
+	visual.hide()
+	art_sprite.show()
+
+
+## 그림 방향 맞추기. 원화는 날 끝이 위를 향하므로 진행 방향으로 90도 더 돌린다.
+func _face(direction: Vector2) -> void:
+	if direction.length_squared() < 0.01:
+		return   # 멈춰 있으면 마지막 방향 그대로 (바닥에 꽂힌 단검)
+	art_sprite.rotation = direction.angle() + PI * 0.5
+
+
+## 그리기는 모든 피어가 한다. 클라이언트는 속도를 받지 않으므로 복제된 위치의
+## 변화로 진행 방향을 잡는다 — 유도(단검)로 방향이 바뀌어도 그림이 따라 돈다.
+func _process(_delta: float) -> void:
+	if not _has_art:
+		return
+	_face(position - _last_position)
+	_last_position = position
 
 
 func _physics_process(delta: float) -> void:

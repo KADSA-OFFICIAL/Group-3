@@ -11,6 +11,8 @@ extends RefCounted
 ##   special_damage  특수 공격 데미지. 0 이면 데미지 없는 능력 부여형
 ##   special_cooldown 특수 공격 쿨타임(초)
 ##   knockback       넉백 단계 — Combat.Knockback
+##   special_range   이 거리 안에 상대가 있을 때만 특수를 쓸 수 있다. 없으면 거리 제한 없음
+##   art_faces_left  원화가 **왼쪽**을 보고 그려져 있다. 기본은 오른쪽 보기다 (art_faces_left 참고)
 
 ## 실제 무기가 아닌 특수값. 서버가 실제 무기 하나로 확정한다 (resolve 참고).
 const RANDOM := "랜덤"
@@ -29,6 +31,8 @@ const LIST: Array[Dictionary] = [
 		"special_damage": 0.0, "special_cooldown": 6.0, "knockback": 1,
 		# 상대의 "현재 체력" 에 비례한다 (확정).
 		"special_hp_ratio": 0.15,
+		# 이 거리 안에 상대가 있을 때만 쓸 수 있다 — 밖이면 발동도 쿨타임도 없다.
+		"special_range": 150.0,
 	},
 	{
 		"name": "단검",
@@ -42,19 +46,24 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "광선검",
+		"file": "laser_sword.png",
 		"basic": "닿으면 일정 지속 데미지",
 		"special": "일정 시간 관통 능력 부여",
 		# 특수가 능력 부여라 기본 지속 데미지만으로 싸운다 — 12 → 20 (#55).
-		"basic_damage": 20.0, "basic_interval": 1.0, "basic_kind": "melee_dot",
+		# 초당 20은 그대로 두고 0.2초마다 4씩 촘촘하게 넣는다 (#103).
+		"basic_damage": 4.0, "basic_interval": 0.2, "basic_kind": "melee_dot",
 		"special_damage": 0.0, "special_cooldown": 8.0, "knockback": 0,
 		"special_duration": 3.0,
 	},
 	{
 		"name": "전기톱",
 		"file": "chainsaw.png",
+		# 원화가 톱날 왼쪽·손잡이 오른쪽으로 그려져 있다 — 그대로 붙이면 등 뒤를 벤다 (#109).
+		"art_faces_left": true,
 		"basic": "닿으면 일정 지속 데미지",
 		"special": "관통 돌진 후 일정 시간 출혈",
-		"basic_damage": 15.0, "basic_interval": 1.0, "basic_kind": "melee_dot",
+		# 초당 15는 그대로 두고 0.2초마다 3씩 촘촘하게 넣는다 (#105, 광선검과 같은 방식).
+		"basic_damage": 3.0, "basic_interval": 0.2, "basic_kind": "melee_dot",
 		"special_damage": 20.0, "special_cooldown": 7.0, "knockback": 1,
 		"bleed_damage": 4.0, "bleed_duration": 3.0,
 	},
@@ -207,6 +216,12 @@ static func texture(weapon_name: String) -> Texture2D:
 	if not ResourceLoader.exists(path):
 		return null
 	return load(path)
+
+
+## 원화가 왼쪽을 보고 그려졌는가. 그리는 쪽은 오른쪽 보기를 기본으로 가정하므로
+## 이 무기는 좌우를 한 번 더 뒤집어야 바라보는 쪽에 날이 온다 (#109).
+static func art_faces_left(weapon_name: String) -> bool:
+	return bool(get_weapon(weapon_name).get("art_faces_left", false))
 
 
 static func resolve(weapon_name: String) -> String:
