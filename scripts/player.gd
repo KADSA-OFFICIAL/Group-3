@@ -109,6 +109,8 @@ var _body_offset_unit := Vector2.ZERO
 var _weapon_offset := Vector2.ZERO
 ## 이 무기에 그림이 있는가. 없으면 지금까지처럼 임시 막대로 그린다.
 var _weapon_has_art := false
+## 이 무기의 원화가 왼쪽을 보고 그려졌는가. 그렇다면 뒤집는 조건이 반대가 된다 (#109).
+var _weapon_faces_left := false
 
 ## 클라이언트가 서버로부터 받은 표시용 상태
 var _target_position := Vector2.ZERO
@@ -271,6 +273,7 @@ func _apply_weapon() -> void:
 	var texture := Weapons.texture(weapon_id)
 	sprite.texture = texture
 	_weapon_has_art = texture != null
+	_weapon_faces_left = Weapons.art_faces_left(weapon_id)
 	if texture == null:
 		return
 	var texture_size := Vector2(texture.get_size())
@@ -332,8 +335,10 @@ func _update_weapon_shape() -> void:
 	if _weapon_has_art:
 		shape.hide()
 		sprite.show()
+		# 원화는 오른쪽 보기가 기본이라 왼쪽을 볼 때 뒤집는다. 다만 왼쪽을 보고 그려진
+		# 원화(전기톱)는 조건이 정반대다 — 안 그러면 톱날이 등 뒤로 간다 (#109).
 		# 뒤집으면 그림이 스프라이트 중심을 기준으로 반전되므로 여백 보정도 반대로 간다.
-		var flipped := facing < 0
+		var flipped := (facing < 0) != _weapon_faces_left
 		sprite.flip_h = flipped
 		var offset_x := -_weapon_offset.x if flipped else _weapon_offset.x
 		sprite.position = Vector2(
