@@ -4,35 +4,35 @@
 [ext_resource type="Script" path="res://scripts/jelly_preview.gd" id="2_preview"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_random"]
-bg_color = Color(0.56, 0.59, 0.91, 1)
+bg_color = Color(0.42, 0.45, 0.82, 1)
 border_width_bottom = 5
-border_color = Color(0.44, 0.47, 0.8, 1)
+border_color = Color(0.3, 0.33, 0.68, 1)
 corner_radius_top_left = 18
 corner_radius_top_right = 18
 corner_radius_bottom_right = 18
 corner_radius_bottom_left = 18
 corner_detail = 12
-shadow_color = Color(0.44, 0.47, 0.8, 0.28)
+shadow_color = Color(0.3, 0.33, 0.68, 0.28)
 shadow_size = 8
 shadow_offset = Vector2(0, 4)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_random_hover"]
-bg_color = Color(0.66, 0.69, 0.96, 1)
+bg_color = Color(0.48, 0.51, 0.86, 1)
 border_width_bottom = 5
-border_color = Color(0.44, 0.47, 0.8, 1)
+border_color = Color(0.3, 0.33, 0.68, 1)
 corner_radius_top_left = 18
 corner_radius_top_right = 18
 corner_radius_bottom_right = 18
 corner_radius_bottom_left = 18
 corner_detail = 12
-shadow_color = Color(0.44, 0.47, 0.8, 0.32)
+shadow_color = Color(0.3, 0.33, 0.68, 0.32)
 shadow_size = 10
 shadow_offset = Vector2(0, 5)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_random_pressed"]
-bg_color = Color(0.5, 0.53, 0.85, 1)
+bg_color = Color(0.34, 0.37, 0.74, 1)
 border_width_top = 3
-border_color = Color(0.44, 0.47, 0.8, 1)
+border_color = Color(0.3, 0.33, 0.68, 1)
 corner_radius_top_left = 18
 corner_radius_top_right = 18
 corner_radius_bottom_right = 18
@@ -64,13 +64,13 @@ theme_override_constants/separation = 14
 [node name="WeaponButton" type="Button" parent="HBox/IconColumn"]
 custom_minimum_size = Vector2(0, 62)
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 20
 text = "무기"
 
 [node name="CharacterButton" type="Button" parent="HBox/IconColumn"]
 custom_minimum_size = Vector2(0, 62)
 layout_mode = 2
-theme_override_font_sizes/font_size = 18
+theme_override_font_sizes/font_size = 20
 text = "캐릭터"
 
 [node name="Center" type="VBoxContainer" parent="HBox"]
@@ -96,7 +96,7 @@ size_flags_horizontal = 4
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
 theme_override_colors/font_pressed_color = Color(0.94, 0.95, 1, 1)
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 24
 theme_override_styles/normal = SubResource("StyleBoxFlat_random")
 theme_override_styles/hover = SubResource("StyleBoxFlat_random_hover")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_random_pressed")

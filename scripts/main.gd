@@ -75,7 +75,7 @@ const LOSE_COLOR := Color(0.72, 0.70, 0.80)
 
 
 func _ready() -> void:
-	$MapLabel.text = "맵: " + Lobby.map_name
+	$UI/HUD/MapCard/MapLabel.text = "맵: " + Lobby.map_name
 	# 지형은 모든 피어에서 똑같이 깔려야 한다 — 스폰보다 먼저 붙인다.
 	# 서버가 대기실에서 "랜덤"을 확정해 두므로 양쪽이 같은 맵을 받는다.
 	_load_map(Lobby.map_name)
@@ -929,11 +929,18 @@ func _process(_delta: float) -> void:
 
 
 ## 체력·점수 표시. 대기실 접속 순서(Lobby.order)가 1P·2P를 정한다.
+##
+## 라벨은 전부 흰 카드(`P1Card`·`P2Card`) **안**에 들어 있다 — 카드 밖에 두면 맵 배경 위에
+## 그대로 그려져서 어두운 맵(용암)에서 진한 글자가 묻힌다(이슈 #112).
+## 체력은 막대와 숫자를 함께 낸다. 막대 길이만으로는 남은 값을 정확히 읽을 수 없고,
+## 막대 안에 숫자를 그리면(`show_percentage`) 채운 쪽과 빈 쪽 중 한쪽에서 반드시 묻힌다.
 func _update_hud() -> void:
 	for slot in 2:
-		var bar := $UI/HUD.get_node("P%dBar" % (slot + 1)) as ProgressBar
-		var label := $UI/HUD.get_node("P%dName" % (slot + 1)) as Label
-		var score_label := $UI/HUD.get_node("P%dScore" % (slot + 1)) as Label
+		var card := $UI/HUD.get_node("P%dCard" % (slot + 1))
+		var bar := card.get_node("Bar") as ProgressBar
+		var label := card.get_node("Name") as Label
+		var hp_label := card.get_node("Hp") as Label
+		var score_label := card.get_node("Score") as Label
 		var player: Player = null
 		var peer_id := 0
 		if slot < Lobby.order.size():
@@ -943,10 +950,13 @@ func _update_hud() -> void:
 		if player == null:
 			bar.value = 0.0
 			label.text = "%dP —" % (slot + 1)
+			hp_label.text = "—"
 			continue
 		bar.max_value = Combat.MAX_HP
 		bar.value = player.hp
 		label.text = "%dP  %s" % [slot + 1, player.weapon_id]
+		# 올림으로 낸다 — 0.4처럼 남은 체력을 "0"으로 적으면 살아 있는데 죽은 것으로 읽힌다.
+		hp_label.text = "%d" % ceili(player.hp)
 
 	var banner_label := $UI/HUD.get_node("Banner") as Label
 	banner_label.text = banner
