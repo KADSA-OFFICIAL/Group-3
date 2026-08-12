@@ -45,6 +45,8 @@ var explosion_radius := 0.0
 var pickup_owner := 0
 ## 이 무기의 그림으로 그린다 (단검). 비어 있거나 그림이 없는 무기면 노란 막대로 그린다.
 var art_weapon: String = ""
+## 탄 크기 배율 (대포 총). 1.0 이면 씬에 잡아 둔 기본 크기다.
+var size_scale := 1.0
 
 var velocity := Vector2.ZERO
 
@@ -58,6 +60,7 @@ var _last_position := Vector2.ZERO
 
 @onready var visual: ColorRect = $Visual
 @onready var art_sprite: Sprite2D = $ArtSprite
+@onready var collision_shape: CollisionShape2D = $CollisionShape2D
 
 
 ## 모든 피어에서 스폰 데이터로 호출된다 (add_child 전).
@@ -76,6 +79,7 @@ func setup(data: Dictionary) -> void:
 	explosion_radius = data.get("explosion_radius", 0.0)
 	pickup_owner = data.get("pickup_owner", 0)
 	art_weapon = data.get("art", "")
+	size_scale = data.get("size_scale", 1.0)
 	velocity = data["velocity"]
 	position = data["position"]
 	_origin = position
@@ -86,6 +90,7 @@ func _ready() -> void:
 	_spawn_time = _now()
 	_last_position = position
 	_apply_art()
+	_apply_size()
 	if _has_art:
 		_face(velocity)
 	elif velocity.x < 0.0:
@@ -113,6 +118,25 @@ func _apply_art() -> void:
 	_has_art = true
 	visual.hide()
 	art_sprite.show()
+
+
+## 탄 크기를 배율만큼 키운다 (대포 총, #118).
+##
+## **그림과 판정을 함께** 키워야 보이는 크기와 실제로 맞는 범위가 어긋나지 않는다.
+##
+## 충돌 상자(RectangleShape2D)는 씬의 sub_resource라 **모든 투사체가 같은 자원을 공유한다** —
+## `shape.size`를 직접 고치면 대포 총 탄 하나 때문에 활·샷건 탄까지 같이 커지고,
+## 그 무기로 갈아타도 크기가 돌아오지 않는다. 그래서 모양이 아니라 노드의 `scale`을 바꾼다.
+func _apply_size() -> void:
+	if is_equal_approx(size_scale, 1.0):
+		return
+	collision_shape.scale = Vector2.ONE * size_scale
+	if _has_art:
+		art_sprite.scale *= size_scale
+		return
+	# 노란 막대는 세로 가운데가 원점이라, 키운 뒤 다시 가운데로 맞춰야 한다.
+	visual.size *= size_scale
+	visual.position.y = -visual.size.y * 0.5
 
 
 ## 그림 방향 맞추기. 원화는 날 끝이 위를 향하므로 진행 방향으로 90도 더 돌린다.
