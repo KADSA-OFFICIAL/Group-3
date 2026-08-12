@@ -47,12 +47,14 @@ const FLAME_MID := Color(0.72, 0.94, 1.0)
 const FLAME_EDGE := Color(0.25, 0.60, 1.0)
 
 # ─────────────────────────── 결정질 화살 (활, #125) ───────────────────────────
-## 화살 전체 길이(px). 젤리 몸통(48px)과 비슷해야 화살로 읽히고 화면을 안 덮는다.
-const ARROW_LENGTH := 46.0
-## 촉이 가장 넓은 곳의 반폭(px).
-const ARROW_HALF_WIDTH := 9.0
-## 앞에서부터 이 비율만큼이 촉이다. 나머지가 몸통과 뒷날개다.
-const ARROW_HEAD_RATIO := 0.42
+## 화살 전체 길이(px). 길쭉해야 "결정 창"으로 읽힌다 — 짧으면 마름모 덩어리가 된다.
+const ARROW_LENGTH := 60.0
+## 가장 넓은 곳의 반폭(px). 길이의 1/8쯤이라 날렵하다.
+const ARROW_HALF_WIDTH := 7.5
+## 앞에서부터 이 비율 되는 곳이 가장 넓다(어깨). 여기서 뒤로는 한 점으로 좁아진다.
+const ARROW_SHOULDER_RATIO := 0.34
+## 어깨 뒤 이 비율 되는 곳에 곁가지 결정이 붙는다.
+const ARROW_SHARD_RATIO := 0.62
 ## 뒤에 남는 짧은 빛 자락의 길이(px). 미사일 꼬리보다 훨씬 짧다 — 화살이지 로켓이 아니다.
 const ARROW_TRAIL_LENGTH := 52.0
 
@@ -333,43 +335,44 @@ func _draw_arrow() -> void:
 	# 뒤로 남는 짧은 빛 자락. 화살이 지나온 길을 알려 주되 로켓처럼 길면 안 된다.
 	_draw_plume(-forward, perp, ARROW_TRAIL_LENGTH * size_scale,
 		ARROW_HALF_WIDTH * size_scale * 0.7, ARROW_EDGE, 0.30)
-	Art.draw_glow(self, Vector2.ZERO, ARROW_LENGTH * size_scale * 0.42, ARROW_EDGE, 0.35)
-	_draw_arrow_body(forward, perp, size_scale, ARROW_EDGE, 0.60)
-	_draw_arrow_body(forward, perp, size_scale * 0.66, ARROW_MID, 0.75)
-	_draw_arrow_body(forward, perp, size_scale * 0.34, ARROW_CORE, 0.95)
+	Art.draw_glow(self, Vector2.ZERO, ARROW_LENGTH * size_scale * 0.38, ARROW_EDGE, 0.35)
+	# 겹칠 때 **폭을 길이보다 많이** 줄인다. 그래야 흰 심이 길이를 따라 남아
+	# 가운데가 하얗게 빛나는 결정이 된다 — 둘 다 줄이면 심이 작은 덩어리가 된다.
+	_draw_arrow_body(forward, perp, size_scale, size_scale, ARROW_EDGE, 0.55)
+	_draw_arrow_body(forward, perp, size_scale * 0.88, size_scale * 0.58, ARROW_MID, 0.75)
+	_draw_arrow_body(forward, perp, size_scale * 0.72, size_scale * 0.28, ARROW_CORE, 0.95)
 
 
-## 화살 윤곽 한 겹 — 각진 촉 + 가늘어지는 몸통 + 갈라진 뒷날개.
-func _draw_arrow_body(forward: Vector2, perp: Vector2, scale_factor: float,
-		color: Color, alpha: float) -> void:
-	var half_length := ARROW_LENGTH * 0.5 * scale_factor
-	var half_width := ARROW_HALF_WIDTH * scale_factor
-	var head_length := ARROW_LENGTH * ARROW_HEAD_RATIO * scale_factor
+## 화살 윤곽 한 겹 — 앞이 뾰족하고 어깨에서 가장 넓다가 **뒤로도 한 점으로** 좁아지는
+## 결정 창. 뒤를 뭉툭하게 두거나 날개를 달면 촉이 둘 달린 것처럼 보인다.
+func _draw_arrow_body(forward: Vector2, perp: Vector2,
+		length_scale: float, width_scale: float, color: Color, alpha: float) -> void:
+	var half_length := ARROW_LENGTH * 0.5 * length_scale
+	var half_width := ARROW_HALF_WIDTH * width_scale
 	var tip := forward * half_length
-	var neck := forward * (half_length - head_length)
 	var tail := -forward * half_length
+	var shoulder := forward * (half_length - ARROW_LENGTH * ARROW_SHOULDER_RATIO * length_scale)
 	var tint := Color(color, alpha)
 
-	# 촉 — 각진 삼각형
-	draw_polygon(
-		PackedVector2Array([tip, neck + perp * half_width, neck - perp * half_width]),
-		PackedColorArray([tint, tint, tint]))
-	# 몸통 — 뒤로 갈수록 가늘어진다
+	# 본체 — 앞뒤로 뾰족한 연꼴
 	draw_polygon(
 		PackedVector2Array([
-			neck + perp * half_width * 0.62,
-			neck - perp * half_width * 0.62,
-			tail - perp * half_width * 0.24,
-			tail + perp * half_width * 0.24,
+			tip,
+			shoulder + perp * half_width,
+			tail,
+			shoulder - perp * half_width,
 		]),
 		PackedColorArray([tint, tint, tint, tint]))
-	# 뒷날개 — 결정이 갈라져 나온 느낌
-	var fin := tail + forward * (head_length * 0.55)
+
+	# 곁가지 결정 — 몸통 뒤쪽에서 바깥·뒤로 삐져나온 얇은 조각
+	var shard := forward * (half_length - ARROW_LENGTH * ARROW_SHARD_RATIO * length_scale)
+	var out := perp * half_width * 1.8
+	var back := forward * half_width * 1.6
 	draw_polygon(
-		PackedVector2Array([fin, fin + perp * half_width * 1.05, tail]),
+		PackedVector2Array([shard, shard + out - back, shard - back * 0.7]),
 		PackedColorArray([tint, tint, tint]))
 	draw_polygon(
-		PackedVector2Array([fin, fin - perp * half_width * 1.05, tail]),
+		PackedVector2Array([shard, shard - out - back, shard - back * 0.7]),
 		PackedColorArray([tint, tint, tint]))
 
 
