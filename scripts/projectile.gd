@@ -22,6 +22,30 @@ const GRAVITY := 980.0
 ## 무기 그림으로 그릴 때 날 끝에서 손잡이 끝까지의 길이(px). 젤리 몸통(48px)보다 조금 짧다.
 const ART_LENGTH := 40.0
 
+# ─────────────────────── 미사일 불꽃 꼬리 (대포 총 특수, #121) ───────────────────────
+## 불꽃 꼬리의 전체 길이(px). `size_scale`이 곱해진다. 젤리 몸통(72px)의 두 배 가까이 되어야
+## 날아가는 동안 "긴 꼬리"로 읽힌다 — 짧으면 그냥 밝은 점으로 보인다.
+const FLAME_LENGTH := 132.0
+## 불꽃이 가장 불룩한 곳의 반폭(px).
+const FLAME_HALF_WIDTH := 20.0
+## 불꽃이 가장 굵어지는 지점(0~1). 머리에서 조금 뒤에서 부풀었다가 꼬리로 뾰족해진다.
+const FLAME_BELLY := 0.16
+## 머리 쪽(t=0) 폭의 비율. 0이면 한 점에서 시작해 불꽃이 끊겨 보인다.
+const FLAME_ROOT_RATIO := 0.30
+## 꼬리 윤곽을 몇 조각으로 나눠 그릴지. 클수록 매끄럽다.
+const FLAME_SEGMENTS := 16
+## 미사일 머리의 빛무리 반지름(px).
+const HEAD_RADIUS := 13.0
+## 꼬리 안에서 흐르는 가는 불꽃 가닥 수.
+const WISP_COUNT := 6
+## 불꽃이 떠는 속도(라디안/초). 빠를수록 타오르는 느낌이 난다.
+const FLAME_FLICKER_RATE := 24.0
+
+## 가운데는 하얗고 바깥으로 갈수록 푸르다.
+const FLAME_CORE := Color(1.0, 1.0, 1.0)
+const FLAME_MID := Color(0.72, 0.94, 1.0)
+const FLAME_EDGE := Color(0.25, 0.60, 1.0)
+
 ## 쏜 플레이어의 peer id. 자기 자신은 맞지 않는다.
 var shooter_peer := 0
 var damage := 0.0
@@ -47,6 +71,10 @@ var pickup_owner := 0
 var art_weapon: String = ""
 ## 탄 크기 배율 (대포 총). 1.0 이면 씬에 잡아 둔 기본 크기다.
 var size_scale := 1.0
+## 푸른 불꽃 꼬리를 단 미사일로 그린다 (대포 총 특수, #121).
+var missile := false
+## 0보다 크면 넉백 단계 대신 이 속도로 민다 (대포 총 미사일, #121).
+var knockback_speed := 0.0
 
 var velocity := Vector2.ZERO
 
@@ -57,6 +85,10 @@ var _hit_peers := {}
 var _done := false
 var _has_art := false
 var _last_position := Vector2.ZERO
+## 불꽃을 그릴 진행 방향(단위 벡터). 꼬리는 이 반대쪽으로 뻗는다.
+var _draw_dir := Vector2.RIGHT
+var _flame_time := 0.0
+var _wisps: Array[Dictionary] = []
 
 @onready var visual: ColorRect = $Visual
 @onready var art_sprite: Sprite2D = $ArtSprite
@@ -80,6 +112,8 @@ func setup(data: Dictionary) -> void:
 	pickup_owner = data.get("pickup_owner", 0)
 	art_weapon = data.get("art", "")
 	size_scale = data.get("size_scale", 1.0)
+	missile = data.get("missile", false)
+	knockback_speed = data.get("knockback_speed", 0.0)
 	velocity = data["velocity"]
 	position = data["position"]
 	_origin = position
@@ -91,6 +125,9 @@ func _ready() -> void:
 	_last_position = position
 	_apply_art()
 	_apply_size()
+	if missile:
+		_setup_flame()
+		return
 	if _has_art:
 		_face(velocity)
 	elif velocity.x < 0.0:
@@ -148,11 +185,114 @@ func _face(direction: Vector2) -> void:
 
 ## 그리기는 모든 피어가 한다. 클라이언트는 속도를 받지 않으므로 복제된 위치의
 ## 변화로 진행 방향을 잡는다 — 유도(단검)로 방향이 바뀌어도 그림이 따라 돈다.
-func _process(_delta: float) -> void:
-	if not _has_art:
+func _process(delta: float) -> void:
+	if not _has_art and not missile:
 		return
-	_face(position - _last_position)
+	var moved := position - _last_position
 	_last_position = position
+	if _has_art:
+		_face(moved)
+	if missile:
+		# 유도(단검)처럼 방향이 바뀌는 것에도 꼬리가 따라 돌도록 위치 변화로 잡는다.
+		if moved.length_squared() >= 0.01:
+			_draw_dir = moved.normalized()
+		_flame_time += delta
+		queue_redraw()
+
+
+## 불꽃 꼬리 준비. 노란 막대는 미사일이 대신하므로 감춘다.
+##
+## 가닥 모양은 노드 이름(`Projectile_<id>`)으로 씨앗을 잡은 난수라 **양쪽 화면에 같게** 뜬다.
+## 이름은 스폰 데이터의 id에서 나오므로 모든 피어에서 같다.
+func _setup_flame() -> void:
+	visual.hide()
+	if velocity.length_squared() >= 0.01:
+		_draw_dir = velocity.normalized()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(name)
+	for i in WISP_COUNT:
+		_wisps.append({
+			# 본줄기 안에서 흐르게 각을 좁게 잡는다 — 넓으면 옆으로 삐친 선으로 보인다.
+			"angle": rng.randf_range(-0.16, 0.16),
+			"length": rng.randf_range(0.62, 1.05),
+			"width": rng.randf_range(0.10, 0.24),
+			"rate": rng.randf_range(11.0, 19.0),
+			"phase": rng.randf_range(0.0, TAU),
+		})
+
+
+## 미사일과 푸른 불꽃 꼬리 (#121).
+##
+## 그림 파일 없이 `_draw()`로만 그린다 — 씬 루트에 걸린 가산 혼합 덕에 겹칠수록 하얗게
+## 타오르고, 그 혼합은 **이 그리기에만** 적용되어 자식(`Visual`·`ArtSprite`)에는 영향이 없다.
+##
+## **노드를 회전시키지 않고** 방향 벡터로 직접 그린다. 루트를 돌리면 `CollisionShape2D`까지
+## 같이 돌아 판정이 달라진다 — 연출 때문에 맞는 범위가 변하면 안 된다.
+func _draw() -> void:
+	if not missile:
+		return
+	var back := -_draw_dir
+	var perp := back.orthogonal()
+	var flicker := 0.85 + 0.15 * sin(_flame_time * FLAME_FLICKER_RATE)
+	var length := FLAME_LENGTH * size_scale * flicker
+	var half := FLAME_HALF_WIDTH * size_scale
+
+	# 넓고 푸른 것부터 좁고 흰 것까지 겹쳐 가운데를 하얗게 태운다.
+	_draw_plume(back, perp, length, half, FLAME_EDGE, 0.50)
+	_draw_plume(back, perp, length * 0.78, half * 0.60, FLAME_MID, 0.60)
+	_draw_plume(back, perp, length * 0.50, half * 0.32, FLAME_CORE, 0.90)
+
+	# 꼬리 안에서 흐르는 가는 가닥. 본줄기 위에 얹어 결을 만든다.
+	for wisp: Dictionary in _wisps:
+		var rate: float = wisp["rate"]
+		var phase: float = wisp["phase"]
+		var angle: float = wisp["angle"]
+		var wisp_length: float = wisp["length"]
+		var wisp_width: float = wisp["width"]
+		var dir := back.rotated(angle + sin(_flame_time * rate + phase) * 0.05)
+		_draw_plume(dir, dir.orthogonal(), length * wisp_length, half * wisp_width,
+			FLAME_CORE, 0.22)
+
+	# 머리 — 불꽃이 뿜어져 나오는 밝은 덩어리.
+	Art.draw_glow(self, Vector2.ZERO, HEAD_RADIUS * size_scale * 1.7, FLAME_EDGE, 0.50)
+	Art.draw_glow(self, Vector2.ZERO, HEAD_RADIUS * size_scale, FLAME_MID, 0.70)
+	Art.draw_glow(self, Vector2.ZERO, HEAD_RADIUS * size_scale * 0.45, FLAME_CORE, 1.0)
+
+
+## 불꽃 덩어리 하나. 머리 뒤에서 불룩해졌다가 꼬리로 갈수록 뾰족해지며 투명해진다.
+##
+## 사다리꼴 하나로 그리면 옆선이 곧아서 "막대"로 보인다. 윤곽을 여러 조각으로 나눠
+## 폭과 옅기를 따로 주면 덩어리진 불꽃이 된다.
+func _draw_plume(back: Vector2, perp: Vector2, length: float, half: float,
+		color: Color, alpha: float) -> void:
+	if length <= 0.0 or half <= 0.0:
+		return
+	var points := PackedVector2Array()
+	var colors := PackedColorArray()
+	# 한쪽 윤곽을 머리에서 꼬리로 훑고,
+	for i in FLAME_SEGMENTS + 1:
+		var t := float(i) / float(FLAME_SEGMENTS)
+		points.append(back * (length * t) + perp * (half * _plume_width(t)))
+		colors.append(Color(color, alpha * _plume_alpha(t)))
+	# 반대쪽 윤곽을 꼬리에서 머리로 되짚어 하나의 폴리곤으로 닫는다.
+	for i in range(FLAME_SEGMENTS, -1, -1):
+		var t := float(i) / float(FLAME_SEGMENTS)
+		points.append(back * (length * t) - perp * (half * _plume_width(t)))
+		colors.append(Color(color, alpha * _plume_alpha(t)))
+	draw_polygon(points, colors)
+
+
+## 꼬리 위치별 폭(0~1). FLAME_BELLY에서 가장 굵고 꼬리 끝에서 0이 된다.
+func _plume_width(t: float) -> float:
+	var rise := clampf(t / FLAME_BELLY, 0.0, 1.0)
+	var fall := clampf((1.0 - t) / (1.0 - FLAME_BELLY), 0.0, 1.0)
+	var swell := FLAME_ROOT_RATIO + (1.0 - FLAME_ROOT_RATIO) * pow(rise, 0.6)
+	return swell * pow(fall, 0.85)
+
+
+## 꼬리 위치별 옅기(0~1). 머리 쪽이 진하고 꼬리로 갈수록 사라진다.
+func _plume_alpha(t: float) -> float:
+	return pow(1.0 - t, 1.35)
 
 
 func _physics_process(delta: float) -> void:
@@ -209,7 +349,7 @@ func _explode() -> void:
 		if jelly.owner_peer_id == shooter_peer or not jelly.alive:
 			continue
 		if position.distance_to(jelly.global_position) <= explosion_radius:
-			jelly.server_apply_hit(damage, knockback, position.x, stun, SOURCE)
+			jelly.server_apply_hit(damage, knockback, position.x, stun, SOURCE, knockback_speed)
 	_finish()
 
 
@@ -226,7 +366,7 @@ func _on_body_entered(body: Node) -> void:
 			_explode()
 			return
 		_hit_peers[peer_id] = true
-		body.server_apply_hit(_damage_at(position), knockback, _origin.x, stun, SOURCE)
+		body.server_apply_hit(_damage_at(position), knockback, _origin.x, stun, SOURCE, knockback_speed)
 		# 주울 수 있는 것(단검)은 맞힌 뒤에도 사라지지 않고 바닥으로 떨어진다.
 		# 안 그러면 한 번만 쓸 수 있는 무기가 된다.
 		if pickup_owner != 0:
