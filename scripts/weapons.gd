@@ -15,6 +15,9 @@ extends RefCounted
 ##   art_faces_left  원화가 **왼쪽**을 보고 그려져 있다. 기본은 오른쪽 보기다 (art_faces_left 참고)
 ##   projectile_scale 이 무기가 쏘는 탄의 크기 배율. 없으면 1.0(기본 크기).
 ##                   그림과 판정이 함께 커진다 — main.gd의 _server_fire()가 읽는다
+##   special_missile  특수로 나가는 탄을 불꽃 꼬리 미사일로 그린다. 기본 공격 탄은 그대로다
+##   special_knockback_speed 미사일에 맞았을 때의 넉백 속도(px/s).
+##                   없으면 knockback 단계 표를 쓴다 — 기존 무기는 달라지지 않는다
 
 ## 실제 무기가 아닌 특수값. 서버가 실제 무기 하나로 확정한다 (resolve 참고).
 const RANDOM := "랜덤"
@@ -89,6 +92,10 @@ const LIST: Array[Dictionary] = [
 		# 전용 투사체 그림이 없어 공용 노란 막대(18×6)로 나가는데, "대포" 치고 탄이
 		# 빈약해 보이고 눈에 안 띄었다 — 1.5배로 키운다 (#118).
 		"projectile_scale": 1.5,
+		# 특수는 "넉백 미사일"이라 기본 공격 탄과 구분되어야 한다 — 불꽃 꼬리를 달고,
+		# 최고 단계(STRONG 700)보다 조금 더 민다 (#121).
+		"special_missile": true,
+		"special_knockback_speed": 850.0,
 	},
 	{
 		"name": "폭탄",

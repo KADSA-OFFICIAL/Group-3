@@ -531,8 +531,9 @@ func _expire_buffs() -> void:
 ## 기본과 특수는 무적 타이머가 따로 돌아가고,
 ## 허공을 나는 것("projectile")은 공유 무적을 아예 타지 않는다 —
 ## 활 특수 3발처럼 같은 순간에 도착하는 것도 전부 들어간다.
+## `knockback_speed`가 0보다 크면 단계 대신 그 속도로 민다 (대포 총 미사일, #121).
 func server_apply_hit(damage: float, knockback_level: int, from_x: float,
-		stun := 0.0, source := "basic") -> void:
+		stun := 0.0, source := "basic", knockback_speed := 0.0) -> void:
 	if not multiplayer.is_server() or not alive:
 		return
 	if source != "projectile" and is_invulnerable(source):
@@ -546,7 +547,7 @@ func server_apply_hit(damage: float, knockback_level: int, from_x: float,
 	var data := Weapons.get_weapon(weapon_id)
 	if data.get("gauge_per_hit", 0.0) > 0.0:
 		new_gauge = minf(gauge + data["gauge_per_hit"], data["gauge_max"])
-	_receive_hit.rpc(new_hp, knockback_level, direction, stun, source, new_gauge)
+	_receive_hit.rpc(new_hp, knockback_level, direction, stun, source, new_gauge, knockback_speed)
 
 
 ## 출혈 같은 지속 데미지. 무적 시간을 무시하고 들어가고, 넉백도 없다.
@@ -608,7 +609,7 @@ func server_end_forced() -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _receive_hit(new_hp: float, knockback_level: int, direction: float,
-		stun: float, source: String, new_gauge: float) -> void:
+		stun: float, source: String, new_gauge: float, knockback_speed := 0.0) -> void:
 	hp = new_hp
 	gauge = new_gauge
 	if source != "projectile":
@@ -617,7 +618,7 @@ func _receive_hit(new_hp: float, knockback_level: int, direction: float,
 		_stun_until = _now() + stun
 	# 넉백은 물리를 계산하는 서버에서만 적용한다.
 	if multiplayer.is_server() and direction != 0.0:
-		velocity = Combat.knockback_velocity(knockback_level, direction)
+		velocity = Combat.knockback_velocity(knockback_level, direction, knockback_speed)
 		_knockback_until = _now() + KNOCKBACK_CONTROL_LOCK
 	_check_death()
 
