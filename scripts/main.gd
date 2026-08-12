@@ -811,9 +811,12 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 			}, [-spacing, 0.0, spacing])
 			return true
 		"대포 총":
+			# 특수만 불꽃 꼬리 미사일이다 — 기본 공격 탄은 노란 막대 그대로 (#121).
 			_server_fire(attacker, {
 				"damage": weapon["special_damage"],
 				"knockback": weapon["knockback"],
+				"missile": weapon.get("special_missile", false),
+				"knockback_speed": weapon.get("special_knockback_speed", 0.0),
 			})
 			return true
 		"삼지창":

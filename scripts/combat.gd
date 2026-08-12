@@ -66,8 +66,15 @@ const FALL_MARGIN_BOTTOM := 200.0
 const FALL_MARGIN_SIDE := 150.0
 
 
-static func knockback_velocity(level: int, direction: float) -> Vector2:
-	var speed: float = KNOCKBACK_SPEED[level]
+## `speed_override`가 0보다 크면 단계 대신 그 속도로 민다 (대포 총 미사일, #121).
+##
+## 단계를 하나 더 만들지 않고 값으로 받는 이유는, "미사일만 조금 더 민다"가
+## 무기 하나에 붙는 성질이지 모든 무기가 골라 쓸 새 단계가 아니기 때문이다.
+## 0이면 지금까지처럼 단계 표를 쓴다 — 기존 공격은 아무것도 달라지지 않는다.
+static func knockback_velocity(level: int, direction: float, speed_override := 0.0) -> Vector2:
+	var speed: float = speed_override
+	if speed <= 0.0:
+		speed = KNOCKBACK_SPEED[level]
 	return Vector2(direction * speed, -speed * KNOCKBACK_LIFT)
 
 
