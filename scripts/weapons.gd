@@ -117,7 +117,10 @@ const LIST: Array[Dictionary] = [
 		"special": "동시 다중 관통 화살 발사",
 		"basic_damage": 10.0, "basic_interval": 0.7, "basic_kind": "ranged",
 		"special_damage": 12.0, "special_cooldown": 6.0, "knockback": 0,
-		"special_projectiles": 3,
+		# 3 → 5 (#128). main.gd 가 이 값을 읽어 평행 다발을 만든다 —
+		# 전에는 여기 3이 적혀 있어도 발사 쪽이 3발을 하드코딩하고 있어서
+		# 이 값을 고쳐도 아무 일도 일어나지 않았다.
+		"special_projectiles": 5,
 		# 활인데 총알처럼 일직선으로 날아가서 원거리 3종이 같은 감각이었다 —
 		# 기본 공격만 15도 위로 띄워 포물선을 준다 (#125).
 		# 정점이 발사 높이보다 약 43px 위(젤리 몸통 72px의 반쯤)다.
