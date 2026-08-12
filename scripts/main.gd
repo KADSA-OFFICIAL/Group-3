@@ -886,13 +886,20 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 			})
 			return true
 		"폭탄":
-			# 던진 폭탄은 바닥에 남고, 3초 뒤 또는 닿으면 반경 200px을 때린다.
+			# 던진 폭탄은 바닥에서 조금 구르다 멈추고, 3초 뒤 또는 닿으면 반경 200px을 때린다.
 			var empowered: bool = randf() < weapon["empowered_chance"]
+			# 강화 폭탄은 그림이 따로다 — 데미지가 32 → 48인데 겉모습이 같으면
+			# 피할지 말지를 정할 근거가 화면에 없다 (#131).
+			# 표에서 꺼낸 값은 Variant라 명시 타입으로 받는다 (#66).
+			var bomb_art: String = weapon["empowered_file"] if empowered else weapon["file"]
 			_server_fire(attacker, {
 				"damage": weapon["empowered_damage"] if empowered else weapon["special_damage"],
 				"knockback": weapon["empowered_knockback"] if empowered else weapon["knockback"],
 				"use_gravity": true,
-				"on_solid": "stay",
+				"on_solid": "roll",
+				"art_file": bomb_art,
+				# 진행 방향으로 돌리면 도화선이 앞을 향한다.
+				"art_upright": true,
 				"fuse": 3.0,
 				"explosion_radius": 200.0,
 			})

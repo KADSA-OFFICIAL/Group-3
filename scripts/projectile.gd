@@ -19,6 +19,12 @@ const SOURCE := "projectile"
 const PICKUP_RANGE := 48.0
 ## 중력을 받는 것(표창·폭탄·떨어진 단검)에 적용할 가속도.
 const GRAVITY := 980.0
+
+## 바닥에 닿은 뒤 굴러가기 시작하는 속도(px/s) — `on_solid = "roll"` (#131).
+const ROLL_SPEED := 300.0
+## 구르면서 받는 감속(px/s^2). 굴러가는 거리는 이 둘이 정한다:
+## 거리 = ROLL_SPEED^2 / (2 * ROLL_FRICTION) = 60px. 젤리 몸통(48px) 하나 조금 넘는다.
+const ROLL_FRICTION := 750.0
 ## 무기 그림으로 그릴 때 날 끝에서 손잡이 끝까지의 길이(px). 젤리 몸통(48px)보다 조금 짧다.
 const ART_LENGTH := 40.0
 
@@ -86,6 +92,11 @@ var explosion_radius := 0.0
 var pickup_owner := 0
 ## 이 무기의 그림으로 그린다 (단검). 비어 있거나 그림이 없는 무기면 노란 막대로 그린다.
 var art_weapon: String = ""
+## 이 **파일**의 그림으로 그린다 (폭탄). `art_weapon`보다 우선한다 —
+## 무기 하나에 그림이 둘일 때(일반/강화 폭탄) 이름만으로는 고를 수 없다 (#131).
+var art_file: String = ""
+## 그림을 진행 방향으로 돌리지 않는다 (폭탄). 돌리면 도화선이 앞을 향한다 (#131).
+var art_upright := false
 ## 탄 크기 배율 (대포 총). 1.0 이면 씬에 잡아 둔 기본 크기다.
 var size_scale := 1.0
 ## 푸른 불꽃 꼬리를 단 미사일로 그린다 (대포 총 특수, #121).
@@ -130,6 +141,8 @@ func setup(data: Dictionary) -> void:
 	explosion_radius = data.get("explosion_radius", 0.0)
 	pickup_owner = data.get("pickup_owner", 0)
 	art_weapon = data.get("art", "")
+	art_file = data.get("art_file", "")
+	art_upright = data.get("art_upright", false)
 	size_scale = data.get("size_scale", 1.0)
 	missile = data.get("missile", false)
 	arrow = data.get("arrow", false)
@@ -141,6 +154,7 @@ func setup(data: Dictionary) -> void:
 
 func _ready() -> void:
 	body_entered.connect(_on_body_entered)
+	body_exited.connect(_on_body_exited)
 	_spawn_time = _now()
 	_last_position = position
 	_apply_art()
@@ -160,9 +174,12 @@ func _ready() -> void:
 ## 한쪽으로 쏠린다. 캐릭터·무기와 같이 `Art.content_rect()`로 여백을 뺀 영역을 기준으로 잡되,
 ## 여기서는 회전을 하므로 위치가 아니라 `Sprite2D.offset`(회전과 함께 도는 값)으로 보정한다.
 func _apply_art() -> void:
-	if art_weapon.is_empty():
-		return
-	var texture := Weapons.texture(art_weapon)
+	# 파일 지정이 무기 이름보다 우선한다 (일반/강화 폭탄).
+	var texture: Texture2D = null
+	if not art_file.is_empty():
+		texture = Weapons.texture_file(art_file)
+	elif not art_weapon.is_empty():
+		texture = Weapons.texture(art_weapon)
 	if texture == null:
 		return
 	var content := Art.content_rect(texture)
@@ -198,6 +215,8 @@ func _apply_size() -> void:
 
 ## 그림 방향 맞추기. 원화는 날 끝이 위를 향하므로 진행 방향으로 90도 더 돌린다.
 func _face(direction: Vector2) -> void:
+	if art_upright:
+		return   # 폭탄 — 돌리면 도화선이 앞을 향한다 (#131)
 	if direction.length_squared() < 0.01:
 		return   # 멈춰 있으면 마지막 방향 그대로 (바닥에 꽂힌 단검)
 	art_sprite.rotation = direction.angle() + PI * 0.5
@@ -386,6 +405,12 @@ func _physics_process(delta: float) -> void:
 		_explode()
 		return
 
+	# 바닥에 닿은 뒤 굴러가는 것 (폭탄) — 감속해서 스스로 멈춘다.
+	if _landed and on_solid == "roll" and not is_zero_approx(velocity.x):
+		var speed := maxf(absf(velocity.x) - ROLL_FRICTION * delta, 0.0)
+		velocity.x = signf(velocity.x) * speed
+		position += velocity * delta
+
 	# 바닥에 남은 것은 주인이 다가오면 회수된다 (단검).
 	if _landed:
 		if pickup_owner != 0:
@@ -466,6 +491,26 @@ func _on_body_entered(body: Node) -> void:
 		"stay":
 			velocity = Vector2.ZERO
 			_landed = true
+		"roll":
+			# 세로 속도만 죽이고 가로로 조금 굴린다 (#131).
+			# **가지고 있던 속도를 넘겨받지 않고 ROLL_SPEED 로 깎는다** — 안 그러면
+			# 1120px/s 로 날아온 폭탄이 화면을 가로질러 굴러간다.
+			# 발판을 벗어났다 다시 떨어진 경우에는 남은 속도가 더 작으므로 그쪽을 쓴다.
+			var keep := minf(absf(velocity.x), ROLL_SPEED)
+			velocity = Vector2(signf(velocity.x) * keep, 0.0)
+			_landed = true
+
+
+## 굴러서 발판 끝을 벗어났다 — 다시 떨어진다 (#131).
+##
+## 이게 없으면 폭탄이 발판 밖 허공을 그대로 굴러간다. 떨어지다 아래 바닥에 닿으면
+## `_on_body_entered`가 다시 굴리는데, 그때는 남은 속도가 더 작아 조금만 구른다.
+func _on_body_exited(body: Node) -> void:
+	if not multiplayer.is_server() or _done or not _landed:
+		return
+	if on_solid != "roll" or body is Player:
+		return
+	_landed = false
 
 
 ## 샷건처럼 거리에 따라 데미지가 줄어드는 경우.
