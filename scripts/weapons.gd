@@ -116,6 +116,10 @@ const LIST: Array[Dictionary] = [
 	{
 		"name": "활",
 		"file": "bow.png",
+		# 원화가 활대 왼쪽·시위 오른쪽으로 그려져 있다. 화살은 시위 반대쪽으로 나가므로
+		# 이건 왼쪽을 보는 그림이다 — 그대로 붙이면 활대가 자기 쪽을 향한다 (#137).
+		# 전기톱과 같은 경우인데 #109 때 활은 빠졌다.
+		"art_faces_left": true,
 		"basic": "일정 시간 일정 데미지",
 		"special": "동시 다중 관통 화살 발사",
 		"basic_damage": 10.0, "basic_interval": 0.7, "basic_kind": "ranged",
