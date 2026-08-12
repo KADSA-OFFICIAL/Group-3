@@ -18,6 +18,9 @@ extends RefCounted
 ##   special_missile  특수로 나가는 탄을 불꽃 꼬리 미사일로 그린다. 기본 공격 탄은 그대로다
 ##   special_knockback_speed 미사일에 맞았을 때의 넉백 속도(px/s).
 ##                   없으면 knockback 단계 표를 쓴다 — 기존 무기는 달라지지 않는다
+##   basic_arc_angle  기본 공격을 바라보는 쪽 **위로** 이 각도(도)만큼 띄운다.
+##                   중력이 함께 켜져 포물선이 된다. 없으면 지금까지처럼 수평
+##   projectile_arrow 이 무기가 쏘는 탄을 결정질 화살로 그린다 (기본·특수 모두)
 
 ## 실제 무기가 아닌 특수값. 서버가 실제 무기 하나로 확정한다 (resolve 참고).
 const RANDOM := "랜덤"
@@ -115,6 +118,12 @@ const LIST: Array[Dictionary] = [
 		"basic_damage": 10.0, "basic_interval": 0.7, "basic_kind": "ranged",
 		"special_damage": 12.0, "special_cooldown": 6.0, "knockback": 0,
 		"special_projectiles": 3,
+		# 활인데 총알처럼 일직선으로 날아가서 원거리 3종이 같은 감각이었다 —
+		# 기본 공격만 15도 위로 띄워 포물선을 준다 (#125).
+		# 정점이 발사 높이보다 약 43px 위(젤리 몸통 72px의 반쯤)다.
+		# 특수(관통 3발)는 쿨타임 6초짜리라 맞히기 어려워지지 않게 직선으로 둔다.
+		"basic_arc_angle": 15.0,
+		"projectile_arrow": true,
 	},
 	{
 		"name": "삼지창",
