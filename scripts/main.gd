@@ -709,6 +709,21 @@ func _server_fire(attacker: Player, base: Dictionary, offsets: Array = [0.0]) ->
 		projectile_spawner.spawn(data)
 
 
+## 평행 다발의 세로 offset 목록 (#128).
+##
+## **가운데를 0으로 두고 위아래 대칭으로 벌린다.** 홀수면 한 발이 정확히 가운데로,
+## 짝수면 가운데를 비우고 양쪽으로 갈라진다 — 어느 쪽이든 조준점이 다발 한가운데다.
+## 0부터 세면 다발이 위로만 쏠려서 조준한 곳보다 높게 나간다.
+func _parallel_offsets(count: int, spacing: float) -> Array[float]:
+	if count <= 1:
+		return [0.0]
+	var offsets: Array[float] = []
+	var middle := (float(count) - 1.0) * 0.5
+	for i in count:
+		offsets.append((float(i) - middle) * spacing)
+	return offsets
+
+
 ## 발사 속도. 각도가 0이면 지금까지처럼 정확히 수평이다.
 ##
 ## **좌우 어느 쪽으로 쏘든 "위로" 나가야 한다** — 각도를 그대로 더하면 한쪽은 위로,
@@ -826,13 +841,14 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 			}
 			return true
 		"활":
-			# 관통 화살 3발 — 살짝 벌어진 평행.
-			var spacing := Combat.PARALLEL_SPACING
+			# 관통 화살 여러 발 — 벌어진 평행. **발 수는 무기 표가 정한다** (#128).
+			# 전에는 여기서 3발을 하드코딩해 표의 special_projectiles 가 죽은 값이었다.
+			var count: int = weapon.get("special_projectiles", 1)
 			_server_fire(attacker, {
 				"damage": weapon["special_damage"],
 				"knockback": weapon["knockback"],
 				"pierce_targets": true,
-			}, [-spacing, 0.0, spacing])
+			}, _parallel_offsets(count, Combat.PARALLEL_SPACING))
 			return true
 		"대포 총":
 			# 특수만 불꽃 꼬리 미사일이다 — 기본 공격 탄은 노란 막대 그대로 (#121).
