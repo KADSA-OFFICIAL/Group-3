@@ -13,6 +13,8 @@ extends RefCounted
 ##   knockback       넉백 단계 — Combat.Knockback
 ##   special_range   이 거리 안에 상대가 있을 때만 특수를 쓸 수 있다. 없으면 거리 제한 없음
 ##   art_faces_left  원화가 **왼쪽**을 보고 그려져 있다. 기본은 오른쪽 보기다 (art_faces_left 참고)
+##   projectile_scale 이 무기가 쏘는 탄의 크기 배율. 없으면 1.0(기본 크기).
+##                   그림과 판정이 함께 커진다 — main.gd의 _server_fire()가 읽는다
 
 ## 실제 무기가 아닌 특수값. 서버가 실제 무기 하나로 확정한다 (resolve 참고).
 const RANDOM := "랜덤"
@@ -84,6 +86,9 @@ const LIST: Array[Dictionary] = [
 		# 6 → 7 (#55). 원거리 계열 중 가장 낮아서 조금 올렸다.
 		"basic_damage": 7.0, "basic_interval": 0.5, "basic_kind": "ranged",
 		"special_damage": 25.0, "special_cooldown": 6.0, "knockback": 2,
+		# 전용 투사체 그림이 없어 공용 노란 막대(18×6)로 나가는데, "대포" 치고 탄이
+		# 빈약해 보이고 눈에 안 띄었다 — 1.5배로 키운다 (#118).
+		"projectile_scale": 1.5,
 	},
 	{
 		"name": "폭탄",

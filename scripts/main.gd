@@ -680,8 +680,13 @@ func is_blocked(attacker: Player, target: Player) -> bool:
 ## 서버에서만 호출한다. offsets로 여러 발을 한 번에 낼 수 있다 (활 특수의 평행 3발).
 func _server_fire(attacker: Player, base: Dictionary, offsets: Array = [0.0]) -> void:
 	var dir := signf(float(attacker.facing))
+	# 탄 크기는 무기 표에서 읽는다 — 기본·특수·연사 어디서 쏘든 같은 크기로 나간다.
+	# 표에서 꺼낸 값은 Variant라 명시 타입으로 받는다 (#66).
+	var weapon := Weapons.get_weapon(attacker.weapon_id)
+	var size_scale: float = weapon.get("projectile_scale", 1.0)
 	for offset: float in offsets:
 		var data := base.duplicate()
+		data["size_scale"] = size_scale
 		data["id"] = _next_projectile_id
 		_next_projectile_id += 1
 		data["shooter_peer"] = attacker.owner_peer_id
