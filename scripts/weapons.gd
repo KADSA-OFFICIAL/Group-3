@@ -109,6 +109,9 @@ const LIST: Array[Dictionary] = [
 		# 기본 공격이 없어 특수 하나로 싸운다 — 22 → 32, 쿨타임 5 → 3.5 (#55).
 		"special_damage": 32.0, "special_cooldown": 3.5, "knockback": 1,
 		"empowered_chance": 0.20, "empowered_damage": 48.0, "empowered_knockback": 2,
+		# 강화 폭탄은 그림이 따로 있다 — 데미지가 32 → 48인데 겉모습이 같으면
+		# 피할지 말지를 정할 근거가 화면에 없다 (#131).
+		"empowered_file": "bomb_charged.png",
 	},
 	{
 		"name": "활",
@@ -233,7 +236,13 @@ static func has_basic_attack(weapon_name: String) -> bool:
 ## 무기 그림. 그림이 없는 무기이거나 파일이 아직 없으면 null을 돌려준다 —
 ## 부르는 쪽이 임시 막대로 대신 그린다.
 static func texture(weapon_name: String) -> Texture2D:
-	var file: String = get_weapon(weapon_name).get("file", "")
+	return texture_file(get_weapon(weapon_name).get("file", ""))
+
+
+## 파일 이름으로 무기 그림을 찾는다. 무기 하나에 그림이 둘일 때 쓴다 —
+## 폭탄은 일반(`bomb.png`)과 강화(`bomb_charged.png`)가 따로 있어서
+## 무기 이름만으로는 어느 쪽인지 고를 수 없다 (#131).
+static func texture_file(file: String) -> Texture2D:
 	if file.is_empty():
 		return null
 	var path := ART_DIR + file
