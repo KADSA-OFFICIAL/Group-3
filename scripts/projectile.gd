@@ -46,6 +46,23 @@ const FLAME_CORE := Color(1.0, 1.0, 1.0)
 const FLAME_MID := Color(0.72, 0.94, 1.0)
 const FLAME_EDGE := Color(0.25, 0.60, 1.0)
 
+# ─────────────────────────── 결정질 화살 (활, #125) ───────────────────────────
+## 화살 전체 길이(px). 길쭉해야 "결정 창"으로 읽힌다 — 짧으면 마름모 덩어리가 된다.
+const ARROW_LENGTH := 60.0
+## 가장 넓은 곳의 반폭(px). 길이의 1/8쯤이라 날렵하다.
+const ARROW_HALF_WIDTH := 7.5
+## 앞에서부터 이 비율 되는 곳이 가장 넓다(어깨). 여기서 뒤로는 한 점으로 좁아진다.
+const ARROW_SHOULDER_RATIO := 0.34
+## 어깨 뒤 이 비율 되는 곳에 곁가지 결정이 붙는다.
+const ARROW_SHARD_RATIO := 0.62
+## 뒤에 남는 짧은 빛 자락의 길이(px). 미사일 꼬리보다 훨씬 짧다 — 화살이지 로켓이 아니다.
+const ARROW_TRAIL_LENGTH := 52.0
+
+## 결정 색. 가운데가 희고 가장자리가 짙푸르다.
+const ARROW_CORE := Color(1.0, 1.0, 1.0)
+const ARROW_MID := Color(0.55, 0.88, 1.0)
+const ARROW_EDGE := Color(0.20, 0.45, 0.95)
+
 ## 쏜 플레이어의 peer id. 자기 자신은 맞지 않는다.
 var shooter_peer := 0
 var damage := 0.0
@@ -73,6 +90,8 @@ var art_weapon: String = ""
 var size_scale := 1.0
 ## 푸른 불꽃 꼬리를 단 미사일로 그린다 (대포 총 특수, #121).
 var missile := false
+## 푸른 결정질 화살로 그린다 (활, #125).
+var arrow := false
 ## 0보다 크면 넉백 단계 대신 이 속도로 민다 (대포 총 미사일, #121).
 var knockback_speed := 0.0
 
@@ -113,6 +132,7 @@ func setup(data: Dictionary) -> void:
 	art_weapon = data.get("art", "")
 	size_scale = data.get("size_scale", 1.0)
 	missile = data.get("missile", false)
+	arrow = data.get("arrow", false)
 	knockback_speed = data.get("knockback_speed", 0.0)
 	velocity = data["velocity"]
 	position = data["position"]
@@ -125,8 +145,8 @@ func _ready() -> void:
 	_last_position = position
 	_apply_art()
 	_apply_size()
-	if missile:
-		_setup_flame()
+	if missile or arrow:
+		_setup_drawn()
 		return
 	if _has_art:
 		_face(velocity)
@@ -192,22 +212,25 @@ func _process(delta: float) -> void:
 	_last_position = position
 	if _has_art:
 		_face(moved)
-	if missile:
-		# 유도(단검)처럼 방향이 바뀌는 것에도 꼬리가 따라 돌도록 위치 변화로 잡는다.
+	if missile or arrow:
+		# 유도(단검)나 포물선(활)처럼 방향이 바뀌는 것에도 그림이 따라 돌도록
+		# 위치 변화로 진행 방향을 잡는다. 화살촉이 궤도를 따라 기울어진다.
 		if moved.length_squared() >= 0.01:
 			_draw_dir = moved.normalized()
 		_flame_time += delta
 		queue_redraw()
 
 
-## 불꽃 꼬리 준비. 노란 막대는 미사일이 대신하므로 감춘다.
+## 직접 그리는 탄(미사일·화살) 준비. 노란 막대는 이들이 대신하므로 감춘다.
 ##
-## 가닥 모양은 노드 이름(`Projectile_<id>`)으로 씨앗을 잡은 난수라 **양쪽 화면에 같게** 뜬다.
-## 이름은 스폰 데이터의 id에서 나오므로 모든 피어에서 같다.
-func _setup_flame() -> void:
+## 불꽃 가닥 모양은 노드 이름(`Projectile_<id>`)으로 씨앗을 잡은 난수라 **양쪽 화면에 같게**
+## 뜬다. 이름은 스폰 데이터의 id에서 나오므로 모든 피어에서 같다.
+func _setup_drawn() -> void:
 	visual.hide()
 	if velocity.length_squared() >= 0.01:
 		_draw_dir = velocity.normalized()
+	if not missile:
+		return
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(name)
 	for i in WISP_COUNT:
@@ -229,6 +252,9 @@ func _setup_flame() -> void:
 ## **노드를 회전시키지 않고** 방향 벡터로 직접 그린다. 루트를 돌리면 `CollisionShape2D`까지
 ## 같이 돌아 판정이 달라진다 — 연출 때문에 맞는 범위가 변하면 안 된다.
 func _draw() -> void:
+	if arrow:
+		_draw_arrow()
+		return
 	if not missile:
 		return
 	var back := -_draw_dir
@@ -293,6 +319,61 @@ func _plume_width(t: float) -> float:
 ## 꼬리 위치별 옅기(0~1). 머리 쪽이 진하고 꼬리로 갈수록 사라진다.
 func _plume_alpha(t: float) -> float:
 	return pow(1.0 - t, 1.35)
+
+
+## 결정질 화살 (#125).
+##
+## 미사일과 같은 규칙이다 — 그림 파일 없이 `_draw()`로만 그리고, **노드를 회전시키지 않는다**
+## (루트를 돌리면 `CollisionShape2D`까지 돌아 판정이 달라진다).
+## 진행 방향은 위치 변화로 잡으므로 **포물선을 따라 화살촉이 기울어진다.**
+##
+## 같은 윤곽을 크기만 줄여 세 번 겹친다. 가산 혼합이라 겹칠수록 밝아져서
+## 가장자리는 짙푸르고 가운데는 흰 결정처럼 보인다.
+func _draw_arrow() -> void:
+	var forward := _draw_dir
+	var perp := forward.orthogonal()
+	# 뒤로 남는 짧은 빛 자락. 화살이 지나온 길을 알려 주되 로켓처럼 길면 안 된다.
+	_draw_plume(-forward, perp, ARROW_TRAIL_LENGTH * size_scale,
+		ARROW_HALF_WIDTH * size_scale * 0.7, ARROW_EDGE, 0.30)
+	Art.draw_glow(self, Vector2.ZERO, ARROW_LENGTH * size_scale * 0.38, ARROW_EDGE, 0.35)
+	# 겹칠 때 **폭을 길이보다 많이** 줄인다. 그래야 흰 심이 길이를 따라 남아
+	# 가운데가 하얗게 빛나는 결정이 된다 — 둘 다 줄이면 심이 작은 덩어리가 된다.
+	_draw_arrow_body(forward, perp, size_scale, size_scale, ARROW_EDGE, 0.55)
+	_draw_arrow_body(forward, perp, size_scale * 0.88, size_scale * 0.58, ARROW_MID, 0.75)
+	_draw_arrow_body(forward, perp, size_scale * 0.72, size_scale * 0.28, ARROW_CORE, 0.95)
+
+
+## 화살 윤곽 한 겹 — 앞이 뾰족하고 어깨에서 가장 넓다가 **뒤로도 한 점으로** 좁아지는
+## 결정 창. 뒤를 뭉툭하게 두거나 날개를 달면 촉이 둘 달린 것처럼 보인다.
+func _draw_arrow_body(forward: Vector2, perp: Vector2,
+		length_scale: float, width_scale: float, color: Color, alpha: float) -> void:
+	var half_length := ARROW_LENGTH * 0.5 * length_scale
+	var half_width := ARROW_HALF_WIDTH * width_scale
+	var tip := forward * half_length
+	var tail := -forward * half_length
+	var shoulder := forward * (half_length - ARROW_LENGTH * ARROW_SHOULDER_RATIO * length_scale)
+	var tint := Color(color, alpha)
+
+	# 본체 — 앞뒤로 뾰족한 연꼴
+	draw_polygon(
+		PackedVector2Array([
+			tip,
+			shoulder + perp * half_width,
+			tail,
+			shoulder - perp * half_width,
+		]),
+		PackedColorArray([tint, tint, tint, tint]))
+
+	# 곁가지 결정 — 몸통 뒤쪽에서 바깥·뒤로 삐져나온 얇은 조각
+	var shard := forward * (half_length - ARROW_LENGTH * ARROW_SHARD_RATIO * length_scale)
+	var out := perp * half_width * 1.8
+	var back := forward * half_width * 1.6
+	draw_polygon(
+		PackedVector2Array([shard, shard + out - back, shard - back * 0.7]),
+		PackedColorArray([tint, tint, tint]))
+	draw_polygon(
+		PackedVector2Array([shard, shard - out - back, shard - back * 0.7]),
+		PackedColorArray([tint, tint, tint]))
 
 
 func _physics_process(delta: float) -> void:

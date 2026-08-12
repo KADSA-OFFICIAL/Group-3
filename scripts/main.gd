@@ -582,10 +582,17 @@ func _try_ranged_basic(attacker: Player) -> void:
 		return
 
 	_next_hit_at[key] = now + weapon["basic_interval"]
-	_server_fire(attacker, {
+	var shot := {
 		"damage": weapon["basic_damage"],
 		"knockback": weapon["knockback"],
-	})
+	}
+	# 활 — 살짝 위로 쏴서 포물선을 그린다 (#125). 각도만 주면 비스듬한 직선이 되므로
+	# 중력을 함께 켜야 한다. 특수(관통 3발)는 이 경로를 안 지나가서 직선 그대로다.
+	var arc: float = weapon.get("basic_arc_angle", 0.0)
+	if not is_zero_approx(arc):
+		shot["launch_angle"] = arc
+		shot["use_gravity"] = true
+	_server_fire(attacker, shot)
 
 
 ## 강제 이동 중에 상대와 닿으면 특수 데미지가 한 번 들어간다.
@@ -684,17 +691,34 @@ func _server_fire(attacker: Player, base: Dictionary, offsets: Array = [0.0]) ->
 	# 표에서 꺼낸 값은 Variant라 명시 타입으로 받는다 (#66).
 	var weapon := Weapons.get_weapon(attacker.weapon_id)
 	var size_scale: float = weapon.get("projectile_scale", 1.0)
+	# 결정질 화살로 그릴지는 무기가 정한다 — 기본이든 특수든 같은 모양으로 나간다 (#125).
+	var draw_arrow: bool = weapon.get("projectile_arrow", false)
+	# 발사 각도는 쏘는 쪽(base)이 정한다. 활은 기본 공격만 위로 띄우고 특수는 직선이다.
+	var launch_angle: float = base.get("launch_angle", 0.0)
 	for offset: float in offsets:
 		var data := base.duplicate()
 		data["size_scale"] = size_scale
+		data["arrow"] = draw_arrow
 		data["id"] = _next_projectile_id
 		_next_projectile_id += 1
 		data["shooter_peer"] = attacker.owner_peer_id
-		data["velocity"] = Vector2(dir * Combat.PROJECTILE_SPEED, 0.0)
+		data["velocity"] = _launch_velocity(dir, launch_angle)
 		# 무기 끝에서 나가게 한다.
 		data["position"] = attacker.global_position + Vector2(
 			dir * (MELEE_REACH * 0.5 + attacker.current_reach()), offset)
 		projectile_spawner.spawn(data)
+
+
+## 발사 속도. 각도가 0이면 지금까지처럼 정확히 수평이다.
+##
+## **좌우 어느 쪽으로 쏘든 "위로" 나가야 한다** — 각도를 그대로 더하면 한쪽은 위로,
+## 반대쪽은 아래로 나간다. 그래서 회전량에 방향(`dir`)을 곱한다.
+## 화면 좌표는 y가 아래로 커지므로 위가 음수다.
+func _launch_velocity(dir: float, angle_degrees: float) -> Vector2:
+	var flat := Vector2(dir * Combat.PROJECTILE_SPEED, 0.0)
+	if is_zero_approx(angle_degrees):
+		return flat
+	return flat.rotated(-deg_to_rad(angle_degrees) * dir)
 
 
 ## 모든 피어에서 호출되어 투사체 노드를 만든다.
