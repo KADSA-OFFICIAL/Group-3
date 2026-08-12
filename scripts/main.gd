@@ -110,11 +110,15 @@ func _add_player(peer_id: int) -> void:
 	if index < 0:
 		index = players_root.get_child_count()
 	var config: Dictionary = Lobby.config_for(peer_id)
+	# 강화 폭탄은 **스폰 데이터로** 실어 보낸다 (#134). 첫 라운드는 `_start_round()`를
+	# 거치지 않으므로 여기서 안 정하면 접속 직후에는 늘 일반 폭탄을 들고 시작한다.
+	# 스폰 데이터는 모든 피어의 `_spawn_player()`에 그대로 전달되어 `_ready()` 전에 박힌다.
 	var player := player_spawner.spawn({
 		"peer_id": peer_id,
 		"index": index,
 		"weapon_id": config["weapon"],
 		"character": config["character"],
+		"empowered": _roll_empowered(config["weapon"]),
 	}) as Player
 	if player == null:
 		return
@@ -137,6 +141,7 @@ func _spawn_player(data: Dictionary) -> Node:
 	player.player_name = "%dP" % (index + 1)
 	player.weapon_id = data["weapon_id"]
 	player.character_id = data["character"]
+	player.empowered_ready = data.get("empowered", false)
 	player.position = _spawn_position(index)
 	player.facing = _spawn_facing(index)
 	return player
@@ -204,6 +209,8 @@ func _start_round() -> void:
 		var index := maxi(Lobby.slot_of(player.owner_peer_id), 0)
 		player.server_reset(_spawn_position(index), _spawn_facing(index))
 		_dagger_held[player.owner_peer_id] = true
+		# 라운드마다 새로 뽑는다 — 안 하면 지난 라운드에서 들고 있던 것이 그대로 남는다.
+		player.server_set_empowered(_roll_empowered(player.weapon_id))
 
 	_broadcast_round("")
 
@@ -709,6 +716,16 @@ func _server_fire(attacker: Player, base: Dictionary, offsets: Array = [0.0]) ->
 		projectile_spawner.spawn(data)
 
 
+## 다음에 던질 폭탄이 강화인지 뽑는다 (#134). **서버에서만 부른다** —
+## 클라이언트가 각자 뽑으면 손에 든 그림이 양쪽에서 달라진다.
+##
+## 확률은 던질 때 뽑던 때와 같다. 언제 뽑느냐만 앞당긴 것이다.
+## `empowered_chance`가 없는 무기는 항상 false다.
+func _roll_empowered(weapon_id: String) -> bool:
+	var chance: float = Weapons.get_weapon(weapon_id).get("empowered_chance", 0.0)
+	return chance > 0.0 and randf() < chance
+
+
 ## 평행 다발의 세로 offset 목록 (#128).
 ##
 ## **가운데를 0으로 두고 위아래 대칭으로 벌린다.** 홀수면 한 발이 정확히 가운데로,
@@ -887,7 +904,9 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 			return true
 		"폭탄":
 			# 던진 폭탄은 바닥에서 조금 구르다 멈추고, 3초 뒤 또는 닿으면 반경 200px을 때린다.
-			var empowered: bool = randf() < weapon["empowered_chance"]
+			# 강화 여부는 **미리 뽑아 손에 들고 있던 그것**을 쓴다 (#134).
+			# 여기서 새로 뽑으면 손에 든 그림과 날아가는 것이 어긋난다.
+			var empowered: bool = attacker.empowered_ready
 			# 강화 폭탄은 그림이 따로다 — 데미지가 32 → 48인데 겉모습이 같으면
 			# 피할지 말지를 정할 근거가 화면에 없다 (#131).
 			# 표에서 꺼낸 값은 Variant라 명시 타입으로 받는다 (#66).
@@ -903,6 +922,8 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 				"fuse": 3.0,
 				"explosion_radius": 200.0,
 			})
+			# 던졌으니 다음 것을 새로 뽑는다 — 쿨타임 동안 손에 들려 보인다.
+			attacker.server_set_empowered(_roll_empowered(attacker.weapon_id))
 			return true
 		"소총":
 			# 한 번 누르면 지속시간 동안 자동 연사.
