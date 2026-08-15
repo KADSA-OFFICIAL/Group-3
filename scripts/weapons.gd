@@ -13,6 +13,14 @@ extends RefCounted
 ##   knockback       넉백 단계 — Combat.Knockback
 ##   special_range   이 거리 안에 상대가 있을 때만 특수를 쓸 수 있다. 없으면 거리 제한 없음
 ##   art_faces_left  원화가 **왼쪽**을 보고 그려져 있다. 기본은 오른쪽 보기다 (art_faces_left 참고)
+##   projectile_scale 이 무기가 쏘는 탄의 크기 배율. 없으면 1.0(기본 크기).
+##                   그림과 판정이 함께 커진다 — main.gd의 _server_fire()가 읽는다
+##   special_missile  특수로 나가는 탄을 불꽃 꼬리 미사일로 그린다. 기본 공격 탄은 그대로다
+##   special_knockback_speed 미사일에 맞았을 때의 넉백 속도(px/s).
+##                   없으면 knockback 단계 표를 쓴다 — 기존 무기는 달라지지 않는다
+##   basic_arc_angle  기본 공격을 바라보는 쪽 **위로** 이 각도(도)만큼 띄운다.
+##                   중력이 함께 켜져 포물선이 된다. 없으면 지금까지처럼 수평
+##   projectile_arrow 이 무기가 쏘는 탄을 결정질 화살로 그린다 (기본·특수 모두)
 
 ## 실제 무기가 아닌 특수값. 서버가 실제 무기 하나로 확정한다 (resolve 참고).
 const RANDOM := "랜덤"
@@ -84,6 +92,13 @@ const LIST: Array[Dictionary] = [
 		# 6 → 7 (#55). 원거리 계열 중 가장 낮아서 조금 올렸다.
 		"basic_damage": 7.0, "basic_interval": 0.5, "basic_kind": "ranged",
 		"special_damage": 25.0, "special_cooldown": 6.0, "knockback": 2,
+		# 전용 투사체 그림이 없어 공용 노란 막대(18×6)로 나가는데, "대포" 치고 탄이
+		# 빈약해 보이고 눈에 안 띄었다 — 1.5배로 키운다 (#118).
+		"projectile_scale": 1.5,
+		# 특수는 "넉백 미사일"이라 기본 공격 탄과 구분되어야 한다 — 불꽃 꼬리를 달고,
+		# 최고 단계(STRONG 700)보다 조금 더 민다 (#121).
+		"special_missile": true,
+		"special_knockback_speed": 850.0,
 	},
 	{
 		"name": "폭탄",
@@ -94,15 +109,31 @@ const LIST: Array[Dictionary] = [
 		# 기본 공격이 없어 특수 하나로 싸운다 — 22 → 32, 쿨타임 5 → 3.5 (#55).
 		"special_damage": 32.0, "special_cooldown": 3.5, "knockback": 1,
 		"empowered_chance": 0.20, "empowered_damage": 48.0, "empowered_knockback": 2,
+		# 강화 폭탄은 그림이 따로 있다 — 데미지가 32 → 48인데 겉모습이 같으면
+		# 피할지 말지를 정할 근거가 화면에 없다 (#131).
+		"empowered_file": "bomb_charged.png",
 	},
 	{
 		"name": "활",
 		"file": "bow.png",
+		# 원화가 활대 왼쪽·시위 오른쪽으로 그려져 있다. 화살은 시위 반대쪽으로 나가므로
+		# 이건 왼쪽을 보는 그림이다 — 그대로 붙이면 활대가 자기 쪽을 향한다 (#137).
+		# 전기톱과 같은 경우인데 #109 때 활은 빠졌다.
+		"art_faces_left": true,
 		"basic": "일정 시간 일정 데미지",
 		"special": "동시 다중 관통 화살 발사",
 		"basic_damage": 10.0, "basic_interval": 0.7, "basic_kind": "ranged",
 		"special_damage": 12.0, "special_cooldown": 6.0, "knockback": 0,
-		"special_projectiles": 3,
+		# 3 → 5 (#128). main.gd 가 이 값을 읽어 평행 다발을 만든다 —
+		# 전에는 여기 3이 적혀 있어도 발사 쪽이 3발을 하드코딩하고 있어서
+		# 이 값을 고쳐도 아무 일도 일어나지 않았다.
+		"special_projectiles": 5,
+		# 활인데 총알처럼 일직선으로 날아가서 원거리 3종이 같은 감각이었다 —
+		# 기본 공격만 15도 위로 띄워 포물선을 준다 (#125).
+		# 정점이 발사 높이보다 약 43px 위(젤리 몸통 72px의 반쯤)다.
+		# 특수(관통 3발)는 쿨타임 6초짜리라 맞히기 어려워지지 않게 직선으로 둔다.
+		"basic_arc_angle": 15.0,
+		"projectile_arrow": true,
 	},
 	{
 		"name": "삼지창",
@@ -209,7 +240,13 @@ static func has_basic_attack(weapon_name: String) -> bool:
 ## 무기 그림. 그림이 없는 무기이거나 파일이 아직 없으면 null을 돌려준다 —
 ## 부르는 쪽이 임시 막대로 대신 그린다.
 static func texture(weapon_name: String) -> Texture2D:
-	var file: String = get_weapon(weapon_name).get("file", "")
+	return texture_file(get_weapon(weapon_name).get("file", ""))
+
+
+## 파일 이름으로 무기 그림을 찾는다. 무기 하나에 그림이 둘일 때 쓴다 —
+## 폭탄은 일반(`bomb.png`)과 강화(`bomb_charged.png`)가 따로 있어서
+## 무기 이름만으로는 어느 쪽인지 고를 수 없다 (#131).
+static func texture_file(file: String) -> Texture2D:
 	if file.is_empty():
 		return null
 	var path := ART_DIR + file

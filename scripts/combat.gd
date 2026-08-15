@@ -55,9 +55,12 @@ const KNOCKBACK_LIFT := 0.35
 ## 강제 이동과 같은 값이다 — 화면 폭 1152 를 약 1초에 가로지른다.
 const PROJECTILE_SPEED := 1120.0
 
-## 활 특수의 평행 3발 사이 간격. 젤리 몸통 높이(56)를 셋으로 나눈 값이라
-## 서 있는 상대에게는 한두 발만 맞는다.
-const PARALLEL_SPACING := 18.0
+## 평행 다발(활 특수) 화살 사이의 세로 간격.
+##
+## 18 → 26 (#128). 3발일 때는 총 폭이 36으로 젤리 몸통(72)의 절반도 못 덮어서
+## 쿨타임 6초를 쓴 보람이 안 났다. 5발 × 26이면 총 폭 104로 몸통 1.4배를 덮는다.
+## 더 벌리면 가운데가 성겨져 서 있는 상대가 화살 사이로 빠진다.
+const PARALLEL_SPACING := 26.0
 
 ## 낙사 경계 — 화면(1152×648) 밖으로 이만큼 벗어나면 낙사.
 ## "일반 평맵" 은 좌우 벽이 있어서 낙사가 일어나지 않는다.
@@ -66,8 +69,15 @@ const FALL_MARGIN_BOTTOM := 200.0
 const FALL_MARGIN_SIDE := 150.0
 
 
-static func knockback_velocity(level: int, direction: float) -> Vector2:
-	var speed: float = KNOCKBACK_SPEED[level]
+## `speed_override`가 0보다 크면 단계 대신 그 속도로 민다 (대포 총 미사일, #121).
+##
+## 단계를 하나 더 만들지 않고 값으로 받는 이유는, "미사일만 조금 더 민다"가
+## 무기 하나에 붙는 성질이지 모든 무기가 골라 쓸 새 단계가 아니기 때문이다.
+## 0이면 지금까지처럼 단계 표를 쓴다 — 기존 공격은 아무것도 달라지지 않는다.
+static func knockback_velocity(level: int, direction: float, speed_override := 0.0) -> Vector2:
+	var speed: float = speed_override
+	if speed <= 0.0:
+		speed = KNOCKBACK_SPEED[level]
 	return Vector2(direction * speed, -speed * KNOCKBACK_LIFT)
 
 

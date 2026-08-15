@@ -77,6 +77,12 @@ var gauge := 0.0
 var special_ready := true
 ## 강제 이동 상태. ""이면 평소, "dash"(전기톱) / "rise"·"fall"(양날 도끼).
 var forced_mode := ""
+## 다음에 던질 것이 **강화** 폭탄인가 (#134).
+##
+## 던지는 순간에 뽑으면 손에 들고 보여줄 수가 없어서, 서버가 미리 뽑아 복제한다.
+## 첫 스폰값은 스폰 데이터로 들어오고(`main.gd._spawn_player`), 그 뒤로는
+## `server_set_empowered()`가 갱신한다 — 라운드 시작과 던진 직후다.
+var empowered_ready := false
 
 ## 무적 시간은 기본 공격용과 특수 공격용을 따로 잰다.
 ## 합치면 기본 공격이 계속 무적을 새로 걸어서 특수 공격이 거의 안 들어간다.
@@ -267,10 +273,23 @@ func _update_squash(grounded: bool, delta: float) -> void:
 	_place_body()
 
 
+## 손에 들 무기 그림 (#134).
+##
+## 강화가 준비된 폭탄은 강화 그림을 든다 — 무기 표에 `empowered_file`이 있고
+## 서버가 미리 뽑아 둔 값이 true 일 때만이다. 그림이 없으면 평소 것으로 돌아간다.
+func _weapon_texture() -> Texture2D:
+	if empowered_ready:
+		var file: String = Weapons.get_weapon(weapon_id).get("empowered_file", "")
+		var empowered := Weapons.texture_file(file)
+		if empowered != null:
+			return empowered
+	return Weapons.texture(weapon_id)
+
+
 ## 무기 그림을 붙이고 크기를 맞춘다. 그림이 없는 무기면 막대 쪽을 쓴다.
 func _apply_weapon() -> void:
 	var sprite: Sprite2D = $WeaponSprite
-	var texture := Weapons.texture(weapon_id)
+	var texture := _weapon_texture()
 	sprite.texture = texture
 	_weapon_has_art = texture != null
 	_weapon_faces_left = Weapons.art_faces_left(weapon_id)
@@ -531,8 +550,9 @@ func _expire_buffs() -> void:
 ## 기본과 특수는 무적 타이머가 따로 돌아가고,
 ## 허공을 나는 것("projectile")은 공유 무적을 아예 타지 않는다 —
 ## 활 특수 3발처럼 같은 순간에 도착하는 것도 전부 들어간다.
+## `knockback_speed`가 0보다 크면 단계 대신 그 속도로 민다 (대포 총 미사일, #121).
 func server_apply_hit(damage: float, knockback_level: int, from_x: float,
-		stun := 0.0, source := "basic") -> void:
+		stun := 0.0, source := "basic", knockback_speed := 0.0) -> void:
 	if not multiplayer.is_server() or not alive:
 		return
 	if source != "projectile" and is_invulnerable(source):
@@ -546,7 +566,7 @@ func server_apply_hit(damage: float, knockback_level: int, from_x: float,
 	var data := Weapons.get_weapon(weapon_id)
 	if data.get("gauge_per_hit", 0.0) > 0.0:
 		new_gauge = minf(gauge + data["gauge_per_hit"], data["gauge_max"])
-	_receive_hit.rpc(new_hp, knockback_level, direction, stun, source, new_gauge)
+	_receive_hit.rpc(new_hp, knockback_level, direction, stun, source, new_gauge, knockback_speed)
 
 
 ## 출혈 같은 지속 데미지. 무적 시간을 무시하고 들어가고, 넉백도 없다.
@@ -575,6 +595,16 @@ func server_apply_buff(kind: String, value: float, duration: float) -> void:
 	if not multiplayer.is_server():
 		return
 	_receive_buff.rpc(kind, value, duration)
+
+
+## 다음 폭탄이 강화인지를 서버가 정해 양쪽에 알린다 (#134).
+##
+## **뽑기는 main.gd가 한다** — 전투 판정의 주인이 거기이고, 라운드 시작과 던진 직후라는
+## 시점도 거기가 안다. 여기는 결과를 복제하고 그림을 갈아 끼우는 일만 한다.
+func server_set_empowered(value: bool) -> void:
+	if not multiplayer.is_server():
+		return
+	_receive_empowered.rpc(value)
 
 
 ## 너클 게이지는 특수 공격을 쓰면 전부 소모된다.
@@ -608,7 +638,7 @@ func server_end_forced() -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _receive_hit(new_hp: float, knockback_level: int, direction: float,
-		stun: float, source: String, new_gauge: float) -> void:
+		stun: float, source: String, new_gauge: float, knockback_speed := 0.0) -> void:
 	hp = new_hp
 	gauge = new_gauge
 	if source != "projectile":
@@ -617,9 +647,18 @@ func _receive_hit(new_hp: float, knockback_level: int, direction: float,
 		_stun_until = _now() + stun
 	# 넉백은 물리를 계산하는 서버에서만 적용한다.
 	if multiplayer.is_server() and direction != 0.0:
-		velocity = Combat.knockback_velocity(knockback_level, direction)
+		velocity = Combat.knockback_velocity(knockback_level, direction, knockback_speed)
 		_knockback_until = _now() + KNOCKBACK_CONTROL_LOCK
 	_check_death()
+
+
+## 손에 든 폭탄이 바뀐다 (#134). 그림만 갈아 끼우므로 판정과는 무관하다.
+@rpc("authority", "call_local", "reliable")
+func _receive_empowered(value: bool) -> void:
+	if empowered_ready == value:
+		return
+	empowered_ready = value
+	_apply_weapon()
 
 
 @rpc("authority", "call_local", "reliable")
