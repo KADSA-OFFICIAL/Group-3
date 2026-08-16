@@ -149,6 +149,10 @@ const LIST: Array[Dictionary] = [
 		"basic_damage": 12.0, "basic_interval": 0.0, "basic_kind": "melee",
 		"special_damage": 18.0, "special_cooldown": 7.0, "knockback": 1,
 		"stun_duration": 0.8,
+		# 던진 삼지창 그림만 40px → 80px (#155). 원화가 1:3.96으로 가늘고 길어서
+		# 기본 크기에서는 자루가 선 한 줄이 되고 갈래 셋이 뭉갠다. 젤리 몸통(72px)과
+		# 비슷한 길이가 되어 무엇이 날아오는지 읽힌다. 판정은 하나도 안 바뀐다.
+		"projectile_art_scale": 2.0,
 	},
 	{
 		"name": "글러브",
