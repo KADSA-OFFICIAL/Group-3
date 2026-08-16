@@ -13,6 +13,11 @@ signal finished(projectile: Node)
 ## 바닥에 남은 것(단검)을 주인이 주웠다.
 signal picked_up(peer_id: int, projectile: Node)
 
+## 폭발 반경 표시 노드의 타입 (#140). `class_name` 대신 preload 로 받는다 —
+## 전역 클래스 이름은 에디터가 만드는 `.godot` 캐시에 등록되어야 풀리므로,
+## 캐시가 없는 상태(새로 받은 저장소·헤드리스 실행)에서 이 스크립트가 통째로 파싱되지 않는다.
+const BlastRadiusNode := preload("res://scripts/blast_radius.gd")
+
 ## 허공을 나는 것은 공유 무적을 타지 않는다. 항상 "projectile" 이다.
 const SOURCE := "projectile"
 ## 단검을 주울 수 있는 거리. 젤리 몸통(48px)에 닿으면 줍는 셈이다.
@@ -87,6 +92,7 @@ var homing_peer := 0
 ## 이 시간이 지나면 스스로 터진다 (폭탄). 0 이면 안 터진다.
 var fuse := 0.0
 ## 터질 때 이 반경 안을 때린다 (폭탄). 0 이면 단발 명중.
+## 이 값이 그대로 `BlastRadius`에 넘어가 화면에도 그려진다 (#140).
 var explosion_radius := 0.0
 ## 바닥에 남았을 때 이 peer의 주인이 주울 수 있다 (단검).
 var pickup_owner := 0
@@ -123,6 +129,7 @@ var _wisps: Array[Dictionary] = []
 @onready var visual: ColorRect = $Visual
 @onready var art_sprite: Sprite2D = $ArtSprite
 @onready var collision_shape: CollisionShape2D = $CollisionShape2D
+@onready var blast_radius: BlastRadiusNode = $BlastRadius
 
 
 ## 모든 피어에서 스폰 데이터로 호출된다 (add_child 전).
@@ -159,6 +166,10 @@ func _ready() -> void:
 	_last_position = position
 	_apply_art()
 	_apply_size()
+	# 터질 때 때리는 범위를 그려 둔다 (#140). 반경이 있는 것은 폭탄뿐이고
+	# 나머지는 0이라 아무것도 그리지 않는다. **미사일·화살보다 먼저** 넘긴다 —
+	# 그쪽은 바로 아래에서 함수를 빠져나간다.
+	blast_radius.radius = explosion_radius
 	if missile or arrow:
 		_setup_drawn()
 		return
