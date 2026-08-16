@@ -15,6 +15,9 @@ extends RefCounted
 ##   art_faces_left  원화가 **왼쪽**을 보고 그려져 있다. 기본은 오른쪽 보기다 (art_faces_left 참고)
 ##   projectile_scale 이 무기가 쏘는 탄의 크기 배율. 없으면 1.0(기본 크기).
 ##                   그림과 판정이 함께 커진다 — main.gd의 _server_fire()가 읽는다
+##   projectile_art_scale 이 무기가 쏘는 탄의 **그림만** 키우는 배율. 없으면 1.0.
+##                   판정(충돌 상자·반경·데미지)은 하나도 안 변한다 — 눈에 잘 띄게
+##                   하려는 것뿐일 때 쓴다. 범위를 키우려면 projectile_scale 쪽이다
 ##   special_missile  특수로 나가는 탄을 불꽃 꼬리 미사일로 그린다. 기본 공격 탄은 그대로다
 ##   special_knockback_speed 미사일에 맞았을 때의 넉백 속도(px/s).
 ##                   없으면 knockback 단계 표를 쓴다 — 기존 무기는 달라지지 않는다
@@ -112,6 +115,9 @@ const LIST: Array[Dictionary] = [
 		# 강화 폭탄은 그림이 따로 있다 — 데미지가 32 → 48인데 겉모습이 같으면
 		# 피할지 말지를 정할 근거가 화면에 없다 (#131).
 		"empowered_file": "bomb_charged.png",
+		# 그림만 40px → 60px. 옆에 지름 400px짜리 반경 원이 붙으면서 기본 크기로는
+		# 무엇이 날아오는지 눈에 안 들어왔다 (#149). 판정은 하나도 안 바뀐다.
+		"projectile_art_scale": 1.5,
 	},
 	{
 		"name": "활",
