@@ -143,6 +143,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "삼지창",
+		"file": "trident.png",
 		"basic": "닿으면 일정 데미지",
 		"special": "던지고 피격 시 일정 데미지 + 기절 효과 부여, 자동 회수",
 		"basic_damage": 12.0, "basic_interval": 0.0, "basic_kind": "melee",
