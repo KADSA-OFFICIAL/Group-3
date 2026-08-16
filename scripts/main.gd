@@ -887,6 +887,9 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 				"damage": weapon["special_damage"],
 				"knockback": weapon["knockback"],
 				"stun": weapon["stun_duration"],
+				# 날아가는 것이 삼지창 자신이므로 같은 그림으로 그린다 (#152).
+				# 그림이 생기기 전에는 노란 막대였다.
+				"art": weapon["name"],
 			})
 			return true
 		"샷건":
