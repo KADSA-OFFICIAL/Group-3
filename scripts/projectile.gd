@@ -105,6 +105,9 @@ var art_file: String = ""
 var art_upright := false
 ## 탄 크기 배율 (대포 총). 1.0 이면 씬에 잡아 둔 기본 크기다.
 var size_scale := 1.0
+## **그림만** 키우는 배율 (폭탄, #149). `size_scale`과 달리 충돌 상자를 건드리지 않는다 —
+## 판정은 그대로 두고 눈에만 잘 띄게 하려는 값이다.
+var art_scale := 1.0
 ## 푸른 불꽃 꼬리를 단 미사일로 그린다 (대포 총 특수, #121).
 var missile := false
 ## 푸른 결정질 화살로 그린다 (활, #125).
@@ -151,6 +154,7 @@ func setup(data: Dictionary) -> void:
 	art_file = data.get("art_file", "")
 	art_upright = data.get("art_upright", false)
 	size_scale = data.get("size_scale", 1.0)
+	art_scale = data.get("art_scale", 1.0)
 	missile = data.get("missile", false)
 	arrow = data.get("arrow", false)
 	knockback_speed = data.get("knockback_speed", 0.0)
@@ -199,7 +203,9 @@ func _apply_art() -> void:
 	var texture_size := Vector2(texture.get_size())
 	art_sprite.texture = texture
 	art_sprite.offset = texture_size * 0.5 - content.position - content.size * 0.5
-	art_sprite.scale = Vector2.ONE * (ART_LENGTH / content.size.y)
+	# `art_scale`은 여기서만 곱한다 (#149) — `_apply_size()`의 `size_scale`과 달리
+	# 충돌 상자에는 닿지 않으므로 판정이 그대로다.
+	art_sprite.scale = Vector2.ONE * (ART_LENGTH / content.size.y) * art_scale
 	_has_art = true
 	visual.hide()
 	art_sprite.show()
