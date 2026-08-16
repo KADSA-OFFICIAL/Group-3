@@ -103,6 +103,11 @@ var art_weapon: String = ""
 var art_file: String = ""
 ## 그림을 진행 방향으로 돌리지 않는다 (폭탄). 돌리면 도화선이 앞을 향한다 (#131).
 var art_upright := false
+## 원화의 앞이 **위가 아니라 오른쪽**이다 (로켓 글러브, #161).
+## 기본값(false)은 지금까지처럼 날 끝이 위를 향하는 원화다 — `_face()` 참고.
+var art_points_right := false
+## 이만큼 날아가면 사라진다 (로켓 글러브). 0 이면 제한 없음 — 지금까지의 투사체가 그렇다.
+var max_distance := 0.0
 ## 탄 크기 배율 (대포 총). 1.0 이면 씬에 잡아 둔 기본 크기다.
 var size_scale := 1.0
 ## **그림만** 키우는 배율 (폭탄, #149). `size_scale`과 달리 충돌 상자를 건드리지 않는다 —
@@ -153,6 +158,8 @@ func setup(data: Dictionary) -> void:
 	art_weapon = data.get("art", "")
 	art_file = data.get("art_file", "")
 	art_upright = data.get("art_upright", false)
+	art_points_right = data.get("art_points_right", false)
+	max_distance = data.get("max_distance", 0.0)
 	size_scale = data.get("size_scale", 1.0)
 	art_scale = data.get("art_scale", 1.0)
 	missile = data.get("missile", false)
@@ -231,11 +238,17 @@ func _apply_size() -> void:
 
 
 ## 그림 방향 맞추기. 원화는 날 끝이 위를 향하므로 진행 방향으로 90도 더 돌린다.
+##
+## 앞이 **오른쪽**인 원화(로켓 글러브)는 그 90도를 더하면 안 된다 (#161) — 그냥 진행
+## 방향 각도가 곧 회전값이다. 왼쪽으로 쏘면 180도가 되어 주먹이 왼쪽, 분사가 오른쪽에 온다.
 func _face(direction: Vector2) -> void:
 	if art_upright:
 		return   # 폭탄 — 돌리면 도화선이 앞을 향한다 (#131)
 	if direction.length_squared() < 0.01:
 		return   # 멈춰 있으면 마지막 방향 그대로 (바닥에 꽂힌 단검)
+	if art_points_right:
+		art_sprite.rotation = direction.angle()
+		return
 	art_sprite.rotation = direction.angle() + PI * 0.5
 
 
@@ -446,6 +459,12 @@ func _physics_process(delta: float) -> void:
 	if use_gravity:
 		velocity.y += GRAVITY * delta
 	position += velocity * delta
+
+	# 정해진 거리를 다 날아가면 사라진다 (로켓 글러브, #161). 기획서가 "단거리 발사"라
+	# 못박은 무기를 화면 끝까지 보내지 않기 위한 것이다.
+	if max_distance > 0.0 and _origin.distance_to(position) >= max_distance:
+		_finish()
+		return
 
 	# 맵에서 완전히 벗어나면 정리한다.
 	var screen := get_viewport_rect().size
