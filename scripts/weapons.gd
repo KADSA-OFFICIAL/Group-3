@@ -13,6 +13,9 @@ extends RefCounted
 ##   knockback       넉백 단계 — Combat.Knockback
 ##   special_range   이 거리 안에 상대가 있을 때만 특수를 쓸 수 있다. 없으면 거리 제한 없음
 ##   art_faces_left  원화가 **왼쪽**을 보고 그려져 있다. 기본은 오른쪽 보기다 (art_faces_left 참고)
+##   weapon_art_scale 손에 든 그림을 이 배율로 줄인다. 없으면 1.0(지금까지의 크기).
+##                   세로 WEAPON_HEIGHT 규칙이 검처럼 가늘고 긴 무기 기준이라,
+##                   글러브처럼 뭉툭한 원화만 여기서 더 줄인다 (art_scale 참고)
 ##   projectile_scale 이 무기가 쏘는 탄의 크기 배율. 없으면 1.0(기본 크기).
 ##                   그림과 판정이 함께 커진다 — main.gd의 _server_fire()가 읽는다
 ##   projectile_art_scale 이 무기가 쏘는 탄의 **그림만** 키우는 배율. 없으면 1.0.
@@ -156,6 +159,10 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "글러브",
+		"file": "glove.png",
+		# 뭉툭한 원화(1.18:1)라 세로 56px 규칙 그대로면 몸통만 해진다 (#158).
+		# 0.6이면 40 x 34px — 젤리 몸통(72px)의 절반쯤이라 손에 낀 것으로 보인다.
+		"weapon_art_scale": 0.6,
 		"basic": "닿으면 일정 데미지",
 		"special": "단거리 주먹 발사 + 넉백 효과 부여",
 		"basic_damage": 9.0, "basic_interval": 0.0, "basic_kind": "melee",
@@ -270,6 +277,15 @@ static func texture_file(file: String) -> Texture2D:
 ## 이 무기는 좌우를 한 번 더 뒤집어야 바라보는 쪽에 날이 온다 (#109).
 static func art_faces_left(weapon_name: String) -> bool:
 	return bool(get_weapon(weapon_name).get("art_faces_left", false))
+
+
+## 손에 든 그림을 줄이는 배율 (#158). 없으면 1.0 — 지금까지의 크기 그대로다.
+##
+## 기본 규칙(세로 `WEAPON_HEIGHT`)은 검처럼 **가늘고 긴** 무기에 맞춰져 있다.
+## 글러브처럼 뭉툭한 원화는 세로만 맞추면 몸통만 한 덩어리가 되어 젤리를 덮는다 —
+## 가로 제한(`WEAPON_MAX_WIDTH`)도 세로로 긴 것을 못 잡듯이 이쪽도 못 잡는다.
+static func art_scale(weapon_name: String) -> float:
+	return float(get_weapon(weapon_name).get("weapon_art_scale", 1.0))
 
 
 static func resolve(weapon_name: String) -> String:
