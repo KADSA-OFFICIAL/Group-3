@@ -654,16 +654,45 @@ func _tick_bursts() -> void:
 	for peer_id: int in _bursts.keys():
 		var info: Dictionary = _bursts[peer_id]
 		var shooter := get_player(peer_id)
-		if now >= info["until"] or shooter == null or not shooter.can_act():
+		if shooter == null or not shooter.can_act():
+			_bursts.erase(peer_id)
+			continue
+		# 끝나는 조건이 둘이다 — 시간(소총: 누르는 동안 2초)과 발 수(글러브: 6발, #164).
+		if info["remaining"] == 0 or (info["until"] > 0.0 and now >= info["until"]):
 			_bursts.erase(peer_id)
 			continue
 		if now < info["next_at"]:
 			continue
 		info["next_at"] = now + info["interval"]
-		_server_fire(shooter, {
-			"damage": info["damage"],
-			"knockback": info["knockback"],
-		})
+		var data: Dictionary = (info["base"] as Dictionary).duplicate()
+		data["damage"] = info["damage"]
+		# **첫 발만 세게 민다** (#164). 매 발 강하게 밀면 연발이 도는 동안 상대 조작이
+		# 계속 잠긴다 — 지속 무기에서 같은 문제를 #103에서 이미 고쳤다.
+		data["knockback"] = info["first_knockback"] if info["fired"] == 0 else info["knockback"]
+		info["fired"] = int(info["fired"]) + 1
+		if info["remaining"] > 0:
+			info["remaining"] = int(info["remaining"]) - 1
+		_server_fire(shooter, data)
+
+
+## 연발 하나를 예약한다 (소총·글러브). **끝나는 조건은 둘 중 하나만 쓴다** —
+## `duration`이 0보다 크면 시간으로, `shots`가 0보다 크면 발 수로 끝난다.
+##
+## `first_knockback`이 음수면 첫 발도 나머지와 같은 넉백이다(소총).
+func _start_burst(peer_id: int, damage: float, knockback: int, interval: float,
+		duration := 0.0, shots := 0, first_knockback := -1, base := {}) -> void:
+	var now := _now()
+	_bursts[peer_id] = {
+		"until": now + duration if duration > 0.0 else 0.0,
+		"remaining": shots if shots > 0 else -1,
+		"next_at": now,
+		"fired": 0,
+		"interval": interval,
+		"damage": damage,
+		"knockback": knockback,
+		"first_knockback": first_knockback if first_knockback >= 0 else knockback,
+		"base": base,
+	}
 
 
 ## 공격자가 상대 쪽을 보고 있는가. **근접 공격은 기본·특수 모두 이 방향으로만 들어간다** (이슈 #107).
@@ -705,6 +734,9 @@ func _server_fire(attacker: Player, base: Dictionary, offsets: Array = [0.0]) ->
 	var draw_arrow: bool = weapon.get("projectile_arrow", false)
 	# 발사 각도는 쏘는 쪽(base)이 정한다. 활은 기본 공격만 위로 띄우고 특수는 직선이다.
 	var launch_angle: float = base.get("launch_angle", 0.0)
+	# 속도도 쏘는 쪽이 정할 수 있다 (#164). 없으면 지금까지의 공통 속도다 —
+	# 로켓 글러브만 느리게 나간다.
+	var speed: float = base.get("speed", Combat.PROJECTILE_SPEED)
 	for offset: float in offsets:
 		var data := base.duplicate()
 		data["size_scale"] = size_scale
@@ -713,7 +745,7 @@ func _server_fire(attacker: Player, base: Dictionary, offsets: Array = [0.0]) ->
 		data["id"] = _next_projectile_id
 		_next_projectile_id += 1
 		data["shooter_peer"] = attacker.owner_peer_id
-		data["velocity"] = _launch_velocity(dir, launch_angle)
+		data["velocity"] = _launch_velocity(dir, launch_angle, speed)
 		# 무기 끝에서 나가게 한다.
 		data["position"] = attacker.global_position + Vector2(
 			dir * (MELEE_REACH * 0.5 + attacker.current_reach()), offset)
@@ -750,8 +782,9 @@ func _parallel_offsets(count: int, spacing: float) -> Array[float]:
 ## **좌우 어느 쪽으로 쏘든 "위로" 나가야 한다** — 각도를 그대로 더하면 한쪽은 위로,
 ## 반대쪽은 아래로 나간다. 그래서 회전량에 방향(`dir`)을 곱한다.
 ## 화면 좌표는 y가 아래로 커지므로 위가 음수다.
-func _launch_velocity(dir: float, angle_degrees: float) -> Vector2:
-	var flat := Vector2(dir * Combat.PROJECTILE_SPEED, 0.0)
+func _launch_velocity(dir: float, angle_degrees: float,
+		speed := Combat.PROJECTILE_SPEED) -> Vector2:
+	var flat := Vector2(dir * speed, 0.0)
 	if is_zero_approx(angle_degrees):
 		return flat
 	return flat.rotated(-deg_to_rad(angle_degrees) * dir)
@@ -824,19 +857,18 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 			return _melee_special(attacker, target, weapon["special_damage"],
 				weapon["knockback"], weapon["stun_duration"])
 		"글러브":
-			# "단거리 주먹 발사" — 글러브가 손에서 분리되어 날아간다 (#161).
+			# "단거리 주먹 발사" — 글러브가 손에서 분리되어 연달아 날아간다 (#161·#164).
 			# 옛 구현은 사거리만 1.5배 늘린 즉시 판정이라 화면에 아무것도 안 나타났다.
-			# **정해진 거리를 날아가면 사라진다** — 기획서의 "단거리"를 지키는 선이다.
-			# 표에서 꺼낸 값은 Variant라 명시 타입으로 받는다 (#66).
-			var rocket: String = weapon["projectile_file"]
-			_server_fire(attacker, {
-				"damage": weapon["special_damage"],
-				"knockback": weapon["knockback"],
-				"art_file": rocket,
-				# 원화의 앞이 위가 아니라 오른쪽이다.
-				"art_points_right": weapon["projectile_points_right"],
-				"max_distance": weapon["special_distance"],
-			})
+			# **발 수**로 끝나고(6발), **첫 발만 세게 민다**. 정해진 거리를 날아가면
+			# 사라지는 것은 기획서의 "단거리"를 지키기 위한 것이다.
+			_start_burst(peer_id, weapon["special_damage"], Combat.Knockback.WEAK,
+				weapon["burst_interval"], 0.0, weapon["burst_shots"], weapon["knockback"], {
+					"art_file": weapon["projectile_file"],
+					# 원화의 앞이 위가 아니라 오른쪽이다.
+					"art_points_right": weapon["projectile_points_right"],
+					"max_distance": weapon["special_distance"],
+					"speed": weapon["projectile_speed"],
+				})
 			return true
 		"너클":
 			# 게이지 비례 데미지 → 쓰면 게이지는 전부 소모된다.
@@ -944,15 +976,9 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 			attacker.server_set_empowered(_roll_empowered(attacker.weapon_id))
 			return true
 		"소총":
-			# 한 번 누르면 지속시간 동안 자동 연사.
-			var now := _now()
-			_bursts[peer_id] = {
-				"until": now + weapon["burst_duration"],
-				"next_at": now,
-				"interval": weapon["burst_interval"],
-				"damage": weapon["special_damage"],
-				"knockback": weapon["knockback"],
-			}
+			# 한 번 누르면 지속시간 동안 자동 연사. **시간**으로 끝난다.
+			_start_burst(peer_id, weapon["special_damage"], weapon["knockback"],
+				weapon["burst_interval"], weapon["burst_duration"])
 			return true
 		"단검":
 			# 특수 = 자동 재수집. 주우러 가지 않아도 손으로 돌아온다.
