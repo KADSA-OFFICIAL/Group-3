@@ -698,6 +698,9 @@ func _server_fire(attacker: Player, base: Dictionary, offsets: Array = [0.0]) ->
 	# 표에서 꺼낸 값은 Variant라 명시 타입으로 받는다 (#66).
 	var weapon := Weapons.get_weapon(attacker.weapon_id)
 	var size_scale: float = weapon.get("projectile_scale", 1.0)
+	# **그림만** 키우는 배율은 따로다 (#149). 판정을 건드리지 않고 눈에 띄게만 하고 싶을
+	# 때 쓴다 — 위의 projectile_scale 은 충돌 상자까지 함께 키운다.
+	var art_scale: float = weapon.get("projectile_art_scale", 1.0)
 	# 결정질 화살로 그릴지는 무기가 정한다 — 기본이든 특수든 같은 모양으로 나간다 (#125).
 	var draw_arrow: bool = weapon.get("projectile_arrow", false)
 	# 발사 각도는 쏘는 쪽(base)이 정한다. 활은 기본 공격만 위로 띄우고 특수는 직선이다.
@@ -705,6 +708,7 @@ func _server_fire(attacker: Player, base: Dictionary, offsets: Array = [0.0]) ->
 	for offset: float in offsets:
 		var data := base.duplicate()
 		data["size_scale"] = size_scale
+		data["art_scale"] = art_scale
 		data["arrow"] = draw_arrow
 		data["id"] = _next_projectile_id
 		_next_projectile_id += 1
