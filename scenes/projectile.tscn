@@ -1,6 +1,7 @@
-[gd_scene load_steps=5 format=3 uid="uid://jellyproj0001"]
+[gd_scene load_steps=6 format=3 uid="uid://jellyproj0001"]
 
 [ext_resource type="Script" path="res://scripts/projectile.gd" id="1_proj"]
+[ext_resource type="Script" path="res://scripts/blast_radius.gd" id="2_blast"]
 
 [sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_flame"]
 blend_mode = 1
@@ -19,6 +20,10 @@ script = ExtResource("1_proj")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("RectangleShape2D_proj")
+
+[node name="BlastRadius" type="Node2D" parent="."]
+z_index = -1
+script = ExtResource("2_blast")
 
 [node name="Visual" type="ColorRect" parent="."]
 offset_top = -3.0
