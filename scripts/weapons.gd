@@ -166,7 +166,16 @@ const LIST: Array[Dictionary] = [
 		"basic": "닿으면 일정 데미지",
 		"special": "단거리 주먹 발사 + 넉백 효과 부여",
 		"basic_damage": 9.0, "basic_interval": 0.0, "basic_kind": "melee",
-		"special_damage": 14.0, "special_cooldown": 4.0, "knockback": 2,
+		# 특수는 6연발이라 발당을 낮게 잡는다 — 14 → 5 (#164). 투사체는 개별 무적이라
+		# 발마다 다 들어가서, 14를 두면 특수 하나가 84가 된다(소총이 발당 1.5인 것과 같은 이유).
+		# 첫 발이 강하게 밀어내므로 실제로는 2~4발만 맞는 경우가 많다(10~20).
+		"special_damage": 5.0, "special_cooldown": 4.0, "knockback": 2,
+		# 0.15초 간격 6발. `knockback`(강)은 **첫 발에만** 들어가고 나머지는 약이다 —
+		# 매 발 세게 밀면 0.75초 동안 상대 조작이 잠긴다(#103에서 고친 것과 같은 문제).
+		"burst_interval": 0.15, "burst_shots": 6,
+		# 1120 → 700px/s (#164). 사거리 300px를 0.27초가 아니라 0.43초에 지난다 —
+		# 로켓 펀치인데 눈으로 따라갈 틈이 없었다.
+		"projectile_speed": 700.0,
 		# 특수는 "단거리 주먹 발사" — 글러브가 손에서 날아간다 (#161).
 		# 날아가는 것은 뒤에 분사가 붙은 그림이고, 앞이 오른쪽이라 회전 기준이 다르다.
 		"projectile_file": "glove_rocket.png",
