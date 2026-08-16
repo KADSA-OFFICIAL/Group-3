@@ -303,6 +303,10 @@ func _apply_weapon() -> void:
 	# 세로를 WEAPON_HEIGHT에 맞추되 가로가 WEAPON_MAX_WIDTH를 넘지 않게 한다.
 	# 세로만 맞추면 가로로 긴 원화(전기톱 2.69:1)가 몸통 3배 폭으로 터진다 (이슈 #105).
 	var factor := minf(WEAPON_HEIGHT / content.size.y, WEAPON_MAX_WIDTH / content.size.x)
+	# 뭉툭한 원화는 두 제한을 다 통과하고도 몸통만 해진다 (이슈 #158). 세로 규칙은
+	# 검처럼 가늘고 긴 무기를 기준으로 잡은 것이고, 가로 제한은 세로로 긴 것을 못 잡듯
+	# 정사각에 가까운 것도 못 잡는다. 그런 무기만 표에서 배율을 더 준다.
+	factor *= Weapons.art_scale(weapon_id)
 	sprite.scale = Vector2.ONE * factor
 	# 캐릭터와 마찬가지로 여백을 뺀 실제 그림의 가운데를 기준으로 놓는다.
 	_weapon_offset = Vector2(
