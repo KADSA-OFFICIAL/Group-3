@@ -824,9 +824,20 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 			return _melee_special(attacker, target, weapon["special_damage"],
 				weapon["knockback"], weapon["stun_duration"])
 		"글러브":
-			# "단거리 주먹 발사" — 사거리만 살짝 늘린 즉시 판정으로 구현.
-			return _melee_special(attacker, target, weapon["special_damage"],
-				weapon["knockback"], 0.0, 1.5)
+			# "단거리 주먹 발사" — 글러브가 손에서 분리되어 날아간다 (#161).
+			# 옛 구현은 사거리만 1.5배 늘린 즉시 판정이라 화면에 아무것도 안 나타났다.
+			# **정해진 거리를 날아가면 사라진다** — 기획서의 "단거리"를 지키는 선이다.
+			# 표에서 꺼낸 값은 Variant라 명시 타입으로 받는다 (#66).
+			var rocket: String = weapon["projectile_file"]
+			_server_fire(attacker, {
+				"damage": weapon["special_damage"],
+				"knockback": weapon["knockback"],
+				"art_file": rocket,
+				# 원화의 앞이 위가 아니라 오른쪽이다.
+				"art_points_right": weapon["projectile_points_right"],
+				"max_distance": weapon["special_distance"],
+			})
+			return true
 		"너클":
 			# 게이지 비례 데미지 → 쓰면 게이지는 전부 소모된다.
 			var ratio: float = attacker.gauge / weapon["gauge_max"]

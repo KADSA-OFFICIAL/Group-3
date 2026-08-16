@@ -167,6 +167,14 @@ const LIST: Array[Dictionary] = [
 		"special": "단거리 주먹 발사 + 넉백 효과 부여",
 		"basic_damage": 9.0, "basic_interval": 0.0, "basic_kind": "melee",
 		"special_damage": 14.0, "special_cooldown": 4.0, "knockback": 2,
+		# 특수는 "단거리 주먹 발사" — 글러브가 손에서 날아간다 (#161).
+		# 날아가는 것은 뒤에 분사가 붙은 그림이고, 앞이 오른쪽이라 회전 기준이 다르다.
+		"projectile_file": "glove_rocket.png",
+		"projectile_points_right": true,
+		# 기획서가 "단거리"라고 못박았고 쿨타임 4초(강한 넉백 중 가장 짧음)의 근거가
+		# "사거리 짧은 대신"이다. 화면 끝까지 보내면 그 근거가 무너지므로 여기서 끊는다.
+		# 젤리 몸통(72px)의 네 배쯤이고, 옛 근접 판정(108px)보다는 확실히 길다.
+		"special_distance": 300.0,
 	},
 	{
 		"name": "표창",
