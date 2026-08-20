@@ -412,7 +412,7 @@ func _physics_process(delta: float) -> void:
 	if multiplayer.is_server():
 		_check_long_press()
 		apply_movement(_take_input(), delta)
-		_receive_state.rpc(global_position, velocity, is_on_floor(), facing)
+		_send_state()
 		_update_squash(is_on_floor(), delta)
 	else:
 		# 클라이언트는 물리를 계산하지 않고 서버가 보낸 위치로 따라간다
@@ -426,6 +426,16 @@ func _physics_process(delta: float) -> void:
 	# 여백 보정의 부호는 _place_body()가 flip_h를 보고 맞춘다.
 	$Body.flip_h = facing < 0
 	_place_body()
+
+
+## 위치·속도를 **전투 화면에 있는 피어에게만** 보낸다 (서버 전용, 매 프레임).
+##
+## 브로드캐스트(`rpc()`)로 보내면 대기실에 앉아 있는 피어에게도 날아간다 — 그쪽에는 이 노드가
+## 없으니 받을 수 없고 "Node not found" 오류만 초당 60번 쌓인다. 관전이 생기면서
+## 전투 화면 밖에 있는 피어가 정상 상태가 되었으므로(이슈 #167) 대상을 골라 보낸다.
+func _send_state() -> void:
+	for peer in Lobby.viewers:
+		_receive_state.rpc_id(peer, global_position, velocity, is_on_floor(), facing)
 
 
 ## 자기 입력을 서버로 보낸다.
