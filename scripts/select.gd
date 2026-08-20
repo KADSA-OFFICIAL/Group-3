@@ -152,16 +152,18 @@ func _refresh_maps() -> void:
 func _update_status() -> void:
 	var me := multiplayer.get_unique_id()
 
-	# 자리를 거절당했다 — 사유를 알려 주고, 관전 자리가 남았으면 그쪽으로 갈 길을 준다.
+	# 자리를 거절당했다 — 사유와 나갈 길만 알려 준다.
+	#
+	# **여기서 역할을 바꾸는 조작은 두지 않는다**(이슈 #170). 역할을 고르는 자리는 접속 화면
+	# 하나뿐이다 — 두 곳에 두면 방식을 바꿀 때 양쪽을 다 손봐야 한다. 자리가 비면 알아서
+	# 다시 신청하므로(`_refresh`) 기다리는 것만으로도 들어갈 수는 있다.
 	if _rejected != "":
 		if Lobby.observer_slots_open():
-			status_label.text = "%s  관전으로 볼 수 있어요." % _rejected
-			go_button.disabled = false
-			go_button.text = "관전으로 보기"
+			status_label.text = "%s  홈으로 나가 접속 화면에서 관전을 고르세요." % _rejected
 		else:
 			status_label.text = "%s  방이 꽉 찼습니다 — 홈으로 나가세요." % _rejected
-			go_button.disabled = true
-			go_button.text = "준비"
+		go_button.disabled = true
+		go_button.text = "준비"
 		return
 
 	# 관전자는 준비를 보낼 것이 없다. 버튼을 켜 두면 눌러도 아무 일 없는 버튼이 된다.
@@ -240,13 +242,7 @@ func _on_my_config_changed() -> void:
 	Lobby.submit_config(_my_panel.get_config())
 
 
-## 준비 토글. 자리를 거절당한 상태에서는 같은 버튼이 관전 전환으로 쓰인다.
 func _on_ready_pressed() -> void:
-	if _rejected != "":
-		_rejected = ""
-		Lobby.my_role = Lobby.ROLE_OBSERVER
-		_start_sync()
-		return
 	Lobby.submit_ready(not Lobby.is_ready(multiplayer.get_unique_id()))
 
 
