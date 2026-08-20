@@ -27,6 +27,9 @@ extends RefCounted
 ##   basic_arc_angle  기본 공격을 바라보는 쪽 **위로** 이 각도(도)만큼 띄운다.
 ##                   중력이 함께 켜져 포물선이 된다. 없으면 지금까지처럼 수평
 ##   projectile_arrow 이 무기가 쏘는 탄을 결정질 화살로 그린다 (기본·특수 모두)
+##   preview_file    **대기실 선택창**에만 쓰는 그림. 없으면 `file` 을 양쪽에 쓴다.
+##                   손에 든 모습과 무기 자체의 모습이 다른 무기에만 적는다 —
+##                   너클은 선택창에 금속 너클, 손에는 뻗은 주먹이 나온다 (preview_texture 참고)
 
 ## 실제 무기가 아닌 특수값. 서버가 실제 무기 하나로 확정한다 (resolve 참고).
 const RANDOM := "랜덤"
@@ -195,6 +198,15 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "너클",
+		# 손에 든 모습(앞으로 뻗은 주먹)과 무기 자체의 모습(금속 너클)이 다르다 (#173).
+		# 주먹 그림을 선택창에 쓰면 무엇을 고르는 것인지 알 수 없고, 너클 그림을
+		# 젤리 손에 붙이면 쥔 것처럼 보이지 않는다 — 그림이 갈라지는 첫 무기다.
+		"file": "knuckle_worn.png",
+		"preview_file": "knuckle.png",
+		# 착용 원화가 뭉툭하다(내용 영역 약 1.06:1). 세로 56px 규칙 그대로면
+		# 60 x 56px 로 몸통(72px)만 해진다 — 글러브(#158)와 같은 경우다.
+		# 0.6 이면 36 x 34px 로 글러브(40 x 34px)와 같은 눈높이가 된다.
+		"weapon_art_scale": 0.6,
 		"basic": "닿으면 일정 데미지",
 		"special": "게이지 비례 강펀치 데미지 + 넉백 (피격 시 게이지 충전)",
 		"basic_damage": 9.0, "basic_interval": 0.0, "basic_kind": "melee",
@@ -288,6 +300,19 @@ static func texture_file(file: String) -> Texture2D:
 	if not ResourceLoader.exists(path):
 		return null
 	return load(path)
+
+
+## 대기실 선택창에 보여줄 무기 그림 (#173). `preview_file` 이 있으면 그쪽을,
+## 없으면 손에 드는 그림(`file`)을 그대로 쓴다 — 나머지 16종은 달라지지 않는다.
+##
+## 파일이 없어 null 이 나오면 `file` 로 되돌아간다. 선택창 그림만 빠졌을 때
+## 빈칸으로 남는 것보다 손에 든 그림이라도 보이는 편이 낫다.
+static func preview_texture(weapon_name: String) -> Texture2D:
+	var file: String = get_weapon(weapon_name).get("preview_file", "")
+	var preview := texture_file(file)
+	if preview != null:
+		return preview
+	return texture(weapon_name)
 
 
 ## 원화가 왼쪽을 보고 그려졌는가. 그리는 쪽은 오른쪽 보기를 기본으로 가정하므로
