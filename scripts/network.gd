@@ -21,8 +21,14 @@ const ROOMS := [
 	{"name": "1번 방", "port": 7777},
 	{"name": "2번 방", "port": 7778},
 ]
-## 전용 서버이므로 서버 자신은 플레이어가 아니다. **방 하나당** 1 VS 1 = 클라이언트 2명.
-const MAX_CLIENTS := 2
+## 전용 서버이므로 서버 자신은 플레이어가 아니다. **방 하나당** 1 VS 1 = 플레이어 2명.
+## 이 값은 ENet 정원이 아니라 **싸우는 자리 수**다 — 자리 배정은 Lobby 가 한다.
+const MAX_PLAYERS := 2
+## 관전자 정원. 플레이어 자리를 차지하지 않고 보기만 하는 피어다 (이슈 #167).
+const MAX_OBSERVERS := 4
+## ENet 에 넘기는 실제 정원. 관전자도 피어이므로 여기에 포함되어야 접속이 열린다.
+## 이 값만 늘리면 관전자로 들어올 수 있는 것이 아니다 — 역할 구분은 Lobby 가 한다.
+const MAX_CLIENTS := MAX_PLAYERS + MAX_OBSERVERS
 ## 로컬 테스트용 기본값. 실제 서버 주소는 접속 화면에서 입력한다.
 const DEFAULT_ADDRESS := "127.0.0.1"
 
@@ -80,7 +86,9 @@ func start_server(target_port: int = ROOMS[0]["port"]) -> Error:
 		return err
 	multiplayer.multiplayer_peer = peer
 	is_server = true
-	print("서버 시작 — %s, 포트 %d, 최대 %d명" % [room_name_for(target_port), target_port, MAX_CLIENTS])
+	print("서버 시작 — %s, 포트 %d, 플레이어 %d명 + 관전 %d명" % [
+		room_name_for(target_port), target_port, MAX_PLAYERS, MAX_OBSERVERS,
+	])
 	server_started.emit()
 	return OK
 

@@ -8,6 +8,9 @@ extends Node2D
 ##
 ## 포인트 진행(쓰러뜨리면 1포인트·3포인트 선취)도 여기가 주인이다. 판정은 전부 서버에서 하고
 ## 결과만 `_receive_round`로 복제한다 — 클라이언트는 점수를 세지 않는다.
+##
+## **관전자도 이 씬을 본다**(이슈 #167). 스폰을 받지 않아 자기 젤리가 없고 입력도 보내지 않지만,
+## 지형·플레이어·투사체·HUD는 복제로 그대로 보인다.
 
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
 const PROJECTILE_SCENE := preload("res://scenes/projectile.tscn")
@@ -92,6 +95,16 @@ func _ready() -> void:
 		# 씬이 준비된 뒤에 서버에 알린다. 접속 직후 바로 스폰하면
 		# 클라이언트가 아직 이 씬을 로드하기 전이라 스폰을 놓칠 수 있다.
 		_notify_ready.rpc_id(1)
+		_setup_observer_view()
+
+
+## 관전자 화면. 조작할 것이 없으니 조작 안내를 나가는 방법으로 바꿔 준다 (이슈 #167).
+## 자기 젤리가 없다는 것 말고는 플레이어 화면과 같다 — HUD·배너·투사체가 다 보인다.
+func _setup_observer_view() -> void:
+	if not Lobby.is_observer(multiplayer.get_unique_id()):
+		return
+	$UI/HUD/HintCard/ControlsHint.text = "관전 중 — 이 기기는 경기를 보기만 합니다
+접속 종료: ESC"
 
 
 ## 클라이언트가 전투 화면 준비를 마쳤음을 서버에 알린다.
@@ -99,7 +112,13 @@ func _ready() -> void:
 func _notify_ready() -> void:
 	if not multiplayer.is_server():
 		return
-	_add_player(multiplayer.get_remote_sender_id())
+	var sender := multiplayer.get_remote_sender_id()
+	# 이 씬에 들어온 피어만 전투 노드의 RPC 대상이 된다 — 관전자도 여기에 들어간다.
+	Lobby.server_add_viewer(sender)
+	# 관전자에게는 젤리를 주지 않는다. 스폰하면 셋째 플레이어가 판에 끼어든다.
+	if Lobby.is_observer(sender):
+		return
+	_add_player(sender)
 
 
 func _add_player(peer_id: int) -> void:
@@ -148,9 +167,13 @@ func _spawn_player(data: Dictionary) -> Node:
 
 
 func _on_peer_left(peer_id: int) -> void:
+	# 전투 화면 목록에서 빼는 것은 Lobby 가 접속 종료를 받아 직접 한다 — 여기는 판만 정리한다.
 	var player := players_root.get_node_or_null("Player_%d" % peer_id)
-	if player:
-		player.queue_free()
+	# 관전자가 나간 것이라면 판에 손댈 것이 없다 — 아래 정리를 그냥 돌리면
+	# 남은 두 사람의 공격 간격(_next_hit_at)까지 날려서 경기가 영향을 받는다.
+	if player == null:
+		return
+	player.queue_free()
 	_special_ready_at.erase(peer_id)
 	_special_pending.erase(peer_id)
 	_bleeds.erase(peer_id)
@@ -247,6 +270,9 @@ func _tick_round() -> void:
 ## 전용 서버는 씬을 벗어나지 않으므로 다음 경기를 위해 직접 판을 비운다.
 ## 이걸 안 하면 다음 경기에서 점수가 이어지고 플레이어가 다시 스폰되지 않는다.
 func _server_reset_match() -> void:
+	# 모두 대기실로 돌아갔다 — 전투 화면 목록을 비운다. 남겨 두면 대기실에 있는 피어에게
+	# 위치가 계속 날아가고, 그쪽에는 노드가 없어 오류만 쌓인다.
+	Lobby.server_clear_viewers()
 	for player in players_root.get_children():
 		player.queue_free()
 	for projectile in projectiles_root.get_children():
@@ -285,12 +311,18 @@ func _receive_round(new_scores: Dictionary, new_banner: String) -> void:
 func _receive_match_result(winner_peer: int) -> void:
 	var me := multiplayer.get_unique_id()
 	var my_player := get_player(me)
-	if my_player == null:
-		return   # 전용 서버처럼 자기 플레이어가 없는 피어는 보여줄 것이 없다
-	_play_result(winner_peer == me, my_player.character_id)
+	if my_player != null:
+		_play_result(winner_peer == me, my_player.character_id)
+		return
+	# 관전자는 이길 쪽도 질 쪽도 아니다 — 이긴 사람 기준으로 승리 연출만 보여준다.
+	# 전용 서버는 화면이 없으니 여기서도 아무것도 띄우지 않는다.
+	var winner := get_player(winner_peer)
+	if winner != null and Lobby.is_observer(me):
+		_play_result(true, winner.character_id, "%s 승리!" % winner.player_name)
 
 
-func _play_result(is_winner: bool, character_id: String) -> void:
+## title_override 를 주면 승리 연출을 그대로 쓰면서 글자만 바꾼다 — 관전자 화면이 쓴다.
+func _play_result(is_winner: bool, character_id: String, title_override := "") -> void:
 	_kill_result_tweens()
 	result_jelly.character_id = character_id
 	result_score.text = _final_score_text()
@@ -312,6 +344,10 @@ func _play_result(is_winner: bool, character_id: String) -> void:
 		_play_win()
 	else:
 		_play_lose()
+
+	# 연출이 정한 글자를 덮어쓴다. 크기·색·트윈은 그대로 두고 문구만 바꾼다.
+	if title_override != "":
+		result_label.text = title_override
 
 
 ## 승리 — 젤리가 계속 통통 튀고 글자가 팝업으로 튀어나온다.
