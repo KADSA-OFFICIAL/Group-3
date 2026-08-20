@@ -9,32 +9,43 @@
 
 2026-07-28에 한 기기 2인 로컬에서 온라인 구조로 전환 중이다(로드맵 이슈 #32). 전용 헤드리스 서버가 권위를 갖고, 클라이언트 2대가 Tailscale로 접속한다. 서버 주소는 **저장소가 공개이므로 코드에 적지 않는다** — 접속 화면에서 입력받고 커밋되는 기본값은 `127.0.0.1`이다.
 
+**접속에는 역할이 있다 — 플레이어와 관전**(이슈 #167). 방 하나에 플레이어 2명(`Network.MAX_PLAYERS`)과 관전자 4명(`MAX_OBSERVERS`)이 들어가고, ENet 정원은 둘을 합한 `MAX_CLIENTS`(6)다. 관전자는 플레이어 자리를 차지하지 않고 스폰도 받지 않으며 입력도 보내지 않는다 — 대기실과 전투 화면을 **읽기 전용**으로 본다. 역할은 접속 화면에서 고르고, 접속만으로는 자리가 생기지 않는다(`Lobby.submit_role()`).
+
 **방 하나 = 포트 하나 = 서버 프로세스 하나**다(이슈 #89). 방 2개를 쓰려면 `--port=`를 달리해 서버를 두 번 띄운다. 방끼리 완전히 독립적이고 한 방이 죽어도 다른 방은 멀쩡하다. 실행 명령·방화벽·문제 해결은 `docs/server.md`에 있다.
 
 `main` 브랜치는 2026-07-26에 새 구현(커밋 `e2a7dcb`)으로 교체되었다. 이전 구현(`autoload/game_manager.gd`, `scripts/weapons/`, `scenes/maps/` 등)은 `backup/main-before-reset` 브랜치에만 있고 현재 코드베이스에는 없다 — 그 경로를 참조하지 말 것.
 
 ### 씬 흐름
 
-title(방을 고르고 서버 주소를 입력해 `StartButton`으로 접속) → select(대기실 겸 무기 선택, 둘 다 준비하면 서버가 시작 지시) → main(평지 전투, 서버가 플레이어 스폰) → **3점 선취 시 서버가 select로 되돌린다**(`Lobby.match_ended`). 전투 중 ESC(`ui_cancel`)로 접속 종료 후 title 복귀
+title(방과 역할을 고르고 서버 주소를 입력해 `StartButton`으로 접속) → select(대기실 겸 무기 선택, 둘 다 준비하면 서버가 시작 지시) → main(평지 전투, 서버가 플레이어 스폰) → **3점 선취 시 서버가 select로 되돌린다**(`Lobby.match_ended`). 전투 중 ESC(`ui_cancel`)로 접속 종료 후 title 복귀
+
+**관전자도 같은 씬을 지나간다** — select에서 양쪽 선택을 보기만 하다가 같은 `match_starting` 지시로 main에 함께 들어가고, 경기가 끝나면 함께 select로 돌아온다. 다른 점은 자기 젤리가 없다는 것뿐이다. **경기 도중에 들어온 관전자는 그 경기를 못 보고** select에서 `Lobby.in_match`를 보고 다음 경기를 기다린다 — `MultiplayerSpawner`가 이미 스폰된 플레이어를 나중에 로드한 피어에게 전달하지 않기 때문이다(이슈 #167의 non-goal).
 
 헤드리스로 실행되면 `Network`가 서버를 시작하고 title이 UI 없이 곧바로 main으로 넘어간다. **전용 서버는 select를 거치지 않고 계속 main에 머문다** — 대기실 상태는 씬이 아니라 `Lobby` 오토로드가 들고 있기 때문이다.
 
 ### 구조 요약
 
-- `scripts/network.gd` = 오토로드 싱글턴 `Network`: 연결 수립과 피어 알림만 담당(게임 로직 없음). `ROOMS`(1번 방 7777·2번 방 7778 — 서버컴 방화벽 UDP 규칙과 일치), **방 하나당** `MAX_CLIENTS = 2`, `DEFAULT_ADDRESS = "127.0.0.1"`. `should_run_as_server()`가 헤드리스 또는 `--server` 인자를 감지해 `_ready()`에서 자동으로 서버를 열고, 포트는 `port_from_cmdline()`이 `--port=7778` 인자에서 읽는다(없으면 첫 방). 시그널 `server_started`·`join_succeeded`·`join_failed`·`peer_joined`·`peer_left`.
+- `scripts/network.gd` = 오토로드 싱글턴 `Network`: 연결 수립과 피어 알림만 담당(게임 로직 없음). `ROOMS`(1번 방 7777·2번 방 7778 — 서버컴 방화벽 UDP 규칙과 일치), **방 하나당** `MAX_PLAYERS = 2` + `MAX_OBSERVERS = 4`이고 ENet에 넘기는 정원은 그 합인 `MAX_CLIENTS`(6)다, `DEFAULT_ADDRESS = "127.0.0.1"`. `should_run_as_server()`가 헤드리스 또는 `--server` 인자를 감지해 `_ready()`에서 자동으로 서버를 열고, 포트는 `port_from_cmdline()`이 `--port=7778` 인자에서 읽는다(없으면 첫 방). 시그널 `server_started`·`join_succeeded`·`join_failed`·`peer_joined`·`peer_left`.
   - **방 구성은 `ROOMS`가 유일한 출처다** — 포트도 방 이름도 여기 말고 다른 곳에 적지 않는다. 줄을 추가하면 접속 화면 버튼도 따라 늘어나므로 씬은 손대지 않아도 된다(이슈 #90).
+  - **정원 상수를 늘리는 것만으로는 관전이 되지 않는다** — `MAX_CLIENTS`는 ENet에 넘기는 숫자일 뿐이고, 누구를 플레이어로 앉히고 누구를 관전으로 둘지는 `Lobby`가 정한다.
   - **포트를 못 열면 `get_tree().quit(1)`로 프로세스를 끝낸다**(이슈 #90). 안 끝내면 `is_server`가 false인 채로 살아남아 클라이언트 취급을 받는데, 헤드리스라 화면도 없어서 "서버 떠 있음"으로 착각하게 된다. 같은 방을 두 번 띄우거나 2번 방을 `--port=` 없이 띄웠을 때 실제로 걸린다.
-- `scripts/lobby.gd` = 오토로드 싱글턴 `Lobby`: 대기실 상태를 **서버가 권위로** 보관한다. `order`(접속 순서, 먼저 들어온 쪽이 1P), `configs`(peer_id → weapon·character·map), `ready_flags`, `map_name`(시작할 때 확정되는 실제 맵). 클라이언트는 `submit_config()`·`submit_ready()`·`submit_map()`으로 자기 값만 보내고, 서버가 `_receive_lobby`로 전체를 복제한다. **무기 "랜덤" 확정과 맵 뽑기, 시작 판정은 서버에서만** 실행되어 양쪽이 같은 값을 갖는다. **맵은 플레이어마다 하나씩 고르고** 시작할 때 `_pick_map()`이 둘 중 하나를 뽑는다 — 각자의 "랜덤"을 먼저 실제 맵으로 확정한 뒤 뽑아야 뽑기가 두 번 일어나지 않는다. 클라이언트가 보낸 값은 `_sanitize()`로 목록에 있는 값인지 검사한다. 경기가 끝나면 서버가 `server_end_match()`로 준비를 풀고 양쪽을 대기실로 돌려보낸다(안 풀면 도착하자마자 다시 시작한다). 시그널 `lobby_changed`·`match_starting`·`match_ended`.
-  - **상태를 받는 것은 밀어주기만 믿지 않는다**(이슈 #93). 클라이언트가 `request_state()`로 청하면 서버가 `_request_state`에서 그 피어에게만 지금 상태를 보낸다 — 상태를 바꾸지 않으니 몇 번을 청해도 안전하다. 접속 순간의 브로드캐스트 한 번만 믿으면 그것을 놓쳤을 때 `order`에 내 peer id가 없는 채로 굳는데, 그러면 대기실 화면이 통째로 잠기고 되돌릴 방법이 없다.
+- `scripts/lobby.gd` = 오토로드 싱글턴 `Lobby`: 대기실 상태를 **서버가 권위로** 보관한다. `order`(플레이어 접속 순서, 먼저 들어온 쪽이 1P), `observers`(관전자 peer 목록), `configs`(peer_id → weapon·character·map), `ready_flags`, `map_name`(시작할 때 확정되는 실제 맵), `in_match`(경기 진행 중인가). 클라이언트는 `submit_config()`·`submit_ready()`·`submit_map()`으로 자기 값만 보내고, 서버가 `_receive_lobby`로 전체를 복제한다. **무기 "랜덤" 확정과 맵 뽑기, 시작 판정은 서버에서만** 실행되어 양쪽이 같은 값을 갖는다. **맵은 플레이어마다 하나씩 고르고** 시작할 때 `_pick_map()`이 둘 중 하나를 뽑는다 — 각자의 "랜덤"을 먼저 실제 맵으로 확정한 뒤 뽑아야 뽑기가 두 번 일어나지 않는다. 클라이언트가 보낸 값은 `_sanitize()`로 목록에 있는 값인지 검사한다. 경기가 끝나면 서버가 `server_end_match()`로 준비를 풀고 양쪽을 대기실로 돌려보낸다(안 풀면 도착하자마자 다시 시작한다). 시그널 `lobby_changed`·`match_starting`·`match_ended`.
+  - **자리 배정은 접속이 아니라 역할 신고로 일어난다**(이슈 #167). 클라이언트가 `submit_role()`을 보내면 서버가 `_receive_role`에서 `order`(플레이어) 또는 `observers`(관전)에 넣고 **그 피어에게만** 지금 상태를 돌려준다. 정원이 차면 넣지 않고 `role_rejected` 시그널로 사유를 보낸다 — 조용히 잠긴 화면을 만들지 않기 위해서다. 관전으로 들어온 피어는 `ready_flags`에 없으므로 시작 판정을 막지도 않는다.
+  - **상태를 받는 것은 밀어주기만 믿지 않는다**(이슈 #93). `submit_role()`은 자리 배정과 상태 요청을 한 RPC로 합친 것이고, 이미 등록된 피어가 다시 보내도 상태만 다시 내려온다 — 몇 번을 청해도 안전하다. 접속 순간의 브로드캐스트 한 번만 믿으면 그것을 놓쳤을 때 `order`에 내 peer id가 없는 채로 굳는데, 그러면 대기실 화면이 통째로 잠기고 되돌릴 방법이 없다. 그래서 대기실 화면이 자리를 받을 때까지 1초마다 다시 보낸다.
+  - **`viewers`는 복제하지 않는 서버 전용 목록이다**(이슈 #167) — 전투 화면에 실제로 들어와 있는 피어다(`main.gd`의 `_notify_ready`가 등록). 관전이 생기면서 "접속해 있지만 전투 화면 밖에 있는 피어"가 정상 상태가 되었고, 그 피어에게 Player 노드의 RPC를 보내면 그쪽에 노드가 없어 `Node not found`가 **초당 60번** 쌓인다. 그래서 위치 복제(`Player._send_state`)와 투사체 동기화는 이 목록으로만 보낸다. 경기가 끝나면 `server_clear_viewers()`로 비운다.
   - `reset()`은 클라이언트가 들고 있던 상태를 버린다. 옛 접속의 `order`가 남으면 새 접속에서 **"2명이 있는데 그중에 나는 없는"** 상태가 되고, 이건 화면상 정상과 구별되지 않는다.
   - 이 둘의 서버 판정은 `multiplayer.is_server()`가 아니라 **`Network.is_server`로 한다** — 접속이 끊기면 peer가 없어 내 id가 1이 되므로 클라이언트가 자기를 서버로 착각한다.
 - `scripts/game_state.gd` = 오토로드 싱글턴 `GameState`: 화면 간 선택 정보 전달. `CHARACTERS`(`Characters.names()` 5종 — 사본을 두지 않고 캐릭터 표에서 만든다), `WEAPONS`("랜덤" + `Weapons.names()` 17종 — 마찬가지), `MAPS`("랜덤" + `Maps.names()` 4종 — 마찬가지), `p1_config`/`p2_config`(weapon·character), `map_name`, `get_config(prefix)`.
-- `scenes/title.tscn` + `scripts/title.gd` = 타이틀 겸 접속 화면. `AddressEdit`(기본 `127.0.0.1`)·`RoomBox`(방 선택)·`StartButton`("접속")·`StatusLabel`(접속 중/실패 표시). 접속 성공 시 select로 전환한다. 좌우 `JellyLeft`/`JellyRight`는 미리보기 장식.
+- `scenes/title.tscn` + `scripts/title.gd` = 타이틀 겸 접속 화면. `AddressEdit`(기본 `127.0.0.1`)·`RoomBox`(방 선택)·`RoleBox`(역할 선택 — `PlayerButton`·`ObserverButton`, 고른 값은 `Lobby.my_role`에 담긴다)·`StartButton`("접속")·`StatusLabel`(접속 중/실패 표시). 접속 성공 시 select로 전환한다. 좌우 `JellyLeft`/`JellyRight`는 미리보기 장식.
   - **방 버튼은 씬에 박아 두지 않고 `Network.ROOMS` 개수만큼 만든다**(이슈 #90). `RoomBox`(HBoxContainer) 아래 `RoomButton` 하나가 첫 방이자 나머지의 원본이고, `_setup_room_buttons()`가 `duplicate()`로 복제한다 — 스타일과 `ButtonGroup`이 그대로 딸려 오므로 라디오 동작과 모양이 자동으로 맞는다. 버튼은 `size_flags_horizontal = 3`이라 방이 몇 개든 같은 폭에 균등하게 나뉜다.
+  - **역할 버튼은 방 버튼과 색으로 구분한다**(이슈 #167) — 방은 진한 핑크, 역할은 진한 라벤더가 선택 색이다. 두 줄이 똑같이 생기면 방을 고른 것과 역할을 고른 것이 헷갈린다. 고른 역할은 오토로드에 남아 다음 접속에도 유지된다.
   - `AddressEdit`에 `주소:포트`로 적으면 고른 방보다 그쪽을 우선한다.
   - **방이 꽉 차면 ENet이 거절 신호를 보내지 않고 조용히 무시한다** — `connection_failed`조차 오지 않아 "접속 중..."에서 영원히 멈춘다. 그래서 `JOIN_TIMEOUT_SEC`(8초) 타이머로 직접 실패 처리한다. 이 타이머를 지우면 증상이 되살아난다.
 - `scenes/select.tscn` + `scripts/select.gd` = 대기실 겸 무기 선택. `P1Panel`/`P2Panel`은 흰 카드(`Card`) 위에 얹히며 `Lobby.order` 슬롯에 대응하고 **자기 슬롯만 조작 가능**하고 상대 패널은 서버가 보낸 값을 표시만 한다. `StatusLabel`에 "상대 대기 중" 또는 양쪽 준비 상태, `GoButton`은 준비 토글. **씬 전환은 클라이언트가 스스로 하지 않고 `Lobby.match_starting`(서버 지시)을 받아서 한다.** 좌우 화살표는 **자기 맵 선택만** 바꾼다(`Lobby.submit_map()`) — `MapBox`에 양쪽 선택이 나란히 보이고, 실제로 쓸 맵은 시작할 때 서버가 둘 중 하나를 뽑는다. 그 아래 `WeaponBox`에 양쪽이 고른 무기 그림과 이름이 나란히 보인다.
-  - **화면에 들어오면 대기실 상태를 서버에서 새로 받는다**(`_start_sync()`, 이슈 #93) — 들고 있던 것을 `Lobby.reset()`으로 버리고 `Lobby.request_state()`로 청한다. 답도 유실될 수 있어 내 자리를 받을 때까지 `SYNC_RETRY_SEC`(1초)마다 다시 청한다.
+  - **화면에 들어오면 역할을 신고하고 대기실 상태를 새로 받는다**(`_start_sync()`, 이슈 #93·#167) — 들고 있던 것을 `Lobby.reset()`으로 버리고 `Lobby.submit_role(Lobby.my_role)`을 보낸다. 답도 유실될 수 있어 자리를 받을 때까지(`Lobby.knows_me()`) `SYNC_RETRY_SEC`(1초)마다 다시 보낸다.
+  - **관전자에게는 이 화면이 통째로 읽기 전용이다** — 양쪽 패널·맵 화살표·`GoButton`이 다 잠기고 `StatusLabel`이 관전 상태를 적는다(플레이어 대기 중 / 준비 대기 중 / 경기 진행 중). 플레이어 쪽 문구 뒤에는 `관전 N명`이 붙는다.
+  - **자리를 거절당하면(`Lobby.role_rejected`) 되풀이 요청을 멈추고 사유를 띄운다.** 플레이어 자리가 찼을 때는 `GoButton`이 `관전으로 보기`가 되어 역할을 바꿔 다시 신고한다 — 자리가 없는데 계속 청하면 "눌러도 아무 일 없는 화면"이 된다.
+  - **트리를 벗어난 뒤에는 신호를 무시한다**(`is_inside_tree()` 확인). 씬 전환은 프레임 끝에 일어나므로 그 사이에 도착한 서버 방송이 이미 떼어진 노드로 들어오고, 그때 `multiplayer`는 null이다. 관전자가 경기 중에 들어오고 나가면서 방송이 늘어 잘 드러난다.
   - **내 자리가 아직 없으면(`slot_of(me) < 0`) `GoButton`을 잠그고 "대기실 정보를 받는 중..."을 띄운다.** 그 상태에서는 준비를 보내도 서버가 버리므로, 버튼을 켜 두면 "눌리는데 아무 일도 안 일어난다"로만 보인다. 이때는 양쪽 패널도 잠겨 있다 — 화면 전체가 죽은 것처럼 보이는 유일한 경우다.
 - `scenes/player_panel.tscn` + `scripts/player_panel.gd` = 플레이어 1인 패널(양쪽 재사용). `mirrored`가 true면 아이콘 열을 오른쪽으로 옮긴다. 무기/캐릭터 버튼은 각각 목록을 순환하고, `RandomButton`은 전부 랜덤. 사용자 조작으로 값이 바뀌면 `config_changed`를 내보낸다. `set_interactive(false)`로 상대 패널을 잠그고, `apply_config()`로 서버가 보낸 값을 표시한다(이때는 시그널을 내보내지 않는다).
 - `scripts/weapon_preview.gd` = 대기실 가운데 `WeaponBox`의 무기 그림 미리보기. `jelly_preview.gd`와 같은 형태이고 `Art.content_rect()`로 여백을 뺀다. 그림이 있는 무기가 10종뿐이라 **없으면 아무것도 그리지 않고** 옆의 이름 라벨이 대신한다. 무기 원화는 세로로 긴 것(검 1:4.7)과 가로로 긴 것(전기톱·대포 총)과 뭉툭한 것(글러브 1.18:1)이 섞여 있어 칸은 세로로 잡았다.
@@ -45,6 +56,7 @@ title(방을 고르고 서버 주소를 입력해 `StartButton`으로 접속) �
   - **글자는 맵 배경 위에 그냥 얹지 않고 흰 카드 안에 넣는다**(이슈 #112). 맵마다 배경 밝기가 정반대라서(평지 하늘 `(0.82, 0.93, 0.99)` ↔ 용암 `(0.42, 0.26, 0.38)`) 한 맵에 맞춘 글자색은 다른 맵에서 사라진다 — 진한 글자를 용암 배경에 얹으면 대비가 1.3:1이다. 카드를 깔면 배경이 무엇이든 10:1이 나오므로, 맵 위에 글자를 새로 얹을 일이 생기면 카드부터 만든다. 카드는 하늘 영역(y ≲ 190)에 둔다 — 점프 정점이 y≈340이라 지형·젤리와 겹치지 않는다.
   - 체력 숫자는 막대 **안**(`show_percentage`)이 아니라 카드 위 별도 라벨에 적는다. 막대 안에 그리면 채운 쪽과 빈 쪽의 밝기가 반대라 어느 색을 골라도 한쪽에서 묻힌다.
   - **플레이어는 씬에 배치되어 있지 않고 서버가 런타임에 스폰한다** — `PlayerSpawner`(MultiplayerSpawner, `spawn_path = ../Players`)와 `Players` 노드가 담당. 클라이언트는 씬 준비 후 `_notify_ready()`를 서버로 RPC하고, 서버가 그때 `spawn()`한다(접속 직후 스폰하면 클라이언트가 씬 로드 전이라 놓칠 수 있다). 노드 이름은 `Player_<peer_id>`.
+  - **관전자에게는 스폰하지 않는다**(이슈 #167) — `_notify_ready()`가 `Lobby.is_observer()`를 보고 걸러낸다. 대신 그 피어를 `Lobby.server_add_viewer()`로 등록해 **전투 노드 RPC의 대상**에 넣는다. 관전자는 조작 안내 대신 `관전 중` 문구를 보고(`_setup_observer_view()`), 결과 화면에서는 이긴 쪽의 젤리와 `1P 승리!`를 본다(`_play_result`의 `title_override`).
   - 투사체도 같은 방식이다 — `ProjectileSpawner`(`spawn_path = ../Projectiles`). 서버에서 `queue_free()`하면 클라이언트에서도 같이 사라진다.
   - **연출(이펙트)은 스포너를 쓰지 않는다**(이슈 #99). 서버가 결과를 정한 뒤 `@rpc("authority", "call_local", "reliable")`로 알리면 각 피어가 `Effects`(z_index 50) 아래에 노드를 붙이고, 그 노드가 다 재생한 뒤 스스로 `queue_free()`한다 — 아무것도 맞히지 않고 잠깐 떴다 사라져서 위치를 계속 맞출 것도 나중에 지워 줄 것도 없다. 검 특수의 빛기둥(`scenes/light_burst.tscn`)이 첫 사례다.
   - `_physics_process()`가 `multiplayer.is_server()` 하나로 전투 틱 전체를 감싼다: `_check_basic_attacks()`(근접 접촉·원거리 자동 발사) → `_check_pending_specials()`(강제 이동 중 명중) → `_tick_bleeds()`(출혈) → `_tick_bursts()`(연발 — 소총은 **시간**으로, 글러브 로켓 펀치는 **발 수**로 끝난다, 이슈 #164. `_start_burst()`가 둘 다 예약하고 `first_knockback`으로 첫 발만 세게 민다) → `_check_falls()`(낙사) → `_tick_round()`(예약된 라운드 재시작·대기실 복귀). 특수 공격은 `Player.special_requested` 신호를 받아 `_execute_special()`에서 무기별로 분기한다.
@@ -56,6 +68,7 @@ title(방을 고르고 서버 주소를 입력해 `StartButton`으로 접속) �
 - `scenes/player.tscn` + `scripts/player.gd`(CharacterBody2D, `class_name Player`): **서버 권위 이동 + 서버 권위 전투**. `owner_peer_id`·`player_name`·`character_id`·`weapon_id` export. SPEED 320, JUMP_VELOCITY -560, FAST_FALL_MULTIPLIER 2.0, INTERPOLATION_SPEED 20.
   - 클라이언트: `read_input()`(**`Input`을 읽는 유일한 지점**) → `_receive_move_input`(unreliable_ordered)·`_receive_jump`·`_receive_skill`(reliable, 엣지 입력이라 유실되면 안 됨)로 서버 전송. 물리를 계산하지 않고 `_receive_state`로 받은 위치로 lerp 보간만 한다.
   - 서버: `apply_movement(input, delta)`로 위치를 정하고(`move_and_slide()`는 여기서만 호출) `_receive_state`(authority, unreliable_ordered)로 위치·속도·접지·`facing`을 복제한다.
+  - **위치 복제는 브로드캐스트가 아니라 `Lobby.viewers`에게만 보낸다**(`_send_state()`, 이슈 #167). 대기실에 앉아 있는 피어(경기 중에 들어온 관전자 등)에게는 이 노드가 없어서 `Node not found`가 **초당 60번** 쌓인다. 새로 매 프레임 복제하는 것을 만들 때도 같은 목록을 쓴다.
   - **권한 검증**: 입력 RPC 세 개가 모두 `_is_owner_input()`을 거친다 — `multiplayer.get_remote_sender_id() != owner_peer_id`이면 무시한다. 없으면 남의 플레이어를 조작할 수 있다.
   - 전투 상태(`hp`·`alive`·`facing`·무적·기절·게이지·버프·강제 이동)는 **서버가 정하고** `server_*` 함수가 결과를 `@rpc("authority", "call_local", "reliable")`로 양쪽에 복제한다. 판정 자체는 여기가 아니라 `main.gd`에 있다.
   - 방패의 짧게/길게는 **서버가 누른 시간을 잰다**(`_check_long_press()`) — 클라이언트는 눌렀다/뗐다만 보낸다.
@@ -69,7 +82,8 @@ title(방을 고르고 서버 주소를 입력해 `StartButton`으로 접속) �
   - 바다·용암에는 `Hazard`가 있어 닿으면 즉사한다. 평지·벽돌은 좌우 벽이 있고 `Hazard`도 없어 낙사가 일어나지 않는다.
 - `scripts/art.gd`(`class_name Art`) = 그림 공통 처리. `content_rect()`가 **투명 여백을 뺀 실제 그림 영역**을 잰다. 캐릭터·무기 원화가 모두 정사각 캔버스에 여백을 두고 그려져 있어 크기와 위치를 잡을 때 항상 이 값을 기준으로 한다. `draw_glow()`는 **가운데가 밝은 빛무리**를 그린다 — 원 하나로 그리면 테두리가 딱 끊겨 어두운 판때기로 보여서, 같은 옅기의 원을 크기만 줄여 가며 겹쳐 쌓는다. 빛기둥과 관통 표시가 같이 쓴다.
 - `scripts/combat.gd`(`class_name Combat`) = 전투 공통 수치. MAX_HP 100, INVULNERABLE_TIME 0.1, MELEE_HIT_INTERVAL 0.6(**지속 데미지 무기의 데미지 간격에는 안 걸리고 넉백 간격으로만 쓰인다** — 이슈 #103), ROUND_START_GRACE 2.0, POINTS_TO_WIN 3, ROUND_RESTART_DELAY 2.0, MATCH_END_DELAY 4.0, 넉백 3단계(200/400/700), PROJECTILE_SPEED 1120, 낙사 경계 `is_out_of_bounds()`.
-- `scenes/projectile.tscn` + `scripts/projectile.gd`(Area2D, `class_name Projectile`) = 허공을 나는 것(화살·총알·표창·던진 단검·폭탄). 이동·판정은 서버만 하고 위치는 `MultiplayerSynchronizer`로 복제된다. 상대 무기에 막히지 않고 공유 무적도 타지 않는다.
+- `scenes/projectile.tscn` + `scripts/projectile.gd`(Area2D, `class_name Projectile`) = 허공을 나는 것(화살·총알·표창·던진 단검·폭탄). 이동·판정은 서버만 하고 위치는 `MultiplayerSynchronizer`(`Sync`)로 복제된다. 상대 무기에 막히지 않고 공유 무적도 타지 않는다.
+  - **`Sync`에 가시성 필터를 걸지 말 것**(이슈 #167에서 시도했다가 되돌렸다). `public_visibility = false` + `add_visibility_filter()`를 `_ready()`에서 걸면 **모든 클라이언트에서 투사체가 사라진다** — 서버에는 2개가 있는데 양쪽 화면에 0개였다. 자식 `Sync`의 `_ready()`가 부모보다 먼저 돌아 이미 등록된 뒤에 가시성을 끄는 순서 문제로 보이고, 필터가 다시 평가되지 않는다. 대기실에 앉아 있는 피어에게 날아가는 것을 막으려면 이 경로가 아니라 다른 방법을 찾아야 한다.
   - **폭발 반경은 `BlastRadius` 자식 노드가 그린다**(`scripts/blast_radius.gd`, 이슈 #140) — `explosion_radius`(폭탄 200px)만큼의 반투명 원과 그 경계선이다. 폭탄은 닿지 않아도 맞는 유일한 무기라 범위가 안 보이면 피할 거리인지 판단할 근거가 없다. **루트가 아니라 자식에서 그리는 이유**는 루트에 미사일 불꽃용 가산 혼합이 걸려 있어서다 — 가산은 밝게만 만들 수 있어 평지 하늘처럼 흰 배경 위에서는 아무것도 안 보인다(#112). 자식은 그 재질을 물려받지 않아 보통의 알파 혼합으로 그려진다. 폭탄 그림 뒤에 깔리는 것은 **형제 순서**로 한다(`Visual`·`ArtSprite`보다 앞에 있다) — **`z_index`를 내리면 안 된다**(이슈 #146). z를 내리면 z 0에 있는 것 **전부보다** 먼저 그려지는데 맵이 자기 배경을 z 0의 불투명 `ColorRect`로 깔기 때문에 그 아래로 사라진다. `Effects`처럼 **올리는** 것은 안전하고 내리는 것만 위험하다. 원점 기준으로 한 번만 그려 두면 폭탄이 움직여도 따라간다. 반경이 0인 나머지 투사체는 아무것도 그리지 않는다.
   - 그리기는 기본이 노란 막대(`Visual`)지만, 스폰 데이터에 `art`(무기 이름)가 있으면 `ArtSprite`에 그 무기 그림을 붙이고 진행 방향으로 회전시킨다 — 단검·삼지창·로켓 글러브가 쓴다(이슈 #96·#152·#161). **원화의 앞이 오른쪽이면 `art_points_right`를 넘긴다** — 기본은 "날 끝이 위"라 90도를 더해 돌리는데, 가로로 그린 로켓 글러브는 그러면 주먹이 위를 본다. `max_distance`를 주면 그만큼 날아간 뒤 사라진다(글러브 300px — 기획서의 "단거리"를 지키는 선이다). `speed`를 주면 그 속도로 나간다(글러브 700px/s, 없으면 공통 1120px/s). 클라이언트는 속도를 복제받지 않으므로 방향은 **위치 변화**로 잡는다(`_process`). 멈추면 마지막 방향을 유지해 바닥에 꽂힌 모양이 된다. 회전하는 그림이라 여백 보정은 `position`이 아니라 `Sprite2D.offset`으로 넣어야 한다.
 - `docs/weapon-system.md` = 무기 추가·수정 방법과 지켜야 할 계약. `docs/무기_수치_초안.md` = 수치가 정해진 근거와 미확정 항목.
@@ -90,6 +104,7 @@ title(방을 고르고 서버 주소를 입력해 `StartButton`으로 접속) �
 기획서의 냉장고·봉지 속·위 속 맵 — 이슈 #62에서 바다·용암·벽돌로 교체했다. 필요하면 `Maps.LIST`에 되살린다.
 맵 고유 기믹(움직이는 발판 등)과 배경 애니메이션(물결·용암 흐름)은 없다.
 라운드마다 무기를 다시 고르는 방식(기획서)은 아직 없다 — 한 번 고른 무기로 경기가 끝날 때까지 싸운다.
+**경기 도중 난입 관전은 없다**(이슈 #167 non-goal) — 경기 중에 들어온 관전자는 대기실에서 다음 경기를 기다린다. 하려면 `player.tscn`에 가시성용 `MultiplayerSynchronizer`를 붙여 늦게 들어온 피어에게도 스폰이 전달되게 해야 한다(투사체는 이미 그 방식이다). 관전자 전용 카메라·자유 시점·리플레이·채팅도 없다.
 무기별로 남은 것(표창의 파란 표창, 삼지창 회수 연출, 미확정 수치)은 `docs/weapon-system.md`의 "아직 안 된 것"에 정리되어 있다.
 지연 보상(prediction·rollback)은 로드맵 Non-goal이라 입력 지연이 왕복 시간만큼 발생한다.
 
