@@ -146,6 +146,7 @@ title(방과 역할을 고르고 서버 주소를 입력해 `StartButton`으로 
 - **사용자가 에디터에서 씬을 만지면 파일이 정규화된다** — `load_steps`가 빠지고, 노드에 `layout_mode`·`anchors_preset`·`unique_id`가 붙고, 손으로 적어 둔 자리표시 UID(`uid://jellyselect01` 같은 것)가 진짜 UID로 교체된다. 실제 변경은 몇 줄인데 diff가 크게 보이니 놀라지 말 것. 이때 **참조 쪽만 새 UID로 바뀌고 선언 쪽은 옛 UID로 남아 어긋날 수 있다**(#72에서 `player_panel.tscn`이 그랬다) — 씬을 커밋하기 전에 선언과 참조를 대조한다. 아직 자리표시 UID인 씬(`main`·`player`·`title`·`projectile`)도 열어 저장하는 순간 같은 일이 일어난다.
 - .tscn의 `uid://`는 손으로 바꾸지 않는다. 씬의 자기 UID를 바꾸면 그 씬을 참조하는 `ext_resource`의 UID도 같이 고쳐야 한다. stale `.godot` 캐시 상태로 에디터가 UID를 재생성하면 참조가 끊길 수 있으니(이슈 #27), 그런 변경은 커밋하지 말고 `git restore`로 되돌린다.
 - `main`이 리셋된 이력이 있다. `dev`는 2026-07-26에 `main`(`e2a7dcb`) 지점으로 재정렬했다. 옛 히스토리가 필요하면 `backup/main-before-reset`을 참조한다.
+- **`dev`는 2026-08-20에 원격에서 삭제되었다가 2026-08-22에 `main`(`636df2f`) 지점으로 다시 만들어졌다**(이슈 #186). PR #174가 dev로 머지된 직후 브랜치 정리 중에 지워진 것으로, 그 사이에 진행한 #180·#182·#184는 `dev`가 없어 **`main`으로 직접 머지했다** — 그 세 건에 dev PR이 없는 것은 흐름을 어긴 것이 아니다. 삭제 시점의 `dev`가 들고 있던 고유 커밋 10개는 전부 "PR → dev" 머지 커밋이고 그 내용은 이미 `main`에 별도 PR로 들어가 있었으므로(양방향 diff가 대칭이었다) **파일 내용 손실은 없다.** 로컬에 옛 `dev`가 남아 있으면 `git fetch && git reset --hard origin/dev`로 맞춘다.
 
 ## Issue-First Rule
 
