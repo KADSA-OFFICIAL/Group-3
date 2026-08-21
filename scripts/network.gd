@@ -1,7 +1,8 @@
 extends Node
 ## 네트워크 연결 관리 (오토로드 싱글턴 Network).
 ## 연결 수립과 피어 알림만 담당하고 게임 로직은 다루지 않는다.
-## 서버 주소는 여기에 적지 않는다 — 저장소가 공개라 실행 시 입력받는다.
+## 서버 주소는 `DEFAULT_ADDRESS` 하나로 고정이고 화면에 입력칸이 없다 (이슈 #198) —
+## 붙을 주소는 `configured_address()`가 정한다(개발용 `--address=` 인자 → 기기 예외 파일 → 기본값).
 ##
 ## 방은 **포트 하나 = 방 하나** 로 나눈다.
 ## 서버 프로세스를 포트별로 하나씩 띄우므로 방끼리 완전히 독립적이다.
@@ -29,14 +30,21 @@ const MAX_OBSERVERS := 4
 ## ENet 에 넘기는 실제 정원. 관전자도 피어이므로 여기에 포함되어야 접속이 열린다.
 ## 이 값만 늘리면 관전자로 들어올 수 있는 것이 아니다 — 역할 구분은 Lobby 가 한다.
 const MAX_CLIENTS := MAX_PLAYERS + MAX_OBSERVERS
-## 로컬 테스트용 기본값. 실제 서버 주소는 접속 화면에서 입력한다.
-const DEFAULT_ADDRESS := "127.0.0.1"
-
-## 마지막으로 접속에 성공한 주소를 적어 두는 파일 (이슈 #195).
+## 팀 서버 주소 (서버컴의 Tailscale 주소). **접속 화면에 입력칸은 없다** — 서버가 하나뿐이고
+## 방은 포트로만 갈리므로 고를 것이 없다(이슈 #198).
 ##
-## **주소를 코드에 박지 않는 규칙을 지키면서** 매번 손으로 입력하는 불편을 없애는 방법이다 —
+## 주소가 바뀌면 **이 줄을 고치고 배포본을 다시 만들어야** 팀원들이 붙을 수 있다 —
+## 화면에서 바꿀 방법이 없다. 그때는 docs/build.md 의 절차를 다시 밟는다.
+##
+## Tailscale 주소는 tailnet 안에서만 닿는 사설 주소라 외부에서 접속할 수 있는 대상이 아니지만,
+## 이 저장소는 공개이므로 이 값은 공개되고 깃 이력에 남는다. 사용자가 알고 정한 것이다.
+const DEFAULT_ADDRESS := "100.102.216.35"
+
+## 기기별 주소 예외를 적어 두는 파일 (이슈 #195·#198). **읽기만 한다.**
+##
 ## `user://` 는 실행 파일 밖(윈도우에서는 `%APPDATA%/Godot/app_userdata/Jelly Wars/`)이라
-## 저장소에도 배포본에도 들어가지 않고, 기기마다 다른 주소를 쓸 수 있다.
+## 저장소에도 배포본에도 들어가지 않는다. 한 기기만 다른 서버(로컬 등)에 붙여야 할 때 쓴다.
+## 실행 인자 `--address=` 가 이것보다 우선한다.
 const CLIENT_CONFIG_PATH := "user://client.cfg"
 
 ## 접속 대기 한계 시간(초).
@@ -139,9 +147,16 @@ func switch_room(target_port: int) -> Error:
 	return join_server(address, target_port)
 
 
-## 이 기기가 마지막으로 접속에 성공한 주소. 없으면 로컬 기본값 (이슈 #195).
-## 접속 화면이 이 값으로 주소 칸을 채운다.
-func remembered_address() -> String:
+## 이번 실행에서 붙을 서버 주소 (이슈 #198). 화면에 표시하고 접속에도 이 값을 쓴다.
+##
+## 정하는 순서가 중요하다.
+## 1. `--address=` 실행 인자 — 개발·검증용. 로컬 서버에 붙을 유일한 방법이라 가장 우선한다.
+## 2. `user://client.cfg` 의 `address` — 기기 한 대만 예외로 둘 때.
+## 3. 코드에 박힌 팀 서버 주소(`DEFAULT_ADDRESS`) — 평소 모든 기기가 쓰는 값.
+func configured_address() -> String:
+	var from_args := address_from_cmdline()
+	if not from_args.is_empty():
+		return from_args
 	var config := ConfigFile.new()
 	if config.load(CLIENT_CONFIG_PATH) != OK:
 		return DEFAULT_ADDRESS
@@ -151,17 +166,20 @@ func remembered_address() -> String:
 	return saved if not saved.is_empty() else DEFAULT_ADDRESS
 
 
-## 접속에 성공한 주소만 적어 둔다 — **실패한 주소로 덮어쓰면 다음 실행이 망가진다.**
-## 그래서 부르는 곳은 `_on_connected_to_server()` 한 곳뿐이다.
-func _remember_address(address: String) -> void:
-	if address.strip_edges().is_empty():
-		return
-	var config := ConfigFile.new()
-	# 이미 있는 파일이면 다른 값을 지우지 않도록 먼저 읽는다.
-	config.load(CLIENT_CONFIG_PATH)
-	config.set_value("server", "address", address)
-	if config.save(CLIENT_CONFIG_PATH) != OK:
-		push_warning("서버 주소를 기억하지 못했습니다: %s" % CLIENT_CONFIG_PATH)
+## `--address=127.0.0.1` 형태의 실행 인자. 없으면 빈 문자열 (이슈 #198).
+## `--port=` 와 같은 방식으로 `--` 앞이든 뒤든 받는다.
+func address_from_cmdline() -> String:
+	var args: PackedStringArray = OS.get_cmdline_user_args()
+	args.append_array(OS.get_cmdline_args())
+	for arg in args:
+		if arg.begins_with("--address="):
+			return arg.substr(10).strip_edges()
+	return ""
+
+
+## 지금 쓰는 주소가 코드에 박힌 팀 서버 주소인가. 화면이 예외 상태를 알리는 데 쓴다.
+func using_default_address() -> bool:
+	return configured_address() == DEFAULT_ADDRESS
 
 
 ## 접속 실패 사유를 꺼내고 비운다. 두 번 읽어도 같은 사유가 또 뜨지 않게 한다.
@@ -187,8 +205,6 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 
 func _on_connected_to_server() -> void:
-	# 여기까지 왔으면 그 주소가 실제로 통한 주소다 (이슈 #195).
-	_remember_address(last_address)
 	join_succeeded.emit()
 
 
