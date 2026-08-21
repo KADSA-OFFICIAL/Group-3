@@ -7,7 +7,7 @@
 2기기 **1 VS 1 온라인 대전** 액션, **Godot 4.6 (GL Compatibility)**. 3조(스틱매너) 개발기획서 기반. `project.godot`의 `config/name`은 "Jelly Wars", 메인 씬은 `scenes/title.tscn`.
 기획 핵심 루프(무기 선택 → 맵 → 전투 → 3점 선취 승리)가 **전부 돈다.**
 
-2026-07-28에 한 기기 2인 로컬에서 온라인 구조로 전환 중이다(로드맵 이슈 #32). 전용 헤드리스 서버가 권위를 갖고, 클라이언트 2대가 Tailscale로 접속한다. 서버 주소는 **저장소가 공개이므로 코드에 적지 않는다** — 접속 화면에서 입력받고 커밋되는 기본값은 `127.0.0.1`이다. 매번 입력하는 불편은 **기기별 저장**으로 푼다(이슈 #195): 접속에 성공한 주소를 `user://client.cfg`에 적어 두고 다음 실행 때 칸에 채운다. 주소를 코드·저장소 파일에 넣어 달라는 요청이 오면 이 규칙을 먼저 알리고 그 방법을 제안할 것.
+2026-07-28에 한 기기 2인 로컬에서 온라인 구조로 전환 중이다(로드맵 이슈 #32). 전용 헤드리스 서버가 권위를 갖고, 클라이언트 2대가 Tailscale로 접속한다. **서버 주소는 `Network.DEFAULT_ADDRESS`에 박혀 있고 접속 화면에 입력칸이 없다**(이슈 #198). 서버가 하나뿐이고 방은 포트로만 갈리므로 고를 것이 없다 — 화면은 붙을 주소를 글자로만 보여준다. 사용자가 편의를 위해 정한 것이며(이전에는 입력칸 + 기기별 저장이었다, 이슈 #195) **주소가 공개 저장소와 깃 이력에 남는다는 것을 알고 택했다.** Tailscale 주소는 tailnet 안에서만 닿아 외부 접속 대상이 아니다. 따라오는 제약: **주소가 바뀌면 코드를 고쳐 배포본을 다시 만들어야 한다.** 로컬 서버로 개발할 때는 `--address=127.0.0.1` 인자를 쓴다(기기 한 대만 예외로 둘 때는 `user://client.cfg`).
 
 **접속에는 역할이 있다 — 플레이어와 관전**(이슈 #167). 방 하나에 플레이어 2명(`Network.MAX_PLAYERS`)과 관전자 4명(`MAX_OBSERVERS`)이 들어가고, ENet 정원은 둘을 합한 `MAX_CLIENTS`(6)다. 관전자는 플레이어 자리를 차지하지 않고 스폰도 받지 않으며 입력도 보내지 않는다 — 대기실과 전투 화면을 **읽기 전용**으로 본다. 접속만으로는 자리가 생기지 않고 역할을 신고해야 한다(`Lobby.submit_role()`).
 
@@ -19,7 +19,7 @@
 
 ### 씬 흐름
 
-title(방과 역할을 고르고 서버 주소를 입력해 `StartButton`으로 접속) → select(대기실 겸 무기 선택, 둘 다 준비하면 서버가 시작 지시) → main(평지 전투, 서버가 플레이어 스폰) → **3점 선취 시 서버가 select로 되돌린다**(`Lobby.match_ended`). 전투 중 ESC(`ui_cancel`)로 접속 종료 후 title 복귀
+title(방을 고르고 `StartButton`으로 접속 — 주소는 코드가 정하고 역할은 빌드가 정한다) → select(대기실 겸 무기 선택, 둘 다 준비하면 서버가 시작 지시) → main(평지 전투, 서버가 플레이어 스폰) → **3점 선취 시 서버가 select로 되돌린다**(`Lobby.match_ended`). 전투 중 ESC(`ui_cancel`)로 접속 종료 후 title 복귀
 
 **관전자도 같은 씬을 지나간다** — select에서 양쪽 선택을 보기만 하다가 같은 `match_starting` 지시로 main에 함께 들어가고, 경기가 끝나면 함께 select로 돌아온다. 다른 점은 자기 젤리가 없다는 것뿐이다.
 
@@ -29,7 +29,7 @@ title(방과 역할을 고르고 서버 주소를 입력해 `StartButton`으로 
 
 ### 구조 요약
 
-- `scripts/network.gd` = 오토로드 싱글턴 `Network`: 연결 수립과 피어 알림만 담당(게임 로직 없음). `ROOMS`(1번 방 7777·2번 방 7778 — 서버컴 방화벽 UDP 규칙과 일치), **방 하나당** `MAX_PLAYERS = 2` + `MAX_OBSERVERS = 4`이고 ENet에 넘기는 정원은 그 합인 `MAX_CLIENTS`(6)다, `DEFAULT_ADDRESS = "127.0.0.1"`. `should_run_as_server()`가 헤드리스 또는 `--server` 인자를 감지해 `_ready()`에서 자동으로 서버를 열고, 포트는 `port_from_cmdline()`이 `--port=7778` 인자에서 읽는다(없으면 첫 방). 시그널 `server_started`·`join_succeeded`·`join_failed`·`peer_joined`·`peer_left`.
+- `scripts/network.gd` = 오토로드 싱글턴 `Network`: 연결 수립과 피어 알림만 담당(게임 로직 없음). `ROOMS`(1번 방 7777·2번 방 7778 — 서버컴 방화벽 UDP 규칙과 일치), **방 하나당** `MAX_PLAYERS = 2` + `MAX_OBSERVERS = 4`이고 ENet에 넘기는 정원은 그 합인 `MAX_CLIENTS`(6)다, `DEFAULT_ADDRESS`(팀 서버 주소 — 이슈 #198), 붙을 주소를 정하는 `configured_address()`(우선순위: `--address=` 인자 → `user://client.cfg` → `DEFAULT_ADDRESS`). `should_run_as_server()`가 헤드리스 또는 `--server` 인자를 감지해 `_ready()`에서 자동으로 서버를 열고, 포트는 `port_from_cmdline()`이 `--port=7778` 인자에서 읽는다(없으면 첫 방). 시그널 `server_started`·`join_succeeded`·`join_failed`·`peer_joined`·`peer_left`.
   - **방 구성은 `ROOMS`가 유일한 출처다** — 포트도 방 이름도 여기 말고 다른 곳에 적지 않는다. 줄을 추가하면 접속 화면 버튼도 따라 늘어나므로 씬은 손대지 않아도 된다(이슈 #90).
   - **정원 상수를 늘리는 것만으로는 관전이 되지 않는다** — `MAX_CLIENTS`는 ENet에 넘기는 숫자일 뿐이고, 누구를 플레이어로 앉히고 누구를 관전으로 둘지는 `Lobby`가 정한다.
   - **포트를 못 열면 `get_tree().quit(1)`로 프로세스를 끝낸다**(이슈 #90). 안 끝내면 `is_server`가 false인 채로 살아남아 클라이언트 취급을 받는데, 헤드리스라 화면도 없어서 "서버 떠 있음"으로 착각하게 된다. 같은 방을 두 번 띄우거나 2번 방을 `--port=` 없이 띄웠을 때 실제로 걸린다.
@@ -45,12 +45,11 @@ title(방과 역할을 고르고 서버 주소를 입력해 `StartButton`으로 
   - `reset()`은 클라이언트가 들고 있던 상태를 버린다. 옛 접속의 `order`가 남으면 새 접속에서 **"2명이 있는데 그중에 나는 없는"** 상태가 되고, 이건 화면상 정상과 구별되지 않는다.
   - 이 둘의 서버 판정은 `multiplayer.is_server()`가 아니라 **`Network.is_server`로 한다** — 접속이 끊기면 peer가 없어 내 id가 1이 되므로 클라이언트가 자기를 서버로 착각한다.
 - `scripts/game_state.gd` = 오토로드 싱글턴 `GameState`: 화면 간 선택 정보 전달. `CHARACTERS`(`Characters.names()` 5종 — 사본을 두지 않고 캐릭터 표에서 만든다), `WEAPONS`("랜덤" + `Weapons.names()` 17종 — 마찬가지), `MAPS`("랜덤" + `Maps.names()` 4종 — 마찬가지), `p1_config`/`p2_config`(weapon·character), `map_name`, `get_config(prefix)`.
-- `scenes/title.tscn` + `scripts/title.gd` = 타이틀 겸 접속 화면. `AddressEdit`(기본 `127.0.0.1`)·`RoomBox`(방 선택)·`StartButton`("접속")·`StatusLabel`(접속 중/실패 표시). 접속 성공 시 select로 전환한다. 좌우 `JellyLeft`/`JellyRight`는 미리보기 장식.
-  - **주소 칸은 `Network.remembered_address()`로 채운다**(이슈 #195) — 접속에 **성공한** 주소를 `user://client.cfg`에 적어 두고 다음 실행 때 꺼내 쓴다. **주소를 코드에 박지 않는 규칙을 지키면서** 매번 입력하는 불편을 없애는 방법이다: `user://`는 기기별 폴더(`%APPDATA%`)라 저장소에도 배포본에도 안 들어간다. 실패한 주소는 저장하지 않는다 — 오타 한 번이 다음 실행까지 망치면 안 된다.
+- `scenes/title.tscn` + `scripts/title.gd` = 타이틀 겸 접속 화면. `AddressValue`(붙을 주소를 **보여주는 라벨** — 입력칸이 아니다)·`RoomBox`(방 선택)·`StartButton`("접속")·`StatusLabel`(접속 중/실패 표시). 접속 성공 시 select로 전환한다. 좌우 `JellyLeft`/`JellyRight`는 미리보기 장식.
+  - **주소는 보여주기만 한다**(이슈 #198) — `AddressValue`에 `Network.configured_address()`를 적고, 기본값이 아니면 `(예외 설정)`을 덧붙여 개발용 인자·기기 예외가 걸린 것을 알린다. 입력칸을 되살리지 말 것: 서버가 하나뿐이라 고를 것이 없고, 팀원 대부분은 IP를 외우지 않는다.
   - **접속 실패 사유는 `Network.take_last_failure()`로 받아 온다**(이슈 #184) — 전투 화면에서 방을 옮기다 실패하면 화면이 바뀐 뒤에 알려줄 수밖에 없어서, 실패 사유를 오토로드에 남기고 이 화면이 한 번 읽고 비운다.
   - **방 버튼은 씬에 박아 두지 않고 `Network.ROOMS` 개수만큼 만든다**(이슈 #90). `RoomBox`(HBoxContainer) 아래 `RoomButton` 하나가 첫 방이자 나머지의 원본이고, `_setup_room_buttons()`가 `duplicate()`로 복제한다 — 스타일과 `ButtonGroup`이 그대로 딸려 오므로 라디오 동작과 모양이 자동으로 맞는다. 버튼은 `size_flags_horizontal = 3`이라 방이 몇 개든 같은 폭에 균등하게 나뉜다.
   - **관전 빌드로 실행하면 화면이 그 사실을 알린다**(`_mark_observer_build()`, 이슈 #180) — 부제가 `JELLY WARS — 관전 모드`(진한 라벤더), 버튼이 `관전으로 접속`, 창 제목이 `젤리 워즈 — 관전`으로 바뀐다. 실행 파일이 둘인데 겉모습이 같으면 어느 쪽을 켰는지 알 수 없다.
-  - `AddressEdit`에 `주소:포트`로 적으면 고른 방보다 그쪽을 우선한다.
   - **방이 꽉 차면 ENet이 거절 신호를 보내지 않고 조용히 무시한다** — `connection_failed`조차 오지 않아 "접속 중..."에서 영원히 멈춘다. 그래서 `JOIN_TIMEOUT_SEC`(8초) 타이머로 직접 실패 처리한다. 이 타이머를 지우면 증상이 되살아난다.
 - `scenes/select.tscn` + `scripts/select.gd` = 대기실 겸 무기 선택. `P1Panel`/`P2Panel`은 흰 카드(`Card`) 위에 얹히며 `Lobby.order` 슬롯에 대응하고 **자기 슬롯만 조작 가능**하고 상대 패널은 서버가 보낸 값을 표시만 한다. `StatusLabel`에 "상대 대기 중" 또는 양쪽 준비 상태, `GoButton`은 준비 토글. **씬 전환은 클라이언트가 스스로 하지 않고 `Lobby.match_starting`(서버 지시)을 받아서 한다.** 좌우 화살표는 **자기 맵 선택만** 바꾼다(`Lobby.submit_map()`) — `MapBox`에 양쪽 선택이 나란히 보이고, 실제로 쓸 맵은 시작할 때 서버가 둘 중 하나를 뽑는다. 그 아래 `WeaponBox`에 양쪽이 고른 무기 그림과 이름이 나란히 보인다.
   - **화면에 들어오면 역할을 신고하고 대기실 상태를 새로 받는다**(`_start_sync()`, 이슈 #93·#167) — 들고 있던 것을 `Lobby.reset()`으로 버리고 `Lobby.submit_role(Lobby.my_role)`을 보낸다. 답도 유실될 수 있어 자리를 받을 때까지(`Lobby.knows_me()`) `SYNC_RETRY_SEC`(1초)마다 다시 보낸다.
