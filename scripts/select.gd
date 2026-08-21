@@ -154,12 +154,12 @@ func _update_status() -> void:
 
 	# 자리를 거절당했다 — 사유와 나갈 길만 알려 준다.
 	#
-	# **여기서 역할을 바꾸는 조작은 두지 않는다**(이슈 #170). 역할을 고르는 자리는 접속 화면
-	# 하나뿐이다 — 두 곳에 두면 방식을 바꿀 때 양쪽을 다 손봐야 한다. 자리가 비면 알아서
-	# 다시 신청하므로(`_refresh`) 기다리는 것만으로도 들어갈 수는 있다.
+	# **여기서 역할을 바꾸는 조작은 두지 않는다**(이슈 #170·#180). 역할은 화면이 아니라
+	# 실행한 파일이 정하므로 바꿀 수단 자체가 없다 — 관전으로 보려면 관전 빌드로 접속해야 한다.
+	# 자리가 비면 알아서 다시 신청하므로(`_refresh`) 기다리는 것만으로도 들어갈 수는 있다.
 	if _rejected != "":
 		if Lobby.observer_slots_open():
-			status_label.text = "%s  홈으로 나가 접속 화면에서 관전을 고르세요." % _rejected
+			status_label.text = "%s  관전 빌드로 접속하면 볼 수 있어요." % _rejected
 		else:
 			status_label.text = "%s  방이 꽉 찼습니다 — 홈으로 나가세요." % _rejected
 		go_button.disabled = true
