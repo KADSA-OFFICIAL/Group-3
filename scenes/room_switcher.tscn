@@ -1,4 +1,4 @@
-[gd_scene load_steps=3 format=3 uid="uid://jellyroomswitch1"]
+[gd_scene format=3 uid="uid://cavala33hgkt1"]
 
 [ext_resource type="Script" path="res://scripts/room_switcher.gd" id="1_switcher"]
 
