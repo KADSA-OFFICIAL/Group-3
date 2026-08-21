@@ -113,8 +113,12 @@ func _notify_ready() -> void:
 	if not multiplayer.is_server():
 		return
 	var sender := multiplayer.get_remote_sender_id()
-	# 이 씬에 들어온 피어만 전투 노드의 RPC 대상이 된다 — 관전자도 여기에 들어간다.
+	# 이 씬에 들어온 피어만 전투 노드의 RPC·스폰 대상이 된다 — 관전자도 여기에 들어간다.
+	# 등록되는 순간 `Sync` 가시성 필터가 통과로 바뀌어 **이미 스폰된 젤리가 그 피어에게 간다**.
 	Lobby.server_add_viewer(sender)
+	# 진행 중인 점수와 배너를 그 피어에게만 보낸다 (이슈 #182) — 경기 도중에 들어온 관전자는
+	# 지난 방송을 못 받았으므로, 안 보내면 다음 득점까지 0 : 0 을 보게 된다.
+	_receive_round.rpc_id(sender, scores, banner)
 	# 관전자에게는 젤리를 주지 않는다. 스폰하면 셋째 플레이어가 판에 끼어든다.
 	if Lobby.is_observer(sender):
 		return
