@@ -32,7 +32,22 @@ const MAX_CLIENTS := MAX_PLAYERS + MAX_OBSERVERS
 ## 로컬 테스트용 기본값. 실제 서버 주소는 접속 화면에서 입력한다.
 const DEFAULT_ADDRESS := "127.0.0.1"
 
+## 접속 대기 한계 시간(초).
+## **방이 꽉 차면 ENet 이 조용히 거절해서 `connection_failed` 조차 오지 않는다.**
+## 그래서 직접 시간을 재지 않으면 "접속 중..." 에서 영원히 멈춘다.
+## 접속 화면과 관전자의 방 전환이 같은 값을 쓴다 — 붙는 방식이 같으므로 한 곳에 둔다.
+const JOIN_TIMEOUT_SEC := 8.0
+
 var is_server := false
+
+## 마지막으로 접속을 시도한 주소와 포트. **방을 옮길 때 주소를 다시 입력받지 않으려고** 기억한다
+## (이슈 #184). 방은 포트로만 갈리므로 주소는 그대로 쓰고 포트만 바꿔 붙는다.
+var last_address := ""
+var current_port := 0
+
+## 마지막 접속 실패 사유. 타이틀 화면이 한 번 읽고 비운다 —
+## 전투 화면에서 방을 옮기다 실패하면 화면이 바뀐 뒤에 사유를 보여줘야 한다.
+var last_failure := ""
 
 
 func _ready() -> void:
@@ -100,7 +115,28 @@ func join_server(address: String, target_port: int = ROOMS[0]["port"]) -> Error:
 		return err
 	multiplayer.multiplayer_peer = peer
 	is_server = false
+	last_address = address
+	current_port = target_port
 	return OK
+
+
+## 접속을 끊고 **같은 주소의 다른 방(포트)** 으로 다시 붙는다 (이슈 #184).
+##
+## ENet 은 피어를 하나만 들 수 있으므로 **먼저 끊어야 한다** — 그래서 새 방 접속이 실패하면
+## 원래 방으로 돌아갈 수 없다. 실패는 부르는 쪽이 타이틀 복귀로 처리한다.
+func switch_room(target_port: int) -> Error:
+	if last_address.is_empty():
+		return ERR_UNCONFIGURED
+	var address := last_address
+	leave()
+	return join_server(address, target_port)
+
+
+## 접속 실패 사유를 꺼내고 비운다. 두 번 읽어도 같은 사유가 또 뜨지 않게 한다.
+func take_last_failure() -> String:
+	var reason := last_failure
+	last_failure = ""
+	return reason
 
 
 func leave() -> void:
@@ -124,9 +160,11 @@ func _on_connected_to_server() -> void:
 
 func _on_connection_failed() -> void:
 	multiplayer.multiplayer_peer = null
-	join_failed.emit("서버에 연결하지 못했습니다.")
+	last_failure = "서버에 연결하지 못했습니다."
+	join_failed.emit(last_failure)
 
 
 func _on_server_disconnected() -> void:
 	multiplayer.multiplayer_peer = null
-	join_failed.emit("서버와 연결이 끊겼습니다.")
+	last_failure = "서버와 연결이 끊겼습니다."
+	join_failed.emit(last_failure)

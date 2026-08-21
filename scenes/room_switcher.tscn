@@ -1,0 +1,40 @@
+[gd_scene load_steps=3 format=3 uid="uid://jellyroomswitch1"]
+
+[ext_resource type="Script" path="res://scripts/room_switcher.gd" id="1_switcher"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_switch_card"]
+content_margin_left = 14.0
+content_margin_top = 5.0
+content_margin_right = 14.0
+content_margin_bottom = 5.0
+bg_color = Color(1, 1, 1, 1)
+border_width_bottom = 3
+border_color = Color(0.86, 0.81, 0.86, 1)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+corner_detail = 12
+shadow_color = Color(0.62, 0.55, 0.66, 0.16)
+shadow_size = 6
+shadow_offset = Vector2(0, 3)
+
+[node name="RoomSwitcher" type="PanelContainer"]
+theme_override_styles/panel = SubResource("StyleBoxFlat_switch_card")
+script = ExtResource("1_switcher")
+
+[node name="Row" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="CurrentLabel" type="Label" parent="Row"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "관전: 1번 방"
+vertical_alignment = 1
+
+[node name="RoomButton" type="Button" parent="Row"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 18
+text = "2번 방"

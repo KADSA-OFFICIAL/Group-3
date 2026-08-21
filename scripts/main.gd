@@ -88,6 +88,9 @@ func _ready() -> void:
 
 	# 경기가 끝나면 서버 지시로 대기실에 돌아간다 (서버 자신은 이 씬에 머문다).
 	Lobby.match_ended.connect(_on_match_ended)
+	# 접속이 끊기면 멈춘 화면에 남지 않고 타이틀로 나간다 (이슈 #184).
+	# 관전자가 방을 옮기면서 접속 종료가 평상시 일어나는 일이 되었다.
+	Network.join_failed.connect(_on_disconnected)
 
 	if multiplayer.is_server():
 		Network.peer_left.connect(_on_peer_left)
@@ -500,6 +503,14 @@ func _spawn_facing(index: int) -> int:
 
 func _on_match_ended() -> void:
 	get_tree().change_scene_to_file("res://scenes/select.tscn")
+
+
+## 서버가 죽거나 방을 옮기다 실패했다. 방 전환은 스스로 화면을 옮기므로(room_switcher.gd)
+## 그쪽이 처리 중이면 손대지 않는다 — 두 곳에서 씬을 갈아치우면 어느 쪽이 이길지 알 수 없다.
+func _on_disconnected(_reason: String) -> void:
+	if not is_inside_tree() or $UI/HUD/RoomSwitcher.is_switching():
+		return
+	get_tree().change_scene_to_file("res://scenes/title.tscn")
 
 
 func get_player(peer_id: int) -> Player:

@@ -40,8 +40,11 @@ func _ready() -> void:
 	Lobby.role_rejected.connect(_on_role_rejected)
 	Network.join_failed.connect(_on_disconnected)
 
-	_refresh()
+	# 동기화를 먼저 시작한다 — `Lobby.reset()`이 들고 있던 상태를 버리고 `lobby_changed`로
+	# 화면을 한 번 갱신해 준다. 순서를 바꾸면 **방을 옮겨 온 첫 프레임에 옛 방의 상태가**
+	# 그려진다(이슈 #184에서 관전자가 방을 옮길 때 실제로 한 프레임 보였다).
 	_start_sync()
+	_refresh()
 
 
 ## 내 역할을 알리고 대기실 상태를 서버에서 새로 받아 온다.
@@ -104,10 +107,13 @@ func _refresh() -> void:
 	var me := multiplayer.get_unique_id()
 	var my_slot := Lobby.slot_of(me)
 	_my_panel = panels[my_slot] if my_slot >= 0 and my_slot < panels.size() else null
+	# 관전자에게는 조작할 것이 하나도 없다 — 잠근 버튼을 남기지 않고 치운다 (이슈 #184).
+	var observing := Lobby.my_role == Lobby.ROLE_OBSERVER
 
 	for slot in panels.size():
 		var panel: Control = panels[slot]
 		panel.set_interactive(panel == _my_panel)
+		panel.set_display_only(observing)
 		# 내 패널은 내가 조작 중이므로 덮어쓰지 않는다
 		if panel == _my_panel:
 			continue
@@ -115,9 +121,14 @@ func _refresh() -> void:
 			panel.apply_config(Lobby.config_for(Lobby.order[slot]))
 
 	# 내 자리가 없으면(관전자·정보 대기 중) 맵 화살표도 잠근다 — 눌러도 서버가 버린다.
+	# 관전자는 영영 자리가 없으므로 잠그는 대신 아예 치운다.
 	var can_pick := my_slot >= 0
 	$LeftArrow.disabled = not can_pick
 	$RightArrow.disabled = not can_pick
+	$LeftArrow.visible = not observing
+	$RightArrow.visible = not observing
+	# 준비 버튼도 관전자에게는 누를 일이 없다. 문구는 상태 줄이 대신 알려준다.
+	go_button.visible = not observing
 
 	_refresh_maps()
 	_refresh_weapons()
@@ -264,8 +275,10 @@ func _on_match_starting() -> void:
 	get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 
+## 접속이 끊겼다. 방을 옮기는 중이면 그쪽(room_switcher.gd)이 화면을 옮기므로 손대지 않는다 —
+## 두 곳에서 씬을 갈아치우면 어느 쪽이 이길지 알 수 없다.
 func _on_disconnected(_reason: String) -> void:
-	if not is_inside_tree():
+	if not is_inside_tree() or $RoomSwitcher.is_switching():
 		return
 	get_tree().change_scene_to_file("res://scenes/title.tscn")
 

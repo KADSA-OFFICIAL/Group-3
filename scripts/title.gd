@@ -7,11 +7,6 @@ extends Control
 ##
 ## 방 목록은 Network.ROOMS 가 유일한 출처다. 버튼 글자도 거기서 가져온다.
 
-## 접속 대기 한계 시간(초).
-## 방이 꽉 차면 ENet 이 조용히 거절해서 connection_failed 조차 오지 않는다.
-## 그래서 직접 시간을 재지 않으면 "접속 중..." 에서 영원히 멈춘다.
-const JOIN_TIMEOUT_SEC := 8.0
-
 ## 관전 빌드 표시 색 (ui_theme.tres 의 진한 라벤더). 크림 배경 위에서 4.2:1 이다.
 const OBSERVER_COLOR := Color(0.42, 0.45, 0.82)
 
@@ -41,7 +36,9 @@ func _ready() -> void:
 		return
 
 	address_edit.text = Network.DEFAULT_ADDRESS
-	status_label.text = ""
+	# 앞 화면에서 접속이 끊겨 여기로 밀려 왔으면 사유를 보여준다 (이슈 #184) —
+	# 관전자가 방을 옮기다 실패하면 화면이 바뀐 뒤에 알려줄 수밖에 없다.
+	status_label.text = Network.take_last_failure()
 	start_button.pressed.connect(_on_start_pressed)
 	address_edit.text_submitted.connect(_on_address_submitted)
 	Network.join_succeeded.connect(_on_join_succeeded)
@@ -143,7 +140,7 @@ func _on_start_pressed() -> void:
 		_on_join_failed("주소가 올바르지 않습니다: %s" % address)
 		return
 
-	_join_timer.start(JOIN_TIMEOUT_SEC)
+	_join_timer.start(Network.JOIN_TIMEOUT_SEC)
 
 
 ## 방이 꽉 찼을 때 ENet 은 아무 신호 없이 거절한다. 그 경우가 여기로 온다.
