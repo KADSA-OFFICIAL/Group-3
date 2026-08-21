@@ -1,5 +1,6 @@
 extends Control
-## 타이틀 겸 접속 화면. **방을 고르고** 서버 주소를 입력해 접속한다.
+## 타이틀 겸 접속 화면. **방만 고르고 접속한다** — 서버 주소는 코드가 정하고(이슈 #198)
+## 이 화면은 붙을 주소를 글자로 보여주기만 한다.
 ## 헤드리스(서버)로 실행된 경우에는 UI 없이 바로 전투 화면으로 넘어간다.
 ##
 ## **역할은 여기서 고르지 않는다**(이슈 #180) — 관전 전용 빌드로 실행하면 관전, 아니면
@@ -10,7 +11,8 @@ extends Control
 ## 관전 빌드 표시 색 (ui_theme.tres 의 진한 라벤더). 크림 배경 위에서 4.2:1 이다.
 const OBSERVER_COLOR := Color(0.42, 0.45, 0.82)
 
-@onready var address_edit: LineEdit = $AddressEdit
+## 붙을 서버 주소를 보여주는 라벨. **입력칸이 아니다** — 주소는 코드가 정한다(이슈 #198).
+@onready var address_value: Label = $AddressValue
 @onready var status_label: Label = $StatusLabel
 @onready var start_button: Button = $StartButton
 @onready var sub_label: Label = $SubLabel
@@ -35,14 +37,15 @@ func _ready() -> void:
 		get_tree().change_scene_to_file.call_deferred("res://scenes/main.tscn")
 		return
 
-	# 지난번에 접속에 성공한 주소를 채워 둔다 (이슈 #195). 없으면 로컬 기본값이다 —
-	# 실제 서버 주소는 저장소가 공개라 코드에 적지 않고 기기에만 남긴다.
-	address_edit.text = Network.remembered_address()
+	# 붙을 주소를 보여주기만 한다 (이슈 #198). 서버가 하나뿐이라 고를 것이 없고,
+	# 기본값이 아니면(개발용 인자·기기 예외) 그 사실이 보이게 적어 준다.
+	address_value.text = Network.configured_address()
+	if not Network.using_default_address():
+		address_value.text += "  (예외 설정)"
 	# 앞 화면에서 접속이 끊겨 여기로 밀려 왔으면 사유를 보여준다 (이슈 #184) —
 	# 관전자가 방을 옮기다 실패하면 화면이 바뀐 뒤에 알려줄 수밖에 없다.
 	status_label.text = Network.take_last_failure()
 	start_button.pressed.connect(_on_start_pressed)
-	address_edit.text_submitted.connect(_on_address_submitted)
 	Network.join_succeeded.connect(_on_join_succeeded)
 	Network.join_failed.connect(_on_join_failed)
 
@@ -100,7 +103,6 @@ func _selected_port() -> int:
 
 func _set_inputs_enabled(flag: bool) -> void:
 	start_button.disabled = not flag
-	address_edit.editable = flag
 	for button in room_buttons:
 		button.disabled = not flag
 
@@ -109,26 +111,15 @@ func _role_text() -> String:
 	return "관전으로" if Lobby.my_role == Lobby.ROLE_OBSERVER else "플레이어로"
 
 
-func _on_address_submitted(_text: String) -> void:
-	_on_start_pressed()
-
-
 func _on_start_pressed() -> void:
 	if _joining:
 		return
 
-	var address := address_edit.text.strip_edges()
+	var address := Network.configured_address()
 	var target_port := _selected_port()
 
-	# "192.168.0.5:7778" 처럼 포트를 직접 적으면 고른 방보다 그쪽을 우선한다.
-	if address.contains(":"):
-		var parts := address.split(":", false, 1)
-		address = parts[0].strip_edges()
-		if parts.size() > 1 and parts[1].strip_edges().is_valid_int():
-			target_port = int(parts[1])
-
 	if address.is_empty():
-		status_label.text = "서버 주소를 입력하세요."
+		status_label.text = "서버 주소가 비어 있습니다 — 설정을 확인하세요."
 		return
 
 	status_label.text = "%s (%s:%d) 로 %s 접속 중..." % [
