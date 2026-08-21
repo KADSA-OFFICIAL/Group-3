@@ -329,6 +329,9 @@ func _receive_match_result(winner_peer: int) -> void:
 func _play_result(is_winner: bool, character_id: String, title_override := "") -> void:
 	_kill_result_tweens()
 	result_jelly.character_id = character_id
+	# 전투 화면에 누워 있던/서 있던 포즈를 결과 화면도 그대로 이어받는다 (#178).
+	# 관전자는 이긴 쪽 기준(is_winner = true)이므로 승리 포즈를 본다.
+	result_jelly.pose = Characters.POSE_WIN if is_winner else Characters.POSE_LOSE
 	result_score.text = _final_score_text()
 	_reset_result_visuals()
 
