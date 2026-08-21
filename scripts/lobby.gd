@@ -180,6 +180,20 @@ func weapon_of(peer_id: int) -> String:
 var viewers: Array = []
 
 
+## 이 피어에게 전투 노드를 보여줄 것인가. **`MultiplayerSynchronizer` 가시성 필터로 쓴다**
+## (이슈 #182) — 플레이어·투사체의 `Sync` 노드에 서버가 이 함수를 걸어 둔다.
+##
+## 가시성으로 거르면 두 가지가 같이 해결된다.
+## 1. 대기실에 앉아 있는 피어에게 스폰이 가지 않는다 — 그쪽에는 씬이 없어 오류만 쌓였다.
+## 2. **뒤늦게 viewer 가 된 피어에게 그때 스폰이 나간다** — 경기 도중에 들어온 관전자가
+##    이미 스폰된 플레이어를 받는 유일한 경로다.
+##
+## 필터는 **거부권만** 있고 허용을 주지 못한다. `public_visibility` 를 끄면 필터가 참이어도
+## 아무에게도 안 보인다(이슈 #167에서 투사체가 통째로 사라진 원인이다) — 켜 둔 채로 걸 것.
+func can_view(peer_id: int) -> bool:
+	return viewers.has(peer_id)
+
+
 ## 전투 화면 준비를 알린 피어를 등록한다 (main.gd 가 부른다).
 func server_add_viewer(peer_id: int) -> void:
 	if not multiplayer.is_server() or viewers.has(peer_id):
@@ -239,6 +253,12 @@ func _receive_role(role: String) -> void:
 	else:
 		# 이미 등록된 피어의 되풀이 요청 — 상태만 다시 보낸다.
 		_send_state_to(sender)
+
+	# 경기 중에 들어온 **관전자만** 전투 화면으로 따로 보낸다 (이슈 #182).
+	# 위에서 상태(맵 이름 포함)를 먼저 보냈으므로 순서가 맞다 — 반대면 맵 없이 씬을 연다.
+	# 플레이어는 끼어들지 않는다. 경기 도중에 자리를 받았으면 다음 경기를 기다린다.
+	if in_match and observers.has(sender):
+		_begin_match.rpc_id(sender)
 
 
 ## 플레이어였던 피어가 관전으로 바꿀 때 자리를 비운다.
@@ -348,6 +368,10 @@ func _pick_map() -> String:
 
 
 func _check_start() -> void:
+	# 이미 경기 중이면 새로 시작하지 않는다 (이슈 #182). 경기 도중에 빈 자리를 받은
+	# 클라이언트가 준비를 누르면 진행 중인 경기 위에 또 시작해 버린다.
+	if in_match:
+		return
 	if order.size() < 2:
 		return
 	for peer_id in order:

@@ -140,6 +140,9 @@ func _ready() -> void:
 		# 스폰 직후 바로 맞지 않도록 잠깐 무적을 준다.
 		var grace := _now() + Combat.ROUND_START_GRACE
 		_invuln_until = {"basic": grace, "special": grace}
+		# 전투 화면에 있는 피어에게만 보인다 (이슈 #182). 이 필터가 스폰 전달까지 정하므로
+		# 경기 도중에 들어온 관전자는 viewer 가 되는 순간 이 젤리를 받는다.
+		$Sync.add_visibility_filter(Lobby.can_view)
 	_update_weapon_shape()
 
 

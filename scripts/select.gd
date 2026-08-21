@@ -6,6 +6,7 @@ extends Control
 ##
 ## **관전자도 이 화면을 쓴다**(이슈 #167). 자기 패널이 없으니 전부 잠기고, 두 플레이어가
 ## 준비하면 같은 `match_starting` 지시를 받아 함께 전투 화면으로 들어간다.
+## 경기 중에 들어온 관전자는 이 화면을 스치고 바로 그 경기로 들어간다(이슈 #182).
 
 ## 대기실 정보를 다시 청하는 간격(초). 내 자리를 받을 때까지 반복한다.
 const SYNC_RETRY_SEC := 1.0
@@ -181,6 +182,14 @@ func _update_status() -> void:
 		go_button.text = "준비"
 		return
 
+	# 경기 도중에 빈 자리를 받았다 — 끼어들지 않고 기다린다 (이슈 #182).
+	# 서버도 `in_match` 동안에는 새 경기를 시작하지 않으므로 버튼을 켜 두면 헛누름이 된다.
+	if Lobby.in_match:
+		status_label.text = "경기가 진행 중입니다. 끝나면 시작할 수 있어요.%s" % _observer_suffix()
+		go_button.disabled = true
+		go_button.text = "준비"
+		return
+
 	if Lobby.order.size() < 2:
 		status_label.text = "상대 대기 중...%s" % _observer_suffix()
 		go_button.disabled = true
@@ -202,11 +211,12 @@ func _update_status() -> void:
 	]
 
 
-## 관전자에게 보여줄 안내. 경기 중에 들어왔으면 다음 경기를 기다려야 한다는 것을 알린다
-## (경기 도중 난입은 이슈 #167의 non-goal이라 여기서 기다리는 것이 정상 동작이다).
+## 관전자에게 보여줄 안내. 관전자는 이 화면에서 기다리기만 하므로 무엇을 기다리는지 적는다 —
+## 플레이어가 덜 왔는지, 준비를 안 했는지, 경기 중이라 들어가는 중인지.
 func _observer_status() -> String:
 	if Lobby.in_match:
-		return "관전 중 — 경기가 진행 중입니다. 다음 경기부터 볼 수 있어요."
+		# 서버가 곧 이 피어를 전투 화면으로 보낸다 (이슈 #182) — 잠깐 스치는 문구다.
+		return "관전 중 — 진행 중인 경기로 들어갑니다..."
 	if Lobby.order.size() < Network.MAX_PLAYERS:
 		return "관전 중 — 플레이어를 기다립니다. (%d/%d)" % [
 			Lobby.order.size(), Network.MAX_PLAYERS,
