@@ -32,6 +32,13 @@ const MAX_CLIENTS := MAX_PLAYERS + MAX_OBSERVERS
 ## 로컬 테스트용 기본값. 실제 서버 주소는 접속 화면에서 입력한다.
 const DEFAULT_ADDRESS := "127.0.0.1"
 
+## 마지막으로 접속에 성공한 주소를 적어 두는 파일 (이슈 #195).
+##
+## **주소를 코드에 박지 않는 규칙을 지키면서** 매번 손으로 입력하는 불편을 없애는 방법이다 —
+## `user://` 는 실행 파일 밖(윈도우에서는 `%APPDATA%/Godot/app_userdata/Jelly Wars/`)이라
+## 저장소에도 배포본에도 들어가지 않고, 기기마다 다른 주소를 쓸 수 있다.
+const CLIENT_CONFIG_PATH := "user://client.cfg"
+
 ## 접속 대기 한계 시간(초).
 ## **방이 꽉 차면 ENet 이 조용히 거절해서 `connection_failed` 조차 오지 않는다.**
 ## 그래서 직접 시간을 재지 않으면 "접속 중..." 에서 영원히 멈춘다.
@@ -132,6 +139,31 @@ func switch_room(target_port: int) -> Error:
 	return join_server(address, target_port)
 
 
+## 이 기기가 마지막으로 접속에 성공한 주소. 없으면 로컬 기본값 (이슈 #195).
+## 접속 화면이 이 값으로 주소 칸을 채운다.
+func remembered_address() -> String:
+	var config := ConfigFile.new()
+	if config.load(CLIENT_CONFIG_PATH) != OK:
+		return DEFAULT_ADDRESS
+	# ConfigFile 이 주는 값은 Variant 라 명시 타입으로 받는다.
+	var saved: String = config.get_value("server", "address", DEFAULT_ADDRESS)
+	saved = saved.strip_edges()
+	return saved if not saved.is_empty() else DEFAULT_ADDRESS
+
+
+## 접속에 성공한 주소만 적어 둔다 — **실패한 주소로 덮어쓰면 다음 실행이 망가진다.**
+## 그래서 부르는 곳은 `_on_connected_to_server()` 한 곳뿐이다.
+func _remember_address(address: String) -> void:
+	if address.strip_edges().is_empty():
+		return
+	var config := ConfigFile.new()
+	# 이미 있는 파일이면 다른 값을 지우지 않도록 먼저 읽는다.
+	config.load(CLIENT_CONFIG_PATH)
+	config.set_value("server", "address", address)
+	if config.save(CLIENT_CONFIG_PATH) != OK:
+		push_warning("서버 주소를 기억하지 못했습니다: %s" % CLIENT_CONFIG_PATH)
+
+
 ## 접속 실패 사유를 꺼내고 비운다. 두 번 읽어도 같은 사유가 또 뜨지 않게 한다.
 func take_last_failure() -> String:
 	var reason := last_failure
@@ -155,6 +187,8 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 
 func _on_connected_to_server() -> void:
+	# 여기까지 왔으면 그 주소가 실제로 통한 주소다 (이슈 #195).
+	_remember_address(last_address)
 	join_succeeded.emit()
 
 

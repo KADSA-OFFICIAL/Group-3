@@ -7,7 +7,7 @@
 2기기 **1 VS 1 온라인 대전** 액션, **Godot 4.6 (GL Compatibility)**. 3조(스틱매너) 개발기획서 기반. `project.godot`의 `config/name`은 "Jelly Wars", 메인 씬은 `scenes/title.tscn`.
 기획 핵심 루프(무기 선택 → 맵 → 전투 → 3점 선취 승리)가 **전부 돈다.**
 
-2026-07-28에 한 기기 2인 로컬에서 온라인 구조로 전환 중이다(로드맵 이슈 #32). 전용 헤드리스 서버가 권위를 갖고, 클라이언트 2대가 Tailscale로 접속한다. 서버 주소는 **저장소가 공개이므로 코드에 적지 않는다** — 접속 화면에서 입력받고 커밋되는 기본값은 `127.0.0.1`이다.
+2026-07-28에 한 기기 2인 로컬에서 온라인 구조로 전환 중이다(로드맵 이슈 #32). 전용 헤드리스 서버가 권위를 갖고, 클라이언트 2대가 Tailscale로 접속한다. 서버 주소는 **저장소가 공개이므로 코드에 적지 않는다** — 접속 화면에서 입력받고 커밋되는 기본값은 `127.0.0.1`이다. 매번 입력하는 불편은 **기기별 저장**으로 푼다(이슈 #195): 접속에 성공한 주소를 `user://client.cfg`에 적어 두고 다음 실행 때 칸에 채운다. 주소를 코드·저장소 파일에 넣어 달라는 요청이 오면 이 규칙을 먼저 알리고 그 방법을 제안할 것.
 
 **접속에는 역할이 있다 — 플레이어와 관전**(이슈 #167). 방 하나에 플레이어 2명(`Network.MAX_PLAYERS`)과 관전자 4명(`MAX_OBSERVERS`)이 들어가고, ENet 정원은 둘을 합한 `MAX_CLIENTS`(6)다. 관전자는 플레이어 자리를 차지하지 않고 스폰도 받지 않으며 입력도 보내지 않는다 — 대기실과 전투 화면을 **읽기 전용**으로 본다. 접속만으로는 자리가 생기지 않고 역할을 신고해야 한다(`Lobby.submit_role()`).
 
@@ -46,6 +46,7 @@ title(방과 역할을 고르고 서버 주소를 입력해 `StartButton`으로 
   - 이 둘의 서버 판정은 `multiplayer.is_server()`가 아니라 **`Network.is_server`로 한다** — 접속이 끊기면 peer가 없어 내 id가 1이 되므로 클라이언트가 자기를 서버로 착각한다.
 - `scripts/game_state.gd` = 오토로드 싱글턴 `GameState`: 화면 간 선택 정보 전달. `CHARACTERS`(`Characters.names()` 5종 — 사본을 두지 않고 캐릭터 표에서 만든다), `WEAPONS`("랜덤" + `Weapons.names()` 17종 — 마찬가지), `MAPS`("랜덤" + `Maps.names()` 4종 — 마찬가지), `p1_config`/`p2_config`(weapon·character), `map_name`, `get_config(prefix)`.
 - `scenes/title.tscn` + `scripts/title.gd` = 타이틀 겸 접속 화면. `AddressEdit`(기본 `127.0.0.1`)·`RoomBox`(방 선택)·`StartButton`("접속")·`StatusLabel`(접속 중/실패 표시). 접속 성공 시 select로 전환한다. 좌우 `JellyLeft`/`JellyRight`는 미리보기 장식.
+  - **주소 칸은 `Network.remembered_address()`로 채운다**(이슈 #195) — 접속에 **성공한** 주소를 `user://client.cfg`에 적어 두고 다음 실행 때 꺼내 쓴다. **주소를 코드에 박지 않는 규칙을 지키면서** 매번 입력하는 불편을 없애는 방법이다: `user://`는 기기별 폴더(`%APPDATA%`)라 저장소에도 배포본에도 안 들어간다. 실패한 주소는 저장하지 않는다 — 오타 한 번이 다음 실행까지 망치면 안 된다.
   - **접속 실패 사유는 `Network.take_last_failure()`로 받아 온다**(이슈 #184) — 전투 화면에서 방을 옮기다 실패하면 화면이 바뀐 뒤에 알려줄 수밖에 없어서, 실패 사유를 오토로드에 남기고 이 화면이 한 번 읽고 비운다.
   - **방 버튼은 씬에 박아 두지 않고 `Network.ROOMS` 개수만큼 만든다**(이슈 #90). `RoomBox`(HBoxContainer) 아래 `RoomButton` 하나가 첫 방이자 나머지의 원본이고, `_setup_room_buttons()`가 `duplicate()`로 복제한다 — 스타일과 `ButtonGroup`이 그대로 딸려 오므로 라디오 동작과 모양이 자동으로 맞는다. 버튼은 `size_flags_horizontal = 3`이라 방이 몇 개든 같은 폭에 균등하게 나뉜다.
   - **관전 빌드로 실행하면 화면이 그 사실을 알린다**(`_mark_observer_build()`, 이슈 #180) — 부제가 `JELLY WARS — 관전 모드`(진한 라벤더), 버튼이 `관전으로 접속`, 창 제목이 `젤리 워즈 — 관전`으로 바뀐다. 실행 파일이 둘인데 겉모습이 같으면 어느 쪽을 켰는지 알 수 없다.

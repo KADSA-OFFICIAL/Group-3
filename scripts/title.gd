@@ -35,7 +35,9 @@ func _ready() -> void:
 		get_tree().change_scene_to_file.call_deferred("res://scenes/main.tscn")
 		return
 
-	address_edit.text = Network.DEFAULT_ADDRESS
+	# 지난번에 접속에 성공한 주소를 채워 둔다 (이슈 #195). 없으면 로컬 기본값이다 —
+	# 실제 서버 주소는 저장소가 공개라 코드에 적지 않고 기기에만 남긴다.
+	address_edit.text = Network.remembered_address()
 	# 앞 화면에서 접속이 끊겨 여기로 밀려 왔으면 사유를 보여준다 (이슈 #184) —
 	# 관전자가 방을 옮기다 실패하면 화면이 바뀐 뒤에 알려줄 수밖에 없다.
 	status_label.text = Network.take_last_failure()
