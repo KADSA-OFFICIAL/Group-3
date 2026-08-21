@@ -3,13 +3,19 @@
 `scripts/characters.gd`의 `Characters.LIST`가 이 폴더에서 파일을 찾는다.
 파일 이름은 표의 `file` 값과 정확히 같아야 한다.
 
-| 파일 | 캐릭터 |
-| --- | --- |
-| `bear_pink.png` | 분홍 |
-| `bear_blue.png` | 파랑 |
-| `bear_green.png` | 초록 |
-| `bear_yellow.png` | 노랑 |
-| `bear_red.png` | 빨강 |
+캐릭터마다 **포즈 3장**이다 — 평소(`file`), 승리(`win_file`), 패배(`lose_file`).
+
+| 캐릭터 | 평소 | 승리 | 패배 |
+| --- | --- | --- | --- |
+| 분홍 | `bear_pink.png` | `bear_pink_win.png` | `bear_pink_lose.png` |
+| 파랑 | `bear_blue.png` | `bear_blue_win.png` | `bear_blue_lose.png` |
+| 초록 | `bear_green.png` | `bear_green_win.png` | `bear_green_lose.png` |
+| 노랑 | `bear_yellow.png` | `bear_yellow_win.png` | `bear_yellow_lose.png` |
+| 빨강 | `bear_red.png` | `bear_red_win.png` | `bear_red_lose.png` |
+
+승리·패배 그림은 **전투 화면에서만** 쓴다 — 한쪽이 죽는 순간 죽은 젤리는 패배 포즈,
+점수를 얻은 젤리는 승리 포즈가 되고 다음 라운드가 시작되면 둘 다 평소로 돌아온다.
+대기실·타이틀 미리보기와 결과 화면은 평소 그림을 쓴다.
 
 ## 지켜야 할 것
 
@@ -17,6 +23,11 @@
 - 캐릭터가 정면을 보는 그림 하나면 된다. 왼쪽을 볼 때는 코드가 좌우로 뒤집는다.
 - 캔버스 크기와 여백은 맞추지 않아도 된다. `Characters.content_rect()`가 투명 여백을 뺀
   실제 그림 영역을 재서 발을 땅에 맞추고 대기실 미리보기를 채운다.
+- 포즈 그림도 **여백을 뺀 높이**가 `BODY_HEIGHT`에 맞춰지므로, 눕는 포즈처럼 세로가 짧은
+  그림은 그만큼 가로로 커진다(패배 포즈는 화면에서 79x72px, 평소는 40~49x72px).
+  땀방울·효과선까지 여백 계산에 들어가니 젤리 몸통 위로 너무 높게 그리지 않는다 —
+  선이 길수록 그 아래 몸통이 작아진다.
+- 승리·패배 그림이 없어도 게임은 돈다 — 없는 포즈는 조용히 평소 그림으로 되돌아간다.
 
 화면에 그려지는 크기는 `Player.BODY_HEIGHT`(현재 72px)이며, 이 값은 여백이 아니라
 **실제로 보이는 캐릭터의 높이**다. 충돌 상자는 48x56으로 그림보다 조금 작다.
