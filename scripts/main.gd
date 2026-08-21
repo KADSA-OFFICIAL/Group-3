@@ -199,6 +199,10 @@ func _on_player_died(peer_id: int) -> void:
 		_broadcast_round("")
 		return
 
+	# 이긴 쪽만 여기서 포즈를 갈아 준다 (#176) — 죽은 쪽은 _check_death()가 이미
+	# 모든 피어에서 패배 포즈를 걸었다. 다음 라운드가 시작되면 둘 다 평소로 돌아온다.
+	scorer.server_set_pose(Characters.POSE_WIN)
+
 	var id := scorer.owner_peer_id
 	scores[id] = int(scores.get(id, 0)) + 1
 
