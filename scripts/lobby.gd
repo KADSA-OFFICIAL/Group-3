@@ -4,9 +4,10 @@ extends Node
 ## 클라이언트는 자기 선택과 준비 여부만 서버로 보내고, 서버가 전체 상태를
 ## 정리해 양쪽에 복제한다. 무기 "랜덤" 확정도 서버가 해야 양쪽이 같은 값을 갖는다.
 ##
-## **역할(플레이어·관전)도 여기가 정한다**(이슈 #167). 접속만으로는 자리가 생기지 않고,
+## **역할(플레이어·관전) 배정도 여기가 한다**(이슈 #167). 접속만으로는 자리가 생기지 않고,
 ## 클라이언트가 `submit_role()` 로 알려야 서버가 order(플레이어) 또는 observers(관전)에 넣는다.
 ## 정원이 차면 배정하지 않고 사유를 돌려준다 — 조용히 잠기는 상태를 만들지 않기 위해서다.
+## 어느 역할로 신고할지는 **실행 파일이 정한다**(`is_observer_build()`, 이슈 #180).
 ##
 ## 무기 **동작**은 여기서 다루지 않는다 — 무기 id 문자열을 전달하는 것까지가 범위다.
 
@@ -42,14 +43,33 @@ var map_name := DEFAULT_MAP
 ## "다음 경기부터 볼 수 있다"고 안내받는다 (경기 도중 난입은 이슈 #167의 non-goal).
 var in_match := false
 
-## 내가 원하는 역할 (**클라이언트 쪽 의사**). 접속 화면에서 정하고 접속 후 서버에 알린다.
+## 이 기기의 역할 (**클라이언트 쪽 의사**). 접속 후 서버에 알린다.
 ## 실제 배정 결과는 order·observers 로 확인한다 — 서버가 정원을 보고 거절할 수 있다.
-## reset() 은 이 값을 지우지 않는다: 대기실 상태는 서버에서 다시 받지만 내 선택은 내 것이다.
+##
+## **고르는 값이 아니라 실행 파일이 정하는 값이다**(이슈 #180) — `_ready()`에서 한 번 정해지고
+## 그 뒤로 바뀌지 않는다. reset() 도 이 값을 지우지 않는다.
 var my_role := ROLE_PLAYER
 
 
 func _ready() -> void:
+	# 관전 빌드는 관전으로만 접속한다. 화면에 고르는 곳이 없다.
+	my_role = ROLE_OBSERVER if is_observer_build() else ROLE_PLAYER
 	Network.peer_left.connect(_on_peer_left)
+
+
+## 이 실행 파일이 관전 전용 빌드인가 (이슈 #180).
+##
+## 관전 빌드는 export 프리셋에 `observer` 기능 태그가 박혀 있다 — 실행 파일을 나누면
+## 기기마다 역할을 고르는 절차가 없어지고 잘못 고를 일도 없다. 만드는 방법은 docs/build.md.
+##
+## `--observe` 인자도 같은 효과를 낸다. 빌드 없이(에디터·헤드리스) 관전을 확인할 길이
+## 필요해서다 — 검증용 계측이 아니라 정식 경로다.
+func is_observer_build() -> bool:
+	if OS.has_feature("observer"):
+		return true
+	var args := OS.get_cmdline_args()
+	args.append_array(OS.get_cmdline_user_args())
+	return "--observe" in args
 
 
 func default_config(slot: int) -> Dictionary:

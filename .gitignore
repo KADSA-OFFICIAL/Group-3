@@ -2,12 +2,15 @@
 .godot/
 /android/
 
-# 내보낸 실행 파일
+# 내보낸 실행 파일 (산출물이므로 커밋하지 않는다)
 export.cfg
-export_presets.cfg
 build/
 *.exe
 *.pck
+
+# export_presets.cfg 는 **산출물이 아니라 빌드 방법**이라 커밋한다 (이슈 #180).
+# 플레이어용·관전용 두 프리셋이 여기 들어 있고, 빠지면 사람마다 빌드가 달라진다.
+# 서명 키·비밀번호를 넣게 되면 그때는 다시 빼야 한다.
 
 # 개인 로컬 설정 (컴퓨터마다 다름)
 .claude/settings.local.json

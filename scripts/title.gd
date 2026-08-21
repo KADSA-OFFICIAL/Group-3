@@ -1,7 +1,9 @@
 extends Control
-## 타이틀 겸 접속 화면. **방과 역할을 고르고** 서버 주소를 입력해 접속한다.
-## 역할은 플레이어(싸운다)와 관전(본다) 둘이고, 관전자는 플레이어 자리를 차지하지 않는다.
+## 타이틀 겸 접속 화면. **방을 고르고** 서버 주소를 입력해 접속한다.
 ## 헤드리스(서버)로 실행된 경우에는 UI 없이 바로 전투 화면으로 넘어간다.
+##
+## **역할은 여기서 고르지 않는다**(이슈 #180) — 관전 전용 빌드로 실행하면 관전, 아니면
+## 플레이어다. 관전 빌드에서는 이 화면이 그 사실을 보여주기만 한다.
 ##
 ## 방 목록은 Network.ROOMS 가 유일한 출처다. 버튼 글자도 거기서 가져온다.
 
@@ -10,14 +12,16 @@ extends Control
 ## 그래서 직접 시간을 재지 않으면 "접속 중..." 에서 영원히 멈춘다.
 const JOIN_TIMEOUT_SEC := 8.0
 
+## 관전 빌드 표시 색 (ui_theme.tres 의 진한 라벤더). 크림 배경 위에서 4.2:1 이다.
+const OBSERVER_COLOR := Color(0.42, 0.45, 0.82)
+
 @onready var address_edit: LineEdit = $AddressEdit
 @onready var status_label: Label = $StatusLabel
 @onready var start_button: Button = $StartButton
+@onready var sub_label: Label = $SubLabel
 @onready var room_box: HBoxContainer = $RoomBox
 ## 씬에 놓인 방 버튼 1개. 나머지 방 버튼은 이걸 복제해서 만든다.
 @onready var room_button_template: Button = $RoomBox/RoomButton
-@onready var player_button: Button = $RoleBox/PlayerButton
-@onready var observer_button: Button = $RoleBox/ObserverButton
 
 ## 방 버튼들 (Network.ROOMS 와 같은 순서). _setup_room_buttons() 에서 채운다.
 var room_buttons: Array[Button] = []
@@ -50,23 +54,21 @@ func _ready() -> void:
 	add_child(_join_timer)
 
 	_setup_room_buttons()
-	_setup_role_buttons()
+	_mark_observer_build()
 
 
-## 역할 버튼. 고른 값은 Lobby.my_role 에 담아 두고 접속 직후 서버에 알린다 (이슈 #167).
-## 관전자는 플레이어 자리를 차지하지 않고 대기실·경기를 보기만 한다.
-func _setup_role_buttons() -> void:
-	# 오토로드에 남아 있는 지난 선택을 그대로 보여준다 — 관전하다 타이틀로 나온 뒤
-	# 다시 접속할 때 매번 고르지 않아도 된다.
-	observer_button.button_pressed = Lobby.my_role == Lobby.ROLE_OBSERVER
-	player_button.button_pressed = not observer_button.button_pressed
-	player_button.pressed.connect(_on_role_selected.bind(Lobby.ROLE_PLAYER))
-	observer_button.pressed.connect(_on_role_selected.bind(Lobby.ROLE_OBSERVER))
-
-
-func _on_role_selected(role: String) -> void:
-	Lobby.my_role = role
-	status_label.text = ""
+## 관전 빌드임을 화면에 알린다 (이슈 #180).
+##
+## 실행 파일이 두 개(플레이어·관전)이므로 **어느 쪽을 켰는지 화면에서 알 수 있어야 한다** —
+## 겉모습이 똑같으면 관전 기기로 플레이어를 하려다 "자리가 꽉 찼습니다"를 보고 헤맨다.
+## 창 제목도 바꿔서 작업 표시줄에서 구분되게 한다.
+func _mark_observer_build() -> void:
+	if Lobby.my_role != Lobby.ROLE_OBSERVER:
+		return
+	sub_label.text = "JELLY WARS  —  관전 모드"
+	sub_label.add_theme_color_override("font_color", OBSERVER_COLOR)
+	start_button.text = "관전으로 접속"
+	DisplayServer.window_set_title("젤리 워즈 — 관전")
 
 
 ## 방 버튼을 Network.ROOMS 개수만큼 만든다 — 목록에 줄을 추가하면 버튼도 같이 늘어난다.
@@ -102,8 +104,6 @@ func _set_inputs_enabled(flag: bool) -> void:
 	address_edit.editable = flag
 	for button in room_buttons:
 		button.disabled = not flag
-	player_button.disabled = not flag
-	observer_button.disabled = not flag
 
 
 func _role_text() -> String:

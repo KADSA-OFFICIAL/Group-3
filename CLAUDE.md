@@ -9,7 +9,9 @@
 
 2026-07-28에 한 기기 2인 로컬에서 온라인 구조로 전환 중이다(로드맵 이슈 #32). 전용 헤드리스 서버가 권위를 갖고, 클라이언트 2대가 Tailscale로 접속한다. 서버 주소는 **저장소가 공개이므로 코드에 적지 않는다** — 접속 화면에서 입력받고 커밋되는 기본값은 `127.0.0.1`이다.
 
-**접속에는 역할이 있다 — 플레이어와 관전**(이슈 #167). 방 하나에 플레이어 2명(`Network.MAX_PLAYERS`)과 관전자 4명(`MAX_OBSERVERS`)이 들어가고, ENet 정원은 둘을 합한 `MAX_CLIENTS`(6)다. 관전자는 플레이어 자리를 차지하지 않고 스폰도 받지 않으며 입력도 보내지 않는다 — 대기실과 전투 화면을 **읽기 전용**으로 본다. 역할은 접속 화면에서 고르고, 접속만으로는 자리가 생기지 않는다(`Lobby.submit_role()`).
+**접속에는 역할이 있다 — 플레이어와 관전**(이슈 #167). 방 하나에 플레이어 2명(`Network.MAX_PLAYERS`)과 관전자 4명(`MAX_OBSERVERS`)이 들어가고, ENet 정원은 둘을 합한 `MAX_CLIENTS`(6)다. 관전자는 플레이어 자리를 차지하지 않고 스폰도 받지 않으며 입력도 보내지 않는다 — 대기실과 전투 화면을 **읽기 전용**으로 본다. 접속만으로는 자리가 생기지 않고 역할을 신고해야 한다(`Lobby.submit_role()`).
+
+**역할은 화면에서 고르는 것이 아니라 실행 파일이 정한다**(이슈 #180). `export_presets.cfg`에 프리셋이 둘 있고 관전 쪽에만 기능 태그 `observer`가 박혀 있어, `Lobby.is_observer_build()`가 그것을 보고 `my_role`을 한 번 정한 뒤 바뀌지 않는다. 빌드 없이 확인할 때는 `--observe` 인자가 같은 효과를 낸다(정식 경로다 — 헤드리스 검증도 이걸 쓴다). 빌드·배포 방법은 `docs/build.md`. **접속 화면에 역할 버튼을 되살리지 말 것** — 기기마다 고르게 하면 잘못 골라서 "상대가 안 보인다"·"자리가 꽉 찼다"로 헤매게 된다.
 
 **방 하나 = 포트 하나 = 서버 프로세스 하나**다(이슈 #89). 방 2개를 쓰려면 `--port=`를 달리해 서버를 두 번 띄운다. 방끼리 완전히 독립적이고 한 방이 죽어도 다른 방은 멀쩡하다. 실행 명령·방화벽·문제 해결은 `docs/server.md`에 있다.
 
@@ -36,9 +38,9 @@ title(방과 역할을 고르고 서버 주소를 입력해 `StartButton`으로 
   - `reset()`은 클라이언트가 들고 있던 상태를 버린다. 옛 접속의 `order`가 남으면 새 접속에서 **"2명이 있는데 그중에 나는 없는"** 상태가 되고, 이건 화면상 정상과 구별되지 않는다.
   - 이 둘의 서버 판정은 `multiplayer.is_server()`가 아니라 **`Network.is_server`로 한다** — 접속이 끊기면 peer가 없어 내 id가 1이 되므로 클라이언트가 자기를 서버로 착각한다.
 - `scripts/game_state.gd` = 오토로드 싱글턴 `GameState`: 화면 간 선택 정보 전달. `CHARACTERS`(`Characters.names()` 5종 — 사본을 두지 않고 캐릭터 표에서 만든다), `WEAPONS`("랜덤" + `Weapons.names()` 17종 — 마찬가지), `MAPS`("랜덤" + `Maps.names()` 4종 — 마찬가지), `p1_config`/`p2_config`(weapon·character), `map_name`, `get_config(prefix)`.
-- `scenes/title.tscn` + `scripts/title.gd` = 타이틀 겸 접속 화면. `AddressEdit`(기본 `127.0.0.1`)·`RoomBox`(방 선택)·`RoleBox`(역할 선택 — `PlayerButton`·`ObserverButton`, 고른 값은 `Lobby.my_role`에 담긴다)·`StartButton`("접속")·`StatusLabel`(접속 중/실패 표시). 접속 성공 시 select로 전환한다. 좌우 `JellyLeft`/`JellyRight`는 미리보기 장식.
+- `scenes/title.tscn` + `scripts/title.gd` = 타이틀 겸 접속 화면. `AddressEdit`(기본 `127.0.0.1`)·`RoomBox`(방 선택)·`StartButton`("접속")·`StatusLabel`(접속 중/실패 표시). 접속 성공 시 select로 전환한다. 좌우 `JellyLeft`/`JellyRight`는 미리보기 장식.
   - **방 버튼은 씬에 박아 두지 않고 `Network.ROOMS` 개수만큼 만든다**(이슈 #90). `RoomBox`(HBoxContainer) 아래 `RoomButton` 하나가 첫 방이자 나머지의 원본이고, `_setup_room_buttons()`가 `duplicate()`로 복제한다 — 스타일과 `ButtonGroup`이 그대로 딸려 오므로 라디오 동작과 모양이 자동으로 맞는다. 버튼은 `size_flags_horizontal = 3`이라 방이 몇 개든 같은 폭에 균등하게 나뉜다.
-  - **역할 버튼은 방 버튼과 색으로 구분한다**(이슈 #167) — 방은 진한 핑크, 역할은 진한 라벤더가 선택 색이다. 두 줄이 똑같이 생기면 방을 고른 것과 역할을 고른 것이 헷갈린다. 고른 역할은 오토로드에 남아 다음 접속에도 유지된다.
+  - **관전 빌드로 실행하면 화면이 그 사실을 알린다**(`_mark_observer_build()`, 이슈 #180) — 부제가 `JELLY WARS — 관전 모드`(진한 라벤더), 버튼이 `관전으로 접속`, 창 제목이 `젤리 워즈 — 관전`으로 바뀐다. 실행 파일이 둘인데 겉모습이 같으면 어느 쪽을 켰는지 알 수 없다.
   - `AddressEdit`에 `주소:포트`로 적으면 고른 방보다 그쪽을 우선한다.
   - **방이 꽉 차면 ENet이 거절 신호를 보내지 않고 조용히 무시한다** — `connection_failed`조차 오지 않아 "접속 중..."에서 영원히 멈춘다. 그래서 `JOIN_TIMEOUT_SEC`(8초) 타이머로 직접 실패 처리한다. 이 타이머를 지우면 증상이 되살아난다.
 - `scenes/select.tscn` + `scripts/select.gd` = 대기실 겸 무기 선택. `P1Panel`/`P2Panel`은 흰 카드(`Card`) 위에 얹히며 `Lobby.order` 슬롯에 대응하고 **자기 슬롯만 조작 가능**하고 상대 패널은 서버가 보낸 값을 표시만 한다. `StatusLabel`에 "상대 대기 중" 또는 양쪽 준비 상태, `GoButton`은 준비 토글. **씬 전환은 클라이언트가 스스로 하지 않고 `Lobby.match_starting`(서버 지시)을 받아서 한다.** 좌우 화살표는 **자기 맵 선택만** 바꾼다(`Lobby.submit_map()`) — `MapBox`에 양쪽 선택이 나란히 보이고, 실제로 쓸 맵은 시작할 때 서버가 둘 중 하나를 뽑는다. 그 아래 `WeaponBox`에 양쪽이 고른 무기 그림과 이름이 나란히 보인다.
@@ -127,7 +129,7 @@ title(방과 역할을 고르고 서버 주소를 입력해 `StartButton`으로 
   `--check-only --script`는 오토로드를 안 올려서 `Lobby` 같은 식별자를 못 찾는다고 헛짚으니 쓰지 말 것.
 - 그래도 **화면으로 봐야 아는 것**(색·배치·발판 높이·조작감)은 사용자 F5 확인이 필요하다. 헤드리스 실행은 오류 유무만 알려준다.
 - `_ready()`에서 `change_scene_to_file()`을 바로 부르면 "Parent node is busy" 오류가 난다 — `call_deferred`로 미룬다.
-- 배포본(export)이 아직 없고 `export_presets.cfg`도 없다. 유저 실행용 빌드는 별도 이슈로 진행 예정.
+- **`export_presets.cfg`에 프리셋이 둘 있다**(플레이어·관전, 이슈 #180) — 산출물이 아니라 빌드 방법이므로 `.gitignore`에서 빼서 커밋한다. 다만 **이 개발 환경에는 export 템플릿이 없어 실제 `.exe`를 만들 수 없다**(`~/AppData/Roaming/Godot/export_templates/`가 비어 있다). 프리셋이 파싱되는지는 `--export-release`가 "템플릿 없음"까지 가는 것으로 확인하고, 빌드는 사용자가 에디터에서 한다. 방법은 `docs/build.md`.
 - `README.md`는 프로젝트와 무관한 외부 유저가 보는 문서다 — 폴더 구조, 확장 가이드, 엔진 실행·검증 방법을 넣지 않는다(이슈 #4·#8·#11). 개발자용 정보는 이 파일과 `docs/`에 둔다. 현재 README에는 리셋과 함께 폴더 구조·실행 방법이 다시 들어가 있어 정리가 필요하다.
 - **표(`Weapons.LIST`·`Characters.LIST`·`Maps.LIST`)에서 꺼낸 값은 `Variant`다.** `var path := DIR + dict.get("file", "")`처럼 `:=`로 받으면 타입 추론이 실패해 **스크립트가 파싱되지 않고 게임이 아예 뜨지 않는다**(이슈 #66). 반드시 `var file: String = ...`처럼 명시 타입으로 받는다. 정적 검증이 잡아내지 못하는 종류라 표를 다루는 코드를 쓸 때마다 확인한다.
 - .gd 스크립트를 새로 만들면 사용자 에디터가 .uid 파일을 생성한다 — 발견 시 해당 이슈 브랜치에 커밋한다.
