@@ -83,6 +83,9 @@ var banner := ""
 ## 현재 깔린 맵 지형과 그 즉사 구역 (물·용암). 없는 맵이면 _hazard가 null이다.
 var _map: Node2D = null
 var _hazard: Area2D = null
+## 지금 깔린 맵의 이름. **전용 서버가 맵을 갈아야 하는지 판단하는 데 쓴다** —
+## 클라이언트는 경기마다 씬을 새로 열어 `_ready()`에서 한 번만 깔므로 볼 일이 없다.
+var _loaded_map := ""
 
 ## 결과 화면(승리·패배 연출)에서 도는 트윈. 화면을 접을 때 전부 끊는다.
 var _result_tweens: Array[Tween] = []
@@ -111,7 +114,6 @@ const LOSE_COLOR := Color(0.72, 0.70, 0.80)
 
 
 func _ready() -> void:
-	$UI/HUD/MapCard/MapLabel.text = "맵: " + Lobby.map_name
 	# 지형은 모든 피어에서 똑같이 깔려야 한다 — 스폰보다 먼저 붙인다.
 	# 서버가 대기실에서 "랜덤"을 확정해 두므로 양쪽이 같은 맵을 받는다.
 	_load_map(Lobby.map_name)
@@ -130,11 +132,34 @@ func _ready() -> void:
 
 	if multiplayer.is_server():
 		Network.peer_left.connect(_on_peer_left)
+		# 전용 서버는 이 씬을 벗어나지 않으므로 _ready()에서 깐 맵이 계속 남는다 —
+		# 경기가 시작될 때 확정된 맵으로 갈아 주는 곳이 필요하다.
+		Lobby.lobby_changed.connect(_on_lobby_changed)
 	else:
 		# 씬이 준비된 뒤에 서버에 알린다. 접속 직후 바로 스폰하면
 		# 클라이언트가 아직 이 씬을 로드하기 전이라 스폰을 놓칠 수 있다.
 		_notify_ready.rpc_id(1)
 		_setup_observer_view()
+
+
+## 대기실 상태가 바뀌었다 (**서버 전용**). 확정된 맵이 지금 깔린 것과 다르면 갈아 준다.
+##
+## **전용 서버는 전투 화면을 벗어나지 않는다.** `_ready()`는 서버가 켜질 때 딱 한 번 돌고,
+## 그때 `Lobby.map_name`은 아직 대기실 기본값인 `"랜덤"`이다 — `Maps.scene()`은 목록에
+## 없는 이름을 받으면 폴백으로 첫 맵(평지)을 주므로 **서버에는 평지가 깔린다.**
+## 클라이언트는 경기마다 씬을 새로 열어 확정된 맵을 받지만 서버는 그러지 않으므로,
+## 여기서 갈아 주지 않으면 어떤 맵을 골라도 **서버의 충돌 지형은 영원히 평지**다.
+##
+## 그게 곧 게임 지형이다 — 이동·접지·낙사 판정이 전부 서버에서 난다(`player.gd`의
+## `apply_movement()`·`main.gd`의 `_check_falls()`). 클라이언트는 서버가 보낸 위치로
+## 보간만 하므로, 바다의 발판도 용암의 `Hazard`도 서버에 없으면 없는 것이 된다.
+##
+## `map_name`은 서버의 `Lobby._check_start()`에서만 바뀌고 그 직후 `_broadcast()`가
+## 이 신호를 낸다 — 경기 시작 때 한 번 갈리고 경기 중에는 갈리지 않는다.
+func _on_lobby_changed() -> void:
+	if not multiplayer.is_server() or Lobby.map_name == _loaded_map:
+		return
+	_load_map(Lobby.map_name)
 
 
 ## 관전자 화면. 조작할 것이 없으니 조작 안내를 나가는 방법으로 바꿔 준다 (이슈 #167).
@@ -673,10 +698,20 @@ func _final_score_text() -> String:
 # ─────────────────────────── 맵 ───────────────────────────
 
 ## 맵 지형을 MapRoot 아래에 붙인다. 모든 피어에서 호출된다.
+## **서버에서는 경기마다 다시 불린다**(`_on_lobby_changed`) — 클라이언트는 씬을 새로 열어
+## `_ready()`에서 한 번만 부른다. 그래서 두 번째 호출이 깨끗해야 한다.
 func _load_map(map_name: String) -> void:
+	# 갈아 줄 때 무엇이 깔렸는지 기억한다. 폴백으로 다른 맵이 깔려도 **요청한 이름**을
+	# 적어 둔다 — 판단 기준이 `Lobby.map_name`과의 비교이므로 같은 값이어야 한다.
+	_loaded_map = map_name
+	$UI/HUD/MapCard/MapLabel.text = "맵: " + map_name
 	for child in map_root.get_children():
+		# queue_free()는 프레임 끝에야 노드를 뗀다. 그때까지 옛 지형의 충돌 몸체가
+		# 물리 공간에 남아 **새 맵과 겹친 채로 한 프레임이 돈다** — 먼저 떼어 낸다.
+		map_root.remove_child(child)
 		child.queue_free()
 	_map = null
+	_hazard = null
 	var scene := Maps.scene(map_name)
 	if scene == null:
 		push_error("맵 씬을 찾지 못했습니다: %s" % map_name)
