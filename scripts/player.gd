@@ -16,6 +16,9 @@ signal died(peer_id: int)
 ## 서버에서만 발생한다. 이 플레이어가 특수 공격(Shift)을 요청했다.
 ## long_press는 LONG_PRESS_TIME 이상 눌렀는지 (방패의 짧게/길게 구분용).
 signal special_requested(peer_id: int, long_press: bool)
+## 서버에서만 발생한다. 강제 낙하(양날 도끼)가 땅에 닿았다 — 인자는 떨어진 자리 (#167).
+## 그 주변을 때리는 판정은 main.gd 가 한다.
+signal landed_forced(peer_id: int, at: Vector2)
 
 ## 이 플레이어를 조작하는 클라이언트의 peer id. 스폰할 때 서버가 정한다.
 @export var owner_peer_id := 0
@@ -51,6 +54,13 @@ const WEAPON_MAX_WIDTH := 80.0
 const WEAPON_OFFSET_X := 26.0
 ## 무기 그림의 세로 중심. 몸 한가운데쯤이다.
 const WEAPON_CENTER_Y := -8.0
+## 사거리 버프로 그림이 늘어나는 속도(초당 배율). 장대는 1.0 → 1.6이므로 약 0.15초에 다 뻗는다.
+## 특수를 쓴 것이 보일 만큼 빠르고, 뻗는 동작이 눈에 남을 만큼은 느리다.
+const ART_STRETCH_SPEED := 4.0
+## 길이가 늘어날 때 **굵기**가 함께 붇는 비율. 0이면 굵기 그대로, 1.0이면 길이와 같은 배율.
+## 길이만 늘리면 늘어난 봉이 실처럼 가늘어 보이므로 굵기도 조금 따라가게 한다.
+## 0.5면 길이 1.6배일 때 굵기 1.3배다 — 장대가 6px → 8px 굵어진다.
+const ART_THICKEN_SHARE := 0.5
 
 ## 관통(광선검 특수) 중임을 알리는 빛. 광선검 날에 맞춘 민트빛이다.
 const PIERCE_COLOR := Color(0.55, 0.95, 0.85)
@@ -59,6 +69,11 @@ const PIERCE_TINT := Color(0.8, 1.5, 1.35)
 ## 빛무리 크기와 그 중심(몸 한가운데). 몸이 48x72라 이 정도면 몸을 감싼다.
 const PIERCE_AURA_RADIUS := 58.0
 const PIERCE_AURA_CENTER := Vector2(0.0, -8.0)
+
+## 평소와 다른 그림을 든 동안 무기에서 피어오르는 연기 색 (빨간 표창·빨간 도끼).
+## 무기 표에 `smoke_puffs`가 있는 무기에만 뜬다. 두 빨간 그림의 붉은색에 맞췄다 —
+## 손에 든 것과 연기가 다른 색이면 무엇에서 나는지 안 읽힌다.
+const SPECIAL_SMOKE_COLOR := Color(0.82, 0.13, 0.11)
 ## 넉백 직후 좌우 입력이 속도를 덮어쓰지 못하는 시간.
 ##
 ## 서버가 매 프레임 velocity.x를 입력값으로 덮어쓰기 때문에, 이 잠금이 없으면
@@ -75,9 +90,10 @@ var facing := 1
 var gauge := 0.0
 ## 특수 공격을 쓸 수 있는가. 서버가 쿨타임을 재고 이 값만 내려준다 (무기 도형 색에 쓴다).
 var special_ready := true
-## 강제 이동 상태. ""이면 평소, "dash"(전기톱) / "rise"·"fall"(양날 도끼).
+## 강제 이동 상태. ""이면 평소, "dash"(전기톱) / "rise"·"hover"·"fall"(양날 도끼).
 var forced_mode := ""
-## 다음에 던질 것이 **강화** 폭탄인가 (#134).
+## 다음에 던질 것이 **강화**인가 (#134). 폭탄(데미지·넉백 증가)과 표창(빨간 표창,
+## 위치 교환)이 이 값을 쓴다 — 무엇으로 바뀌는지는 무기 표의 `empowered_*`가 정한다.
 ##
 ## 던지는 순간에 뽑으면 손에 들고 보여줄 수가 없어서, 서버가 미리 뽑아 복제한다.
 ## 첫 스폰값은 스폰 데이터로 들어오고(`main.gd._spawn_player`), 그 뒤로는
@@ -113,6 +129,19 @@ var _body_base_scale := Vector2.ONE
 var _body_offset_unit := Vector2.ZERO
 ## 무기 그림의 여백 보정. 그림이 없는 무기면 쓰이지 않는다.
 var _weapon_offset := Vector2.ZERO
+## 무기 그림의 기본 배율과 그렇게 그렸을 때의 세로 길이(px). `_apply_weapon()`이 정한다.
+## 장대 특수에서 그림을 늘일 때 여기서 다시 계산한다 — 누적을 막기 위한 기준값이다.
+var _weapon_art_factor := 1.0
+var _weapon_art_length := 0.0
+## 배율을 곱하기 **전**의 여백 보정과 원화 길이. 눕혀 드는 무기(장대)가 쓴다 —
+## 회전하는 그림은 보정을 `position`이 아니라 `Sprite2D.offset`으로 해야 하고,
+## offset은 배율·회전이 나중에 걸리므로 곱하기 전 값이어야 한다.
+var _weapon_content_offset := Vector2.ZERO
+var _weapon_content_length := 0.0
+## 원화를 눕혀 바라보는 쪽으로 뻗어 드는가 (장대). 기본은 세워 드는 것이다.
+var _weapon_art_forward := false
+## 지금 그림이 늘어난 정도(1.0이면 평소). 목표값으로 부드럽게 따라간다.
+var _weapon_art_stretch := 1.0
 ## 이 무기에 그림이 있는가. 없으면 지금까지처럼 임시 막대로 그린다.
 var _weapon_has_art := false
 ## 이 무기의 원화가 왼쪽을 보고 그려졌는가. 그렇다면 뒤집는 조건이 반대가 된다 (#109).
@@ -136,7 +165,7 @@ func _ready() -> void:
 		# 스폰 직후 바로 맞지 않도록 잠깐 무적을 준다.
 		var grace := _now() + Combat.ROUND_START_GRACE
 		_invuln_until = {"basic": grace, "special": grace}
-	_update_weapon_shape()
+	_update_weapon_shape(0.0)
 
 
 ## 이 기기가 조작하는 플레이어인지.
@@ -160,7 +189,7 @@ func read_input() -> Dictionary:
 func apply_movement(input: Dictionary, delta: float) -> void:
 	# 강제 이동 중에는 조작이 전부 불가하다. 동작이 끝날 때까지 몸이 알아서 움직인다.
 	if forced_mode != "":
-		_apply_forced(delta)
+		_apply_forced(input, delta)
 		return
 
 	# 기절·사망 중에도 조작 불가. 중력만 계속 받는다.
@@ -193,7 +222,15 @@ func apply_movement(input: Dictionary, delta: float) -> void:
 
 
 ## 강제 이동. 서버에서만 호출된다.
-func _apply_forced(delta: float) -> void:
+##
+## 무기 표에 `special_air_control`이 있으면 **공중에 뜬 동안 좌우 입력을 받는다**
+## (양날 도끼, #167). 상승 0.25초 + 정점 0.2초 + 낙하로 1초 가까이 조작이 잠기는데
+## 그동안 상대는 걸어서 낙하 지점을 벗어난다 — 쿨타임 9초로 가장 긴 기술이 "쓰면 거의
+## 빗나가는" 것이 되어 있었다.
+##
+## **돌진("dash")은 일부러 제외한다** — 바라보는 쪽으로 내지르는 기술이라 도중에 꺾이면
+## 다른 기술이 된다. 그래서 조종은 무기 표가 허락한 무기에만 붙는다.
+func _apply_forced(input: Dictionary, delta: float) -> void:
 	match forced_mode:
 		"dash":
 			velocity.x = facing * FORCED_SPEED
@@ -205,16 +242,52 @@ func _apply_forced(delta: float) -> void:
 				server_end_forced()
 		"rise":
 			velocity.y = -FORCED_SPEED
+			_steer(input)
 			move_and_slide()
-			# 올라가는 힘이 다하면 낙하로 넘어간다.
+			# 올라가는 힘이 다하면 정점에 잠깐 머문 뒤 낙하로 넘어간다.
+			# 머무는 시간은 무기 표가 정한다 — 0이면 지금까지처럼 곧바로 떨어진다.
+			if _now() >= _forced_deadline:
+				var hover: float = Weapons.get_weapon(weapon_id).get("hover_time", 0.0)
+				if hover > 0.0:
+					_receive_forced.rpc("hover", hover)
+				else:
+					_receive_forced.rpc("fall", 0.0)
+		"hover":
+			# 정점에서 멈춘다. **속도를 0으로 덮으므로 중력을 받지 않는다** —
+			# 안 그러면 머무는 시간 동안 스르르 떨어져서 "멈췄다"로 안 보인다.
+			# 좌우 조종은 그 뒤에 얹는다 — 정점에서 자리를 고칠 수 있어야 조종이 의미가 있다.
+			velocity = Vector2.ZERO
+			_steer(input)
+			move_and_slide()
 			if _now() >= _forced_deadline:
 				_receive_forced.rpc("fall", 0.0)
 		"fall":
 			velocity.x = 0.0
+			_steer(input)
 			velocity.y = FORCED_SPEED
 			move_and_slide()
 			if is_on_floor():
+				# 착지 판정은 여기서 하지 않는다 (#167) — "어디에 떨어졌다"만 알리고
+				# 누구를 때리는지는 main.gd 가 정한다(전투 판정의 주인은 거기다).
+				if multiplayer.is_server():
+					landed_forced.emit(owner_peer_id, global_position)
 				server_end_forced()
+
+
+## 공중 조종 (#167). 무기 표가 허락한 무기만 좌우 입력으로 가로 속도를 잡는다.
+## 허락하지 않으면 아무것도 건드리지 않아 지금까지의 궤도가 그대로다.
+##
+## 입력이 없으면 가로 속도를 0으로 둔다 — 뜨기 직전에 달리던 속도가 남아 있으면
+## 조종하지 않았는데도 옆으로 흐른다.
+func _steer(input: Dictionary) -> void:
+	if not Weapons.get_weapon(weapon_id).get("special_air_control", false):
+		return
+	var direction: float = input["direction"]
+	if direction == 0.0:
+		velocity.x = 0.0
+		return
+	facing = 1 if direction > 0.0 else -1
+	velocity.x = direction * SPEED
 
 
 ## 캐릭터 그림을 붙이고 크기·위치를 맞춘다.
@@ -273,16 +346,33 @@ func _update_squash(grounded: bool, delta: float) -> void:
 	_place_body()
 
 
-## 손에 들 무기 그림 (#134).
+## 평소와 다른 그림을 들어야 하는 상태면 그 **파일 이름**, 아니면 빈 문자열 (#134).
 ##
-## 강화가 준비된 폭탄은 강화 그림을 든다 — 무기 표에 `empowered_file`이 있고
-## 서버가 미리 뽑아 둔 값이 true 일 때만이다. 그림이 없으면 평소 것으로 돌아간다.
-func _weapon_texture() -> Texture2D:
+## 계기가 둘이고 무기마다 하나만 쓴다:
+##   `empowered_file` — 서버가 미리 뽑아 둔 강화 (폭탄의 강화 폭탄, 표창의 빨간 표창)
+##   `ready_file`     — 특수 쿨타임이 끝나 쓸 수 있는 상태 (양날 도끼의 빨간 도끼)
+##
+## 뽑기가 없는 무기는 `empowered_ready`가 항상 false이고, `ready_file`이 없는 무기는
+## `special_ready`가 켜져 있어도 빈 문자열이 나온다 — 그래서 둘을 순서대로 봐도 섞이지 않는다.
+##
+## 그림 자체가 아니라 이름을 돌려주는 것은 연기(`_update_weapon_smoke`)도 같은 판단을
+## 써야 하기 때문이다. 두 곳에서 조건을 각자 쓰면 그림과 연기가 어긋난다.
+func _highlight_file() -> String:
+	var data := Weapons.get_weapon(weapon_id)
 	if empowered_ready:
-		var file: String = Weapons.get_weapon(weapon_id).get("empowered_file", "")
-		var empowered := Weapons.texture_file(file)
-		if empowered != null:
-			return empowered
+		return data.get("empowered_file", "")
+	if special_ready:
+		return data.get("ready_file", "")
+	return ""
+
+
+## 손에 들 무기 그림. 특별한 상태의 그림이 있으면 그것을, 없으면 평소 것을 든다.
+func _weapon_texture() -> Texture2D:
+	var file := _highlight_file()
+	if not file.is_empty():
+		var highlight := Weapons.texture_file(file)
+		if highlight != null:
+			return highlight
 	return Weapons.texture(weapon_id)
 
 
@@ -307,12 +397,20 @@ func _apply_weapon() -> void:
 	# 검처럼 가늘고 긴 무기를 기준으로 잡은 것이고, 가로 제한은 세로로 긴 것을 못 잡듯
 	# 정사각에 가까운 것도 못 잡는다. 그런 무기만 표에서 배율을 더 준다.
 	factor *= Weapons.art_scale(weapon_id)
+	# 배율과 그려지는 길이를 들고 있는다 — `_update_weapon_shape()`가 매 프레임 여기에
+	# 늘어난 정도를 곱해 쓴다(장대 특수). 거기서 `sprite.scale`을 곱셈으로 누적하면
+	# 프레임마다 커져서 화면을 덮으므로, 항상 이 기준값에서 다시 계산해야 한다.
+	_weapon_art_factor = factor
+	_weapon_art_length = content.size.y * factor
+	_weapon_art_forward = Weapons.get_weapon(weapon_id).get("art_held_forward", false)
 	sprite.scale = Vector2.ONE * factor
 	# 캐릭터와 마찬가지로 여백을 뺀 실제 그림의 가운데를 기준으로 놓는다.
-	_weapon_offset = Vector2(
-		(texture_size.x * 0.5 - content.position.x - content.size.x * 0.5) * factor,
-		(texture_size.y * 0.5 - content.position.y - content.size.y * 0.5) * factor,
+	_weapon_content_offset = Vector2(
+		texture_size.x * 0.5 - content.position.x - content.size.x * 0.5,
+		texture_size.y * 0.5 - content.position.y - content.size.y * 0.5,
 	)
+	_weapon_content_length = content.size.y
+	_weapon_offset = _weapon_content_offset * factor
 
 
 ## 관통 빛은 매 프레임 모양이 바뀌니 켜져 있는 동안 계속 다시 그린다.
@@ -345,9 +443,75 @@ func _draw() -> void:
 		Color(PIERCE_COLOR, 0.95 * pulse), 3.5, true)
 
 
+## 평소와 다른 그림을 든 동안 무기에서 피어오르는 연기 (빨간 표창·빨간 도끼).
+##
+## **켜는 조건은 `_highlight_file()` 하나로 맞춘다** — 그림이 바뀌는 순간에 연기도 같이
+## 나야 하고, 조건을 두 곳에 따로 쓰면 어긋난다. 덩어리 수는 무기 표의 `smoke_puffs`다
+## (표창 5, 양날 도끼 9 — 센 무기일수록 크게 경고한다).
+##
+## 계기가 되는 `empowered_ready`·`special_ready` 둘 다 RPC로 복제되므로 두 화면에 똑같이
+## 뜬다 — 젤리 찌그러짐처럼 각 피어가 복제된 값으로 알아서 그린다.
+##
+## 연기는 무기 그림 자리에서 난다. 여백 보정(`_weapon_offset`)까지 맞추지는 않는다 —
+## 그림이 없는 무기에도 붙을 수 있어야 하고, 몇 px 차이는 연기에서 보이지 않는다.
+func _update_weapon_smoke() -> void:
+	var smoke: WeaponSmoke = $Smoke
+	var puffs: int = Weapons.get_weapon(weapon_id).get("smoke_puffs", 0)
+	var wants := alive and puffs > 0 and not _highlight_file().is_empty()
+	smoke.visible = wants
+	if not wants:
+		return
+	smoke.puff_count = puffs
+	smoke.color = SPECIAL_SMOKE_COLOR
+	smoke.position = Vector2(facing * WEAPON_OFFSET_X, WEAPON_CENTER_Y)
+
+
+## 원화를 눕혀 **바라보는 쪽으로 뻗어** 놓는다 (장대, `art_held_forward`).
+##
+## 사거리 판정은 가로 방향이고(`current_reach()`), 그림이 없던 동안 이 자리를 채웠던
+## 임시 막대도 몸 가운데에서 앞으로 뻗는 가로 막대였다. 세워 들면 늘어나는 방향이
+## 판정 방향과 어긋나서, 길어져도 "앞이 길어졌다"로 읽히지 않는다.
+##
+## **여백 보정을 `position`이 아니라 `Sprite2D.offset`으로 한다** — offset은 회전·배율이
+## 나중에 걸리는 값이라 눕힌 뒤에도 보정이 그림과 같이 돈다. position으로 하면 90도
+## 어긋난 방향으로 밀린다 (projectile.gd가 회전하는 탄에서 같은 이유로 offset을 쓴다).
+##
+## 뒤쪽 끝(주황 구슬)을 몸 가운데에 붙이고 앞으로만 뻗게 하려고 offset을 원화 길이의
+## 절반만큼 더 올린다. 그러면 원점이 뒤쪽 끝이 되어 **늘어날 때 앞으로만 자란다** —
+## 세워 드는 쪽에서 필요했던 위치 보정이 여기서는 필요 없다.
+func _place_forward_weapon(sprite: Sprite2D) -> void:
+	sprite.flip_h = false
+	# 화면 좌표는 y가 아래라 +90도가 위(원화의 날 끝)를 오른쪽으로 보낸다.
+	sprite.rotation = PI * 0.5 * facing
+	sprite.offset = Vector2(
+		_weapon_content_offset.x,
+		_weapon_content_offset.y - _weapon_content_length * 0.5,
+	)
+	sprite.position = Vector2(0.0, WEAPON_CENTER_Y)
+
+
+## 사거리 버프를 그림 길이로 옮긴다 (장대 특수).
+##
+## **무기 표가 허락한 무기만 늘어난다**(`art_grows_with_reach`). 사거리 버프는 다른 무기도
+## 받을 수 있으므로 조건 없이 늘리면 검이 고무처럼 자란다.
+##
+## 목표값으로 툭 바뀌지 않고 부드럽게 따라간다 — 한 프레임에 1.6배가 되면 길어진 것이
+## 아니라 다른 무기로 바뀐 것처럼 보인다. 목표는 복제된 `_reach_multiplier`에서 나오므로
+## 두 화면이 같은 길이로 모인다(가는 도중 몇 프레임 차이는 판정과 무관하다).
+##
+## `reach_multiplier`(표에 적힌 무기 고유 사거리)가 아니라 **버프 배율**을 쓴다.
+## 표의 값은 평소에도 걸려 있어서, 그걸 쓰면 특수를 쓰지 않았는데도 늘어난 채로 있다.
+func _art_stretch(delta: float) -> float:
+	var target := 1.0
+	if Weapons.get_weapon(weapon_id).get("art_grows_with_reach", false):
+		target = _reach_multiplier
+	_weapon_art_stretch = move_toward(_weapon_art_stretch, target, ART_STRETCH_SPEED * delta)
+	return _weapon_art_stretch
+
+
 ## 무기 표시. 그림이 있으면 그림을, 없으면 지금까지의 임시 막대를 쓴다.
 ## 어느 쪽이든 특수 공격 쿨타임 상태를 밝기·색으로 보여준다 (별도 UI 없음).
-func _update_weapon_shape() -> void:
+func _update_weapon_shape(delta: float) -> void:
 	var shape: ColorRect = $WeaponShape
 	var sprite: Sprite2D = $WeaponSprite
 	if Weapons.get_weapon(weapon_id).is_empty():
@@ -358,16 +522,33 @@ func _update_weapon_shape() -> void:
 	if _weapon_has_art:
 		shape.hide()
 		sprite.show()
-		# 원화는 오른쪽 보기가 기본이라 왼쪽을 볼 때 뒤집는다. 다만 왼쪽을 보고 그려진
-		# 원화(전기톱)는 조건이 정반대다 — 안 그러면 톱날이 등 뒤로 간다 (#109).
-		# 뒤집으면 그림이 스프라이트 중심을 기준으로 반전되므로 여백 보정도 반대로 간다.
-		var flipped := (facing < 0) != _weapon_faces_left
-		sprite.flip_h = flipped
-		var offset_x := -_weapon_offset.x if flipped else _weapon_offset.x
-		sprite.position = Vector2(
-			facing * WEAPON_OFFSET_X + offset_x,
-			WEAPON_CENTER_Y + _weapon_offset.y,
-		)
+		# 사거리가 늘어난 만큼 그림을 늘인다 (장대 특수). **길이와 굵기를 같은 배율로
+		# 늘리지 않는다** — 봉이 길어지는 것이 요점이므로 굵기는 `ART_THICKEN_SHARE`만큼만
+		# 따라간다. 길이만 늘리면 늘어난 봉이 실처럼 가늘어 보이고, 같이 늘리면
+		# 길어진 것이 아니라 무기가 통째로 커진 것으로 보인다.
+		var stretch := _art_stretch(delta)
+		var thicken := 1.0 + (stretch - 1.0) * ART_THICKEN_SHARE
+		sprite.scale = Vector2(_weapon_art_factor * thicken, _weapon_art_factor * stretch)
+		if _weapon_art_forward:
+			_place_forward_weapon(sprite)
+		else:
+			# 원화는 오른쪽 보기가 기본이라 왼쪽을 볼 때 뒤집는다. 다만 왼쪽을 보고 그려진
+			# 원화(전기톱)는 조건이 정반대다 — 안 그러면 톱날이 등 뒤로 간다 (#109).
+			# 뒤집으면 그림이 스프라이트 중심을 기준으로 반전되므로 여백 보정도 반대로 간다.
+			var flipped := (facing < 0) != _weapon_faces_left
+			sprite.flip_h = flipped
+			sprite.rotation = 0.0
+			sprite.offset = Vector2.ZERO
+			# 여백 보정도 굵어진 배율을 따라간다 — 안 그러면 굵어질 때 그림이 옆으로 밀린다.
+			var corrected := _weapon_offset.x * thicken
+			var offset_x := -corrected if flipped else corrected
+			# 늘어난 길이의 절반만큼 위로 올려 손에 쥔 아래쪽 끝을 제자리에 둔다.
+			# Sprite2D는 자기 위치를 가운데로 두고 커지므로, 안 올리면 아래로도 자란다.
+			sprite.position = Vector2(
+				facing * WEAPON_OFFSET_X + offset_x,
+				WEAPON_CENTER_Y + _weapon_offset.y * stretch
+					- _weapon_art_length * (stretch - 1.0) * 0.5,
+			)
 		if is_piercing():
 			sprite.modulate = PIERCE_TINT              # 관통 중 — 날이 타오른다
 		elif not can_act():
@@ -421,7 +602,8 @@ func _physics_process(delta: float) -> void:
 
 	_expire_buffs()
 	_update_pierce_aura()
-	_update_weapon_shape()
+	_update_weapon_shape(delta)
+	_update_weapon_smoke()
 	# 바라보는 방향으로 그림을 뒤집는다. facing은 서버가 정해 양쪽에 복제된다.
 	# 여백 보정의 부호는 _place_body()가 flip_h를 보고 맞춘다.
 	$Body.flip_h = facing < 0
@@ -594,6 +776,26 @@ func server_reset(spawn_position: Vector2, spawn_facing: int) -> void:
 	_receive_reset.rpc(spawn_position, spawn_facing)
 
 
+## 순간이동 (빨간 표창의 1P·2P 위치 교환).
+##
+## **`_receive_state`(unreliable)로는 안 된다.** 그쪽은 클라이언트가 `_target_position`을
+## 향해 부드럽게 따라가는 값이라, 화면 반대편으로 던져 넣으면 젤리가 맵을 가로질러
+## **미끄러져 간다.** 라운드 초기화(`_receive_reset`)와 같이 위치와 목표를 함께 박아야
+## 그 자리에서 사라졌다 나타난다.
+##
+## 속도는 건드리지 않는다 — 뛰던 사람은 뛰던 기세 그대로 상대 자리에 선다.
+func server_teleport(to: Vector2) -> void:
+	if not multiplayer.is_server():
+		return
+	_receive_teleport.rpc(to)
+
+
+@rpc("authority", "call_local", "reliable")
+func _receive_teleport(to: Vector2) -> void:
+	global_position = to
+	_target_position = to
+
+
 ## 사거리·크기·관통 버프.
 func server_apply_buff(kind: String, value: float, duration: float) -> void:
 	if not multiplayer.is_server():
@@ -618,7 +820,8 @@ func server_set_gauge(value: float) -> void:
 	_receive_gauge.rpc(value)
 
 
-## 특수 공격 쿨타임 상태. 무기 도형 색에 쓴다.
+## 특수 공격 쿨타임 상태. 무기 도형 색에 쓰고, `ready_file`이 있는 무기(양날 도끼)는
+## 이 값으로 손에 든 **그림 자체**가 바뀐다 — `_receive_special_ready()` 참고.
 func server_set_special_ready(value: bool) -> void:
 	if not multiplayer.is_server() or special_ready == value:
 		return
@@ -707,6 +910,9 @@ func _receive_reset(spawn_position: Vector2, spawn_facing: int) -> void:
 	_reach_until = 0.0
 	_size_multiplier = 1.0
 	_size_until = 0.0
+	# 늘어난 그림도 바로 되돌린다. 안 되돌리면 다음 라운드 시작 순간에 장대가
+	# 늘어난 채로 나타나서 0.15초 동안 줄어드는 것이 보인다.
+	_weapon_art_stretch = 1.0
 	_forced_deadline = 0.0
 	_knockback_until = 0.0
 
@@ -720,7 +926,12 @@ func _receive_reset(spawn_position: Vector2, spawn_facing: int) -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _receive_special_ready(value: bool) -> void:
+	if special_ready == value:
+		return
 	special_ready = value
+	# 쿨타임이 계기인 그림(양날 도끼의 빨간 도끼)은 여기서 갈아 끼워야 한다 (`ready_file`).
+	# `_update_weapon_shape()`가 매 프레임 손보는 것은 밝기·색뿐이고 텍스처는 아니다.
+	_apply_weapon()
 
 
 @rpc("authority", "call_local", "reliable")
