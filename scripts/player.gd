@@ -146,6 +146,9 @@ var _weapon_content_length := 0.0
 var _weapon_art_forward := false
 ## 지금 그림이 늘어난 정도(1.0이면 평소). 목표값으로 부드럽게 따라간다.
 var _weapon_art_stretch := 1.0
+## 지금 그림이 커진 정도(1.0이면 평소). 위의 늘어난 정도와 곱해서 쓴다 — 방패는 이쪽만,
+## 장대는 저쪽만 1.0이 아니라서 둘이 겹치는 무기는 아직 없다.
+var _weapon_art_growth := 1.0
 ## 이 무기에 그림이 있는가. 없으면 지금까지처럼 임시 막대로 그린다.
 var _weapon_has_art := false
 ## 이 무기의 원화가 왼쪽을 보고 그려졌는가. 그렇다면 뒤집는 조건이 반대가 된다 (#109).
@@ -519,6 +522,29 @@ func _art_stretch(delta: float) -> float:
 	return _weapon_art_stretch
 
 
+## 크기 버프를 그림 크기로 옮긴다 (방패 특수).
+##
+## `_art_stretch()`와 짜임이 같고 다른 점만 둘이다. 첫째로 **가로세로를 함께** 키운다 —
+## 특수가 "크기 증가"라서 한쪽만 늘리면 방패가 찌그러진 것으로 보인다. 둘째로 보는 값이
+## `_size_multiplier`다.
+##
+## **무기 표가 허락한 무기만 커진다**(`art_grows_with_size`). 크기 버프는 이론상 다른
+## 무기도 받을 수 있어서, 조건 없이 키우면 방패 아닌 무기가 같이 부푼다.
+##
+## 그림이 없는 무기는 임시 막대의 **두께**가 이 버프를 보여 주고 있었다
+## (`_update_weapon_shape()` 아래쪽). 그림을 붙이면 막대가 사라지므로, 이것이 없으면
+## 4초 동안 사거리만 조용히 2배가 되고 화면에는 아무 표시도 남지 않는다 — 장대가
+## 겪은 것과 같은 일이고 `art_grows_with_reach`가 그림 쪽에서 되살린 것도 같다.
+##
+## 목표가 복제된 `_size_multiplier`에서 나오므로 두 화면이 같은 크기로 모인다.
+func _art_growth(delta: float) -> float:
+	var target := 1.0
+	if Weapons.get_weapon(weapon_id).get("art_grows_with_size", false):
+		target = _size_multiplier
+	_weapon_art_growth = move_toward(_weapon_art_growth, target, ART_STRETCH_SPEED * delta)
+	return _weapon_art_growth
+
+
 ## 무기 표시. 그림이 있으면 그림을, 없으면 지금까지의 임시 막대를 쓴다.
 ## 어느 쪽이든 특수 공격 쿨타임 상태를 밝기·색으로 보여준다 (별도 UI 없음).
 func _update_weapon_shape(delta: float) -> void:
@@ -538,7 +564,14 @@ func _update_weapon_shape(delta: float) -> void:
 		# 길어진 것이 아니라 무기가 통째로 커진 것으로 보인다.
 		var stretch := _art_stretch(delta)
 		var thicken := 1.0 + (stretch - 1.0) * ART_THICKEN_SHARE
-		sprite.scale = Vector2(_weapon_art_factor * thicken, _weapon_art_factor * stretch)
+		# 크기 버프는 반대로 **가로세로를 같은 배율로** 키운다 (방패 특수) — 특수가
+		# "크기 증가"라서 한쪽만 늘리면 커진 것이 아니라 찌그러진 것으로 보인다.
+		# 늘어난 정도와 곱해서 쓰므로 둘 중 하나만 걸린 무기는 지금까지와 똑같다.
+		var growth := _art_growth(delta)
+		sprite.scale = Vector2(
+			_weapon_art_factor * thicken * growth,
+			_weapon_art_factor * stretch * growth,
+		)
 		if _weapon_art_forward:
 			_place_forward_weapon(sprite)
 		else:
@@ -549,15 +582,18 @@ func _update_weapon_shape(delta: float) -> void:
 			sprite.flip_h = flipped
 			sprite.rotation = 0.0
 			sprite.offset = Vector2.ZERO
-			# 여백 보정도 굵어진 배율을 따라간다 — 안 그러면 굵어질 때 그림이 옆으로 밀린다.
-			var corrected := _weapon_offset.x * thicken
+			# 여백 보정도 굵어진·커진 배율을 따라간다 — 안 그러면 굵어질 때 그림이 옆으로 밀린다.
+			var corrected := _weapon_offset.x * thicken * growth
 			var offset_x := -corrected if flipped else corrected
 			# 늘어난 길이의 절반만큼 위로 올려 손에 쥔 아래쪽 끝을 제자리에 둔다.
 			# Sprite2D는 자기 위치를 가운데로 두고 커지므로, 안 올리면 아래로도 자란다.
+			# **세로로 걸린 배율 전체**(늘어난 정도 × 커진 정도)를 봐야 한다 — 커진 쪽만
+			# 빼고 재면 방패가 커지는 동안 아래쪽 절반이 땅에 파묻힌다.
+			var tall := stretch * growth
 			sprite.position = Vector2(
 				facing * WEAPON_OFFSET_X + offset_x,
-				WEAPON_CENTER_Y + _weapon_offset.y * stretch
-					- _weapon_art_length * (stretch - 1.0) * 0.5,
+				WEAPON_CENTER_Y + _weapon_offset.y * tall
+					- _weapon_art_length * (tall - 1.0) * 0.5,
 			)
 		if is_piercing():
 			sprite.modulate = PIERCE_TINT              # 관통 중 — 날이 타오른다
@@ -960,8 +996,9 @@ func _receive_reset(spawn_position: Vector2, spawn_facing: int) -> void:
 	_size_multiplier = 1.0
 	_size_until = 0.0
 	# 늘어난 그림도 바로 되돌린다. 안 되돌리면 다음 라운드 시작 순간에 장대가
-	# 늘어난 채로 나타나서 0.15초 동안 줄어드는 것이 보인다.
+	# 늘어난 채로 나타나서 0.15초 동안 줄어드는 것이 보인다. 커진 그림(방패)도 같다.
 	_weapon_art_stretch = 1.0
+	_weapon_art_growth = 1.0
 	_forced_deadline = 0.0
 	_knockback_until = 0.0
 

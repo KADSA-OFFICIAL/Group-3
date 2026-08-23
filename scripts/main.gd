@@ -800,6 +800,10 @@ func _server_fire(attacker: Player, base: Dictionary, offsets: Array = [0.0]) ->
 	var art_scale: float = weapon.get("projectile_art_scale", 1.0)
 	# 결정질 화살로 그릴지는 무기가 정한다 — 기본이든 특수든 같은 모양으로 나간다 (#125).
 	var draw_arrow: bool = weapon.get("projectile_arrow", false)
+	# 탄 그림도 무기 표에서 읽는다 (소총의 총알) — 크기와 같은 이유로, 기본에서 쏘든
+	# 연사에서 쏘든 같은 탄이 나가야 한다. 여기서 읽지 않으면 기본 공격 경로와
+	# 연사 경로 두 곳에 같은 줄을 적어야 하고, 한쪽만 고치면 어긋난다.
+	var projectile_art: String = weapon.get("projectile_file", "")
 	# 발사 각도는 쏘는 쪽(base)이 정한다. 활은 기본 공격만 위로 띄우고 특수는 직선이다.
 	var launch_angle: float = base.get("launch_angle", 0.0)
 	# 속도도 쏘는 쪽이 정할 수 있다 (#164). 없으면 지금까지의 공통 속도다 —
@@ -809,6 +813,11 @@ func _server_fire(attacker: Player, base: Dictionary, offsets: Array = [0.0]) ->
 		var data := base.duplicate()
 		data["size_scale"] = size_scale
 		data["art_scale"] = art_scale
+		# **쏘는 쪽이 준 것이 우선이다.** 한 무기가 탄 그림을 둘 쓰는 경우(일반/강화
+		# 폭탄·빨간 표창·로켓 글러브)에는 이미 `art_file` 을 넣어 두었고, 여기서
+		# 덮으면 그쪽이 고른 것이 지워진다 (#131·#134와 같은 어긋남).
+		if not projectile_art.is_empty() and not data.has("art_file"):
+			data["art_file"] = projectile_art
 		data["arrow"] = draw_arrow
 		data["id"] = _next_projectile_id
 		_next_projectile_id += 1
@@ -1120,13 +1129,25 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 					projectile.queue_free()
 			return true
 		"방패":
-			# 짧게 = 던지기, 길게 = 크기 증가.
+			# **하나뿐인 길게/짧게로 갈리는 특수다.** 길게(0.3초 이상, `Player.LONG_PRESS_TIME`)는
+			# 크기 증가, 짧게는 던지기다. `long_press`는 **서버가 잰 것**이라 클라이언트가
+			# 속일 수 없고, 길게가 확정되는 순간 뗄 때를 기다리지 않고 바로 발동한 뒤
+			# 눌린 기록을 지운다 — 그래서 손을 뗄 때 던지기가 겹쳐 나가지 않고 쿨타임도
+			# 한 번만 돈다 (`Player._check_long_press`·`_receive_skill` 참고).
 			if long_press:
 				attacker.server_apply_buff("size", weapon["size_multiplier"], weapon["special_duration"])
 			else:
 				_server_fire(attacker, {
 					"damage": weapon["special_damage"],
 					"knockback": weapon["knockback"],
+					# 손에 든 것과 **같은 그림으로** 날아간다 (표창과 같은 이유다) —
+					# 노란 막대로 날아가면 16 데미지짜리가 오는데 무엇이 오는지가
+					# 화면에 없고, 크기 증가 쪽과 구별도 안 된다.
+					"art_file": weapon["file"],
+					# 진행 방향으로 돌리면 방패가 옆으로 눕는다 — 원화가 세로(위가 위)라
+					# `_face()`의 기본 +90도가 걸리면 넘어진 것처럼 보인다. 폭탄이
+					# 도화선 때문에 세워 두는 것과 같은 처리다 (#131).
+					"art_upright": true,
 				})
 			return true
 		_:
