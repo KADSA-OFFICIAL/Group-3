@@ -86,6 +86,10 @@ var hp := Combat.MAX_HP
 var alive := true
 ## 바라보는 방향 (1 오른쪽 / -1 왼쪽). 특수 공격은 이 방향으로 나간다.
 var facing := 1
+## 지금 어떤 포즈의 원화를 입고 있는가 (#176). 평소에는 `Characters.POSE_IDLE`이고,
+## 죽는 순간 자신은 패배 포즈, 점수를 얻은 상대는 승리 포즈가 된다.
+## 라운드가 다시 시작되면 평소로 돌아온다 — 안 되돌리면 다음 라운드로 새어 나간다.
+var pose := Characters.POSE_IDLE
 ## 너클 게이지. 내가 맞을 때 충전된다.
 var gauge := 0.0
 ## 특수 공격을 쓸 수 있는가. 서버가 쿨타임을 재고 이 값만 내려준다 (무기 도형 색에 쓴다).
@@ -165,6 +169,9 @@ func _ready() -> void:
 		# 스폰 직후 바로 맞지 않도록 잠깐 무적을 준다.
 		var grace := _now() + Combat.ROUND_START_GRACE
 		_invuln_until = {"basic": grace, "special": grace}
+		# 전투 화면에 있는 피어에게만 보인다 (이슈 #182). 이 필터가 스폰 전달까지 정하므로
+		# 경기 도중에 들어온 관전자는 viewer 가 되는 순간 이 젤리를 받는다.
+		$Sync.add_visibility_filter(Lobby.can_view)
 	_update_weapon_shape(0.0)
 
 
@@ -294,11 +301,14 @@ func _steer(input: Dictionary) -> void:
 ##
 ## 원화는 정사각 캔버스에 투명 여백을 두고 그려져 있어서 파일 크기를 그대로 쓰면
 ## 발이 땅에서 뜬다. 그래서 여백을 뺀 실제 그림 영역을 재서 그 아래쪽을 발밑에 맞춘다.
+##
+## 포즈가 바뀔 때도 이 함수를 다시 부른다 (#176) — 승리·패배 원화는 평소 그림과
+## 비율이 달라서(눕는 포즈는 가로가 길다) 배율과 여백 보정을 처음부터 다시 재야 한다.
 func _apply_character() -> void:
 	if not Characters.has(character_id):
 		character_id = Characters.default_id()
 	var sprite: Sprite2D = $Body
-	var texture := Characters.texture(character_id)
+	var texture := Characters.pose_texture(character_id, pose)
 	sprite.texture = texture
 	if texture == null:
 		return
@@ -593,7 +603,7 @@ func _physics_process(delta: float) -> void:
 	if multiplayer.is_server():
 		_check_long_press()
 		apply_movement(_take_input(), delta)
-		_receive_state.rpc(global_position, velocity, is_on_floor(), facing)
+		_send_state()
 		_update_squash(is_on_floor(), delta)
 	else:
 		# 클라이언트는 물리를 계산하지 않고 서버가 보낸 위치로 따라간다
@@ -608,6 +618,16 @@ func _physics_process(delta: float) -> void:
 	# 여백 보정의 부호는 _place_body()가 flip_h를 보고 맞춘다.
 	$Body.flip_h = facing < 0
 	_place_body()
+
+
+## 위치·속도를 **전투 화면에 있는 피어에게만** 보낸다 (서버 전용, 매 프레임).
+##
+## 브로드캐스트(`rpc()`)로 보내면 대기실에 앉아 있는 피어에게도 날아간다 — 그쪽에는 이 노드가
+## 없으니 받을 수 없고 "Node not found" 오류만 초당 60번 쌓인다. 관전이 생기면서
+## 전투 화면 밖에 있는 피어가 정상 상태가 되었으므로(이슈 #167) 대상을 골라 보낸다.
+func _send_state() -> void:
+	for peer in Lobby.viewers:
+		_receive_state.rpc_id(peer, global_position, velocity, is_on_floor(), facing)
 
 
 ## 자기 입력을 서버로 보낸다.
@@ -813,6 +833,17 @@ func server_set_empowered(value: bool) -> void:
 	_receive_empowered.rpc(value)
 
 
+## 승리·패배 포즈 (#176). 판정은 main.gd가 한다 — 누가 점수를 얻었는지 아는 곳이 거기다.
+##
+## **패배 포즈는 여기를 거치지 않는다** — `_check_death()`가 이미 모든 피어에서 돌아가므로
+## 죽음과 함께 저절로 복제된다. 라운드 대기 중에 남은 쪽이 또 떨어져도(그때
+## `_on_player_died()`는 일찍 돌아온다) 패배 포즈가 빠지지 않는 이유다.
+func server_set_pose(value: String) -> void:
+	if not multiplayer.is_server() or pose == value:
+		return
+	_receive_pose.rpc(value)
+
+
 ## 너클 게이지는 특수 공격을 쓰면 전부 소모된다.
 func server_set_gauge(value: float) -> void:
 	if not multiplayer.is_server():
@@ -868,19 +899,34 @@ func _receive_empowered(value: bool) -> void:
 	_apply_weapon()
 
 
+## 포즈만 바꾼다 (#176). 판정과는 무관하고 그림을 갈아 끼우는 일만 한다.
+@rpc("authority", "call_local", "reliable")
+func _receive_pose(value: String) -> void:
+	if pose == value:
+		return
+	pose = value
+	_apply_character()
+
+
 @rpc("authority", "call_local", "reliable")
 func _receive_dot(new_hp: float) -> void:
 	hp = new_hp
 	_check_death()
 
 
+## 이 함수는 모든 피어에서 돌아간다 (_receive_hit·_receive_dot이 복제되므로).
+## 그래서 패배 포즈는 여기서 걸어도 따로 RPC를 보내지 않아도 양쪽에 같이 뜬다.
 func _check_death() -> void:
 	if hp > 0.0 or not alive:
 		return
 	alive = false
 	velocity = Vector2.ZERO
 	forced_mode = ""
-	modulate.a = 0.35
+	# 반투명으로 죽음을 알리던 것을 포즈가 대신한다 (#176). 흐리게 두면 눕는 원화의
+	# 땀방울·효과선이 어두운 맵(용암) 배경에 묻혀 보이지 않는다.
+	modulate.a = 1.0
+	pose = Characters.POSE_LOSE
+	_apply_character()
 	if multiplayer.is_server():
 		died.emit(owner_peer_id)
 
@@ -896,6 +942,9 @@ func _receive_reset(spawn_position: Vector2, spawn_facing: int) -> void:
 	special_ready = true
 	forced_mode = ""
 	modulate.a = 1.0
+	# 지난 라운드의 승리·패배 포즈를 벗긴다 (#176) — 안 되돌리면 눕거나 팔을 든 채 싸운다.
+	pose = Characters.POSE_IDLE
+	_apply_character()
 
 	global_position = spawn_position
 	_target_position = spawn_position

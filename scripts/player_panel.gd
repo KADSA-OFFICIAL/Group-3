@@ -40,6 +40,19 @@ func set_interactive(value: bool) -> void:
 		button.disabled = not value
 
 
+## 관전자용 표시 전용 모드 (이슈 #184).
+##
+## `set_interactive(false)`는 버튼을 **잠근 채로 남겨** 두는데, 관전자에게는 애초에 조작할 것이
+## 없으므로 누를 것은 치우고 볼 것만 남긴다. 무기·캐릭터 버튼은 값이 글자로 적혀 있어
+## **그 자체가 표시**이므로 남기되, 잠가서 흐리게 만들지 않고 눌리지만 않게 한다.
+func set_display_only(flag: bool) -> void:
+	random_button.visible = not flag
+	for button in [weapon_button, character_button]:
+		button.disabled = false if flag else button.disabled
+		button.mouse_filter = Control.MOUSE_FILTER_IGNORE if flag else Control.MOUSE_FILTER_STOP
+		button.focus_mode = Control.FOCUS_NONE if flag else Control.FOCUS_ALL
+
+
 ## 서버가 보낸 선택값을 그대로 표시한다. config_changed를 내보내지 않는다.
 func apply_config(config: Dictionary) -> void:
 	weapon_i = maxi(GameState.WEAPONS.find(config.get("weapon", "")), 0)

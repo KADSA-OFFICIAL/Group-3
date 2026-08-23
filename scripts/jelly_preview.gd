@@ -6,8 +6,15 @@ extends Control
 @export var character_id := "":
 	set(value):
 		character_id = value
-		_texture = Characters.texture(value)
-		queue_redraw()
+		_refresh()
+
+## 어느 포즈를 보여줄지 (#178). 비어 있으면 평소 모습이다 —
+## 대기실 패널과 타이틀 젤리는 지정하지 않으므로 지금까지와 똑같이 동작한다.
+## 값은 `Characters.POSE_*` 중 하나이고, 그 포즈의 원화가 없으면 평소 그림으로 되돌아간다.
+@export var pose := "":
+	set(value):
+		pose = value
+		_refresh()
 
 ## 미리보기 칸을 채우는 비율. 1.0이면 칸에 꽉 차서 너무 커 보인다.
 @export_range(0.1, 1.0, 0.05) var fill_ratio := 0.65:
@@ -22,6 +29,13 @@ func _ready() -> void:
 	# 씬에서 캐릭터를 지정하지 않았으면 첫 캐릭터를 보여준다.
 	if _texture == null:
 		character_id = Characters.default_id()
+
+
+## 캐릭터와 포즈 어느 쪽이 바뀌어도 같은 곳을 지나가게 모아 둔다 —
+## 둘 중 하나만 그림을 갱신하면 나중에 지정한 값이 앞의 것을 지운다.
+func _refresh() -> void:
+	_texture = Characters.pose_texture(character_id, pose)
+	queue_redraw()
 
 
 func _draw() -> void:

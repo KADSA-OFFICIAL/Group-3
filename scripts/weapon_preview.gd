@@ -1,13 +1,16 @@
 extends Control
 ## 대기실의 무기 그림 미리보기. `jelly_preview.gd`와 같은 형태다.
 ##
-## 그림이 있는 무기는 7종뿐이라 **나머지는 아무것도 그리지 않는다** —
+## 그림이 없는 무기는 **아무것도 그리지 않는다** —
 ## 이름은 옆의 라벨이 항상 보여주므로 빈칸으로 남지 않는다.
+##
+## 손에 드는 그림이 아니라 `Weapons.preview_texture()` 를 쓴다 — 너클처럼
+## 착용 모습과 무기 자체의 모습이 다른 무기는 선택창에 무기 쪽을 보여야 한다 (#173).
 
 @export var weapon_id := "":
 	set(value):
 		weapon_id = value
-		_texture = Weapons.texture(value)
+		_texture = Weapons.preview_texture(value)
 		queue_redraw()
 
 ## 칸을 채우는 비율. 1.0이면 꽉 차서 답답해 보인다.

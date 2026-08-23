@@ -6,6 +6,32 @@
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
 size = Vector2(48, 56)
 
+[sub_resource type="SceneReplicationConfig" id="SceneReplicationConfig_player"]
+properties/0/path = NodePath(".:position")
+properties/0/spawn = true
+properties/0/replication_mode = 0
+properties/1/path = NodePath(".:hp")
+properties/1/spawn = true
+properties/1/replication_mode = 0
+properties/2/path = NodePath(".:alive")
+properties/2/spawn = true
+properties/2/replication_mode = 0
+properties/3/path = NodePath(".:facing")
+properties/3/spawn = true
+properties/3/replication_mode = 0
+properties/4/path = NodePath(".:pose")
+properties/4/spawn = true
+properties/4/replication_mode = 0
+properties/5/path = NodePath(".:gauge")
+properties/5/spawn = true
+properties/5/replication_mode = 0
+properties/6/path = NodePath(".:special_ready")
+properties/6/spawn = true
+properties/6/replication_mode = 0
+properties/7/path = NodePath(".:empowered_ready")
+properties/7/spawn = true
+properties/7/replication_mode = 0
+
 [sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_pierce"]
 blend_mode = 1
 
@@ -30,6 +56,9 @@ visible = false
 [node name="Smoke" type="Node2D" parent="."]
 visible = false
 script = ExtResource("2_smoke")
+
+[node name="Sync" type="MultiplayerSynchronizer" parent="."]
+replication_config = SubResource("SceneReplicationConfig_player")
 
 [node name="NameLabel" type="Label" parent="."]
 offset_left = -40.0

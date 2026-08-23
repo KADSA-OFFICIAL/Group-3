@@ -186,6 +186,10 @@ func setup(data: Dictionary) -> void:
 func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
+	# 전투 화면에 있는 피어에게만 보낸다 (이슈 #182). `public_visibility` 는 건드리지 않는다 —
+	# 끄면 필터가 참이어도 아무에게도 안 보인다(이슈 #167에서 투사체가 통째로 사라졌다).
+	if multiplayer.is_server():
+		$Sync.add_visibility_filter(Lobby.can_view)
 	_spawn_time = _now()
 	_last_position = position
 	_apply_art()

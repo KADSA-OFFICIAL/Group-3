@@ -6,18 +6,36 @@ extends RefCounted
 ## 서버 검증(`Lobby._sanitize`), 전투 화면 그림(`Player`)이 모두 여기서 나온다.
 ##
 ## 필드
-##   name   대기실에 보이는 이름이자 네트워크로 오가는 id
-##   file   DIR 아래의 그림 파일 이름
-##   color  그림 파일이 아직 없을 때 대신 쓰는 색 (원화의 몸통 색에 맞춘 근사값)
+##   name       대기실에 보이는 이름이자 네트워크로 오가는 id
+##   file       DIR 아래의 그림 파일 이름 (평소 모습)
+##   win_file   포인트를 얻은 순간의 승리 포즈 (없으면 file 로 되돌아간다)
+##   lose_file  죽은 순간의 패배 포즈 (없으면 file 로 되돌아간다)
+##   color      그림 파일이 아직 없을 때 대신 쓰는 색 (원화의 몸통 색에 맞춘 근사값)
 
 const DIR := "res://assets/characters/"
 
+## 포즈 이름. 전투 중에는 평소 모습이고, 죽는 순간 양쪽이 패배·승리로 갈린다 (#176).
+## 네트워크로 오가는 값이므로 문자열을 바꾸면 양쪽 클라이언트를 같이 고쳐야 한다.
+const POSE_IDLE := ""
+const POSE_WIN := "win"
+const POSE_LOSE := "lose"
+
 const LIST: Array[Dictionary] = [
-	{"name": "분홍", "file": "bear_pink.png", "color": Color(0.96, 0.68, 0.86)},
-	{"name": "파랑", "file": "bear_blue.png", "color": Color(0.51, 0.53, 0.85)},
-	{"name": "초록", "file": "bear_green.png", "color": Color(0.40, 0.75, 0.40)},
-	{"name": "노랑", "file": "bear_yellow.png", "color": Color(0.98, 0.94, 0.63)},
-	{"name": "빨강", "file": "bear_red.png", "color": Color(0.88, 0.44, 0.49)},
+	{"name": "분홍", "file": "bear_pink.png",
+		"win_file": "bear_pink_win.png", "lose_file": "bear_pink_lose.png",
+		"color": Color(0.96, 0.68, 0.86)},
+	{"name": "파랑", "file": "bear_blue.png",
+		"win_file": "bear_blue_win.png", "lose_file": "bear_blue_lose.png",
+		"color": Color(0.51, 0.53, 0.85)},
+	{"name": "초록", "file": "bear_green.png",
+		"win_file": "bear_green_win.png", "lose_file": "bear_green_lose.png",
+		"color": Color(0.40, 0.75, 0.40)},
+	{"name": "노랑", "file": "bear_yellow.png",
+		"win_file": "bear_yellow_win.png", "lose_file": "bear_yellow_lose.png",
+		"color": Color(0.98, 0.94, 0.63)},
+	{"name": "빨강", "file": "bear_red.png",
+		"win_file": "bear_red_win.png", "lose_file": "bear_red_lose.png",
+		"color": Color(0.88, 0.44, 0.49)},
 ]
 
 
@@ -59,6 +77,27 @@ static func texture(name: String) -> Texture2D:
 	if ResourceLoader.exists(path):
 		return load(path)
 	return _placeholder(character["color"])
+
+
+## 포즈별 캐릭터 그림 (#176). 그 포즈의 원화가 없으면 조용히 평소 그림으로 돌아간다 —
+## 무기의 `preview_file` 되돌림과 같은 방식이라 원화가 5종 다 갖춰지지 않아도 게임이 돈다.
+static func pose_texture(name: String, pose: String) -> Texture2D:
+	var character := get_character(name)
+	if character.is_empty():
+		return null
+	var key := ""
+	if pose == POSE_WIN:
+		key = "win_file"
+	elif pose == POSE_LOSE:
+		key = "lose_file"
+	if key != "":
+		# 표에서 꺼낸 값은 Variant다 — 명시 타입으로 받아야 파싱이 통과한다 (이슈 #66).
+		var file: String = character.get(key, "")
+		if file != "":
+			var path: String = DIR + file
+			if ResourceLoader.exists(path):
+				return load(path)
+	return texture(name)
 
 
 ## 그림이 없을 때 쓰는 단색 텍스처. 크기는 플레이어 충돌 상자와 같다.
