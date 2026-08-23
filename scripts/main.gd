@@ -15,6 +15,14 @@ extends Node2D
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
 const PROJECTILE_SCENE := preload("res://scenes/projectile.tscn")
 const LIGHT_BURST_SCENE := preload("res://scenes/light_burst.tscn")
+const SWAP_BURST_SCENE := preload("res://scenes/swap_burst.tscn")
+const LIGHTNING_STRIKE_SCENE := preload("res://scenes/lightning_strike.tscn")
+const SHOTGUN_BLAST_SCENE := preload("res://scenes/shotgun_blast.tscn")
+const SHOCKWAVE_SCENE := preload("res://scenes/shockwave.tscn")
+## 위치 교환 연출을 띄울 높이 보정. 젤리의 `global_position`은 충돌 상자(48x56)의
+## 가운데이고 몸(72px)은 발밑이 +`Player.BODY_BOTTOM`(28)이라, 몸 한가운데가 -8이다.
+## 검 특수의 빛기둥은 반대로 발밑(+28)에 띄운다 — 거기서 위로 솟는 연출이라서다.
+const SWAP_BURST_CENTER := Vector2(0.0, -8.0)
 ## 맵에 Spawns가 없을 때만 쓰는 대비값. 정상 경로에서는 맵 씬이 위치를 들고 있다.
 const SPAWN_POSITIONS := [Vector2(300, 500), Vector2(852, 500)]
 
@@ -151,6 +159,8 @@ func _add_player(peer_id: int) -> void:
 	# 특수 공격 요청과 사망은 서버에서만 발생한다.
 	player.special_requested.connect(_on_special_requested)
 	player.died.connect(_on_player_died)
+	# 강제 낙하(양날 도끼)가 땅에 닿는 순간도 서버에서만 온다 (#167).
+	player.landed_forced.connect(_on_forced_landed)
 	_dagger_held[peer_id] = true
 	if not scores.has(peer_id):
 		scores[peer_id] = 0
@@ -790,6 +800,10 @@ func _server_fire(attacker: Player, base: Dictionary, offsets: Array = [0.0]) ->
 	var art_scale: float = weapon.get("projectile_art_scale", 1.0)
 	# 결정질 화살로 그릴지는 무기가 정한다 — 기본이든 특수든 같은 모양으로 나간다 (#125).
 	var draw_arrow: bool = weapon.get("projectile_arrow", false)
+	# 탄 그림도 무기 표에서 읽는다 (소총의 총알) — 크기와 같은 이유로, 기본에서 쏘든
+	# 연사에서 쏘든 같은 탄이 나가야 한다. 여기서 읽지 않으면 기본 공격 경로와
+	# 연사 경로 두 곳에 같은 줄을 적어야 하고, 한쪽만 고치면 어긋난다.
+	var projectile_art: String = weapon.get("projectile_file", "")
 	# 발사 각도는 쏘는 쪽(base)이 정한다. 활은 기본 공격만 위로 띄우고 특수는 직선이다.
 	var launch_angle: float = base.get("launch_angle", 0.0)
 	# 속도도 쏘는 쪽이 정할 수 있다 (#164). 없으면 지금까지의 공통 속도다 —
@@ -799,6 +813,11 @@ func _server_fire(attacker: Player, base: Dictionary, offsets: Array = [0.0]) ->
 		var data := base.duplicate()
 		data["size_scale"] = size_scale
 		data["art_scale"] = art_scale
+		# **쏘는 쪽이 준 것이 우선이다.** 한 무기가 탄 그림을 둘 쓰는 경우(일반/강화
+		# 폭탄·빨간 표창·로켓 글러브)에는 이미 `art_file` 을 넣어 두었고, 여기서
+		# 덮으면 그쪽이 고른 것이 지워진다 (#131·#134와 같은 어긋남).
+		if not projectile_art.is_empty() and not data.has("art_file"):
+			data["art_file"] = projectile_art
 		data["arrow"] = draw_arrow
 		data["id"] = _next_projectile_id
 		_next_projectile_id += 1
@@ -810,11 +829,54 @@ func _server_fire(attacker: Player, base: Dictionary, offsets: Array = [0.0]) ->
 		projectile_spawner.spawn(data)
 
 
-## 다음에 던질 폭탄이 강화인지 뽑는다 (#134). **서버에서만 부른다** —
+## 부채꼴 발사 (샷건). **서버에서만 부른다.**
+##
+## 탄을 쓰지 않는 이유: 산탄은 코앞에서 퍼지는 것이라 "날아가는 무엇"이 없다.
+## 투사체로 흉내내면 회피가 "옆으로 비키기"가 되는데, 부채꼴은 **거리를 벌리거나
+## 부채 밖으로 나가는 것**이 회피여야 한다.
+##
+## **막기(`is_blocked`)를 거치지 않는다.** 막기는 무기 끝과 무기 끝이 부딪히는 판정인데
+## 이건 흩뿌리는 것이다 — 폭탄 반경·양날 도끼 착지 충격파와 같은 취급이다.
+## 다만 `_faces()`는 뜻이 있다: 부채꼴 자체가 바라보는 쪽으로만 열린다.
+##
+## 데미지는 가까울수록 세다(34 → 14). 감소 기준 거리는 부채꼴 사거리와 같은 값이라
+## 부채 끝에 겨우 닿으면 최소값이 들어간다.
+func _cone_blast(attacker: Player, weapon: Dictionary) -> void:
+	var reach: float = weapon["special_cone_range"]
+	var spread: float = weapon["special_cone_angle"]
+	# **맞았는지와 무관하게 먼저 띄운다.** 빗나간 것도 "여기까지였다"로 보여야 한다
+	# (착지 충격파를 띄우는 이유 #167과 같다).
+	_play_shotgun_blast.rpc(
+		attacker.global_position + Vector2(0.0, Player.WEAPON_CENTER_Y),
+		signf(float(attacker.facing)), reach, spread)
+	var target := _opponent_of(attacker.owner_peer_id)
+	if target == null or not target.alive:
+		return
+	var offset := target.global_position - attacker.global_position
+	var distance := offset.length()
+	if distance > reach:
+		return
+	# 바라보는 쪽에서 벗어난 각도가 부채꼴 절반을 넘으면 빗나간다.
+	# 두 젤리가 정확히 겹치면 방향을 못 재므로 그때는 맞은 것으로 둔다.
+	var half := deg_to_rad(spread) * 0.5
+	if distance > 0.001:
+		var aim := Vector2(signf(float(attacker.facing)), 0.0)
+		if absf(aim.angle_to(offset)) > half:
+			return
+	# 표에서 꺼낸 값은 Variant라 명시 타입으로 받는다 (#66).
+	var near: float = weapon["special_damage"]
+	var far: float = weapon["falloff_min_damage"]
+	var damage := lerpf(near, far, clampf(distance / reach, 0.0, 1.0))
+	target.server_apply_hit(damage, weapon["knockback"], attacker.global_position.x,
+		0.0, "special")
+
+
+## 다음에 던질 것이 강화인지 뽑는다 (#134). **서버에서만 부른다** —
 ## 클라이언트가 각자 뽑으면 손에 든 그림이 양쪽에서 달라진다.
 ##
 ## 확률은 던질 때 뽑던 때와 같다. 언제 뽑느냐만 앞당긴 것이다.
-## `empowered_chance`가 없는 무기는 항상 false다.
+## `empowered_chance`가 없는 무기는 항상 false다 —
+## 지금 이 값을 가진 것은 폭탄(데미지·넉백 증가)과 표창(빨간 표창, 위치 교환)뿐이다.
 func _roll_empowered(weapon_id: String) -> bool:
 	var chance: float = Weapons.get_weapon(weapon_id).get("empowered_chance", 0.0)
 	return chance > 0.0 and randf() < chance
@@ -856,6 +918,8 @@ func _spawn_projectile(data: Dictionary) -> Node:
 	if multiplayer.is_server():
 		projectile.finished.connect(_on_projectile_finished)
 		projectile.picked_up.connect(_on_dagger_picked_up)
+		projectile.swapped.connect(_on_positions_swapped)
+		projectile.struck.connect(_on_lightning_struck)
 	return projectile
 
 
@@ -940,7 +1004,10 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 			attacker.server_apply_buff("pierce", 1.0, weapon["special_duration"])
 			return true
 		"장대":
-			attacker.server_apply_buff("reach", weapon["reach_multiplier"], weapon["special_duration"])
+			# 상시 사거리(`reach_multiplier`)가 아니라 **특수 전용 배율**을 쓴다.
+			# 상시로 걸면 특수를 쓰지 않아도 근접 공격을 전부 막는다 (막기 판정 참고).
+			attacker.server_apply_buff("reach", weapon["special_reach_multiplier"],
+				weapon["special_duration"])
 			return true
 		"전기톱":
 			# 관통 돌진. 속도는 일반 점프의 두 배, 벽에 부딪히면 끝난다.
@@ -955,11 +1022,15 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 			return true
 		"양날 도끼":
 			# 고속 상승 후 고속 낙하. 데미지는 낙하 중에만 들어간다.
+			# 낙하 중 직격을 놓치면 **착지할 때 주변을 때린다** (#167) — 그 수치를
+			# 여기 같이 실어 둔다. `_on_forced_landed()`가 꺼내 쓴다.
 			attacker.server_start_forced("rise", _rise_time())
 			_special_pending[peer_id] = {
 				"damage": weapon["special_damage"],
 				"knockback": weapon["knockback"],
 				"modes": ["fall"],
+				"landing_damage": weapon["landing_damage"],
+				"landing_radius": weapon["landing_radius"],
 			}
 			return true
 		"활":
@@ -991,24 +1062,34 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 				# 날아가는 것이 삼지창 자신이므로 같은 그림으로 그린다 (#152).
 				# 그림이 생기기 전에는 노란 막대였다.
 				"art": weapon["name"],
+				# 맞은 자리에 번개가 내려친다. 표에서 읽으므로 여기에 true를 박지 않는다.
+				"hit_lightning": weapon.get("hit_lightning", false),
 			})
 			return true
 		"샷건":
-			# 거리에 따라 30 → 10 으로 줄어든다.
-			_server_fire(attacker, {
-				"damage": weapon["special_damage"],
-				"knockback": weapon["knockback"],
-				"falloff_min_damage": weapon["falloff_min_damage"],
-				"falloff_distance": 400.0,  # TODO: 감소 기준 거리는 미확정
-			})
+			# **원거리가 아니다.** 탄을 쏘지 않고 앞으로 퍼지는 부채꼴 안을 한 번 때린다 —
+			# 코앞에서 쏟아붓는 산탄이라 화면을 가로지르지 않는다.
+			_cone_blast(attacker, weapon)
 			return true
 		"표창":
-			# 중력 영향을 받는다. 파란 표창(위치 교환)은 아직 미구현.
+			# 중력 영향을 받는다. 빨간 표창은 아래 폭탄과 **같은 틀**이다 (#134) —
+			# 여기서 새로 뽑지 않고 미리 뽑아 손에 들고 있던 그것을 쓴다.
+			# 여기서 뽑으면 손에 든 그림과 날아가는 것이 어긋난다.
+			var swap: bool = attacker.empowered_ready
+			# 빨간 표창은 그림이 따로다 — 데미지가 없고 위치가 바뀌는 것이라
+			# 겉모습이 같으면 피할지 말지를 정할 근거가 화면에 없다 (#131).
+			# 표에서 꺼낸 값은 Variant라 명시 타입으로 받는다 (#66).
+			var shuriken_art: String = weapon["empowered_file"] if swap else weapon["file"]
 			_server_fire(attacker, {
-				"damage": weapon["special_damage"],
-				"knockback": weapon["knockback"],
+				"damage": weapon["empowered_damage"] if swap else weapon["special_damage"],
+				"knockback": weapon["empowered_knockback"] if swap else weapon["knockback"],
 				"use_gravity": true,
+				"art_file": shuriken_art,
+				# 폭탄의 강화가 데미지를 올리는 자리에, 이쪽은 위치 교환이 들어간다.
+				"swap_positions": swap and weapon.get("empowered_swap", false),
 			})
+			# 던졌으니 다음 것을 새로 뽑는다 — 쿨타임 동안 손에 들려 보인다.
+			attacker.server_set_empowered(_roll_empowered(attacker.weapon_id))
 			return true
 		"폭탄":
 			# 던진 폭탄은 바닥에서 조금 구르다 멈추고, 3초 뒤 또는 닿으면 반경 200px을 때린다.
@@ -1048,13 +1129,25 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 					projectile.queue_free()
 			return true
 		"방패":
-			# 짧게 = 던지기, 길게 = 크기 증가.
+			# **하나뿐인 길게/짧게로 갈리는 특수다.** 길게(0.3초 이상, `Player.LONG_PRESS_TIME`)는
+			# 크기 증가, 짧게는 던지기다. `long_press`는 **서버가 잰 것**이라 클라이언트가
+			# 속일 수 없고, 길게가 확정되는 순간 뗄 때를 기다리지 않고 바로 발동한 뒤
+			# 눌린 기록을 지운다 — 그래서 손을 뗄 때 던지기가 겹쳐 나가지 않고 쿨타임도
+			# 한 번만 돈다 (`Player._check_long_press`·`_receive_skill` 참고).
 			if long_press:
 				attacker.server_apply_buff("size", weapon["size_multiplier"], weapon["special_duration"])
 			else:
 				_server_fire(attacker, {
 					"damage": weapon["special_damage"],
 					"knockback": weapon["knockback"],
+					# 손에 든 것과 **같은 그림으로** 날아간다 (표창과 같은 이유다) —
+					# 노란 막대로 날아가면 16 데미지짜리가 오는데 무엇이 오는지가
+					# 화면에 없고, 크기 증가 쪽과 구별도 안 된다.
+					"art_file": weapon["file"],
+					# 진행 방향으로 돌리면 방패가 옆으로 눕는다 — 원화가 세로(위가 위)라
+					# `_face()`의 기본 +90도가 걸리면 넘어진 것처럼 보인다. 폭탄이
+					# 도화선 때문에 세워 두는 것과 같은 처리다 (#131).
+					"art_upright": true,
 				})
 			return true
 		_:
@@ -1087,6 +1180,100 @@ func _play_light_burst(at: Vector2) -> void:
 	var burst := LIGHT_BURST_SCENE.instantiate()
 	effects_root.add_child(burst)
 	burst.global_position = at
+
+
+## 샷건 특수의 부채꼴. `at`은 총구 높이의 몸 중심이고 `aim`이 바라보는 쪽이다.
+##
+## 사거리·각도를 **판정과 같은 값으로** 넘긴다 — 여기서 다른 값을 주면 플레이어가
+## 눈으로 배운 범위가 실제로 맞는 범위와 어긋난다 (폭탄 반경을 그린 이유 #140).
+##
+## **위치와 값을 `add_child` 전에 넣는다.** `_ready()`가 붙는 순간 돌면서 위치로 난수
+## 씨앗을 잡기 때문이다 — 나중에 넣으면 모든 발사가 (0, 0)으로 같은 씨앗을 받는다.
+@rpc("authority", "call_local", "reliable")
+func _play_shotgun_blast(at: Vector2, aim: float, reach: float, spread: float) -> void:
+	var blast := SHOTGUN_BLAST_SCENE.instantiate()
+	blast.position = at
+	blast.aim = aim
+	blast.reach = reach
+	blast.spread = spread
+	effects_root.add_child(blast)
+
+
+## 삼지창 특수가 맞혔다 (서버 전용 — 투사체가 알려 온다).
+func _on_lightning_struck(at: Vector2) -> void:
+	_play_lightning_strike.rpc(at)
+
+
+## 삼지창 특수의 번개. `at`은 맞은 젤리의 발밑이고, 줄기는 화면 위에서 거기까지 내려온다.
+@rpc("authority", "call_local", "reliable")
+func _play_lightning_strike(at: Vector2) -> void:
+	var bolt := LIGHTNING_STRIKE_SCENE.instantiate()
+	# 위치를 붙이기 전에 넣는다 — `_ready()`가 이 값으로 줄기 모양의 씨앗을 잡는다.
+	bolt.position = at
+	effects_root.add_child(bolt)
+
+
+## 빨간 표창이 자리를 바꿨다 (서버 전용 — 투사체가 알려 온다).
+func _on_positions_swapped(from_position: Vector2, to_position: Vector2) -> void:
+	_play_swap_burst.rpc(from_position, to_position)
+
+
+## 위치 교환 연출. **두 자리에 하나씩** 띄운다 — 하나만 띄우면 어디로 갔는지 알 수 없다.
+##
+## 받는 값은 **바꾸기 전의** 두 위치다. 각각이 "여기 있던 것이 떠났다"와
+## "여기 있던 것이 저기로 갔다"를 동시에 뜻한다 — 서로 자리를 맞바꾼 것이므로 같은 두 점이다.
+##
+## 원점을 젤리 몸 한가운데로 올린다. 넘어오는 위치는 발밑 기준(`global_position`)이고,
+## 몸 전체가 사라졌다 나타나는 연출이라 발밑에서 터지면 아래로 쏠려 보인다.
+@rpc("authority", "call_local", "reliable")
+func _play_swap_burst(from_position: Vector2, to_position: Vector2) -> void:
+	for at: Vector2 in [from_position, to_position]:
+		var burst := SWAP_BURST_SCENE.instantiate()
+		# **위치를 붙이기 전에 넣는다.** `_ready()`가 붙는 순간 돌면서 위치로 난수 씨앗을
+		# 잡으므로, 나중에 넣으면 두 자리 모두 (0, 0)으로 같은 씨앗을 받아 같은 모양이 된다.
+		burst.position = at + SWAP_BURST_CENTER
+		effects_root.add_child(burst)
+
+
+## 강제 낙하(양날 도끼)가 땅에 닿았다 — 그 자리 주변을 때린다 (#167). 서버 전용.
+##
+## **낙하 중 직격을 놓쳤을 때만 들어간다.** 직격이 성공하면 `_check_pending_specials()`가
+## 예약을 지우므로 여기 올 것이 없다 — 한 번의 특수로 두 번 맞는 일은 생기지 않는다.
+##
+## 반경 판정은 좌우를 따지지 않는다(`_faces()`를 거치지 않는다). 바로 아래를 때리는
+## 기술이라 좌우를 따지면 영영 안 맞는 것과 같은 이유다.
+## 상대 무기에 막히는지도 보지 않는다 — 땅을 타고 오는 충격파라 앞으로 든 무기와 무관하다.
+func _on_forced_landed(peer_id: int, at: Vector2) -> void:
+	if not multiplayer.is_server():
+		return
+	var info: Dictionary = _special_pending.get(peer_id, {})
+	var radius: float = info.get("landing_radius", 0.0)
+	if radius <= 0.0:
+		return
+	_special_pending.erase(peer_id)   # 착지로 기회를 다 썼다
+
+	# 연출은 맞았는지와 무관하게 띄운다 — 빗나간 것도 "여기까지였다"로 보여야 한다.
+	_play_shockwave.rpc(at, radius)
+
+	var damage: float = info.get("landing_damage", 0.0)
+	if damage <= 0.0:
+		return
+	for target: Player in players_root.get_children():
+		if target.owner_peer_id == peer_id or not target.alive:
+			continue
+		if at.distance_to(target.global_position) > radius:
+			continue
+		target.server_apply_hit(damage, info["knockback"], at.x, 0.0, "special")
+
+
+## 착지 충격파. `at`은 떨어진 자리이고 `radius`는 **실제로 맞는 반경**이다 —
+## 보이는 크기와 맞는 범위가 어긋나면 이 연출이 거짓말이 된다.
+@rpc("authority", "call_local", "reliable")
+func _play_shockwave(at: Vector2, radius: float) -> void:
+	var wave := SHOCKWAVE_SCENE.instantiate()
+	wave.radius = radius
+	effects_root.add_child(wave)
+	wave.global_position = at + Vector2(0.0, Player.BODY_BOTTOM)
 
 
 ## 돌진이 벽 없는 맵에서 무한히 이어지지 않게 하는 안전장치.

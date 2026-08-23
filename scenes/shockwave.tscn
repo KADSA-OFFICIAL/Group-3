@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3 uid="uid://jellyshock001"]
+
+[ext_resource type="Script" path="res://scripts/shockwave.gd" id="1_shock"]
+
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_shock"]
+blend_mode = 1
+
+[node name="Shockwave" type="Node2D"]
+material = SubResource("CanvasItemMaterial_shock")
+script = ExtResource("1_shock")

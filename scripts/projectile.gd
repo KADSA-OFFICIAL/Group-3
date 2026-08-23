@@ -12,6 +12,13 @@ extends Area2D
 signal finished(projectile: Node)
 ## 바닥에 남은 것(단검)을 주인이 주웠다.
 signal picked_up(peer_id: int, projectile: Node)
+## 빨간 표창이 자리를 바꿨다. 두 값은 **바꾸기 전의** 위치다 — 연출을 두 자리에 띄우는
+## 쪽(`main.gd`)이 쓴다. 여기서 직접 RPC를 부르지 않는 것은 연출이 `Effects` 아래에
+## 붙어야 하고 그 노드를 아는 것이 main.gd이기 때문이다 (검 특수의 빛기둥과 같다).
+signal swapped(from_position: Vector2, to_position: Vector2)
+## 번개를 부르는 탄(삼지창 특수)이 맞혔다. 값은 **맞은 젤리의 발밑**이다 —
+## 번개가 거기로 내려온다. 연출을 띄우는 쪽이 `main.gd`인 이유는 위 `swapped`와 같다.
+signal struck(at: Vector2)
 
 ## 폭발 반경 표시 노드의 타입 (#140). `class_name` 대신 preload 로 받는다 —
 ## 전역 클래스 이름은 에디터가 만드는 `.godot` 캐시에 등록되어야 풀리므로,
@@ -106,6 +113,10 @@ var art_upright := false
 ## 원화의 앞이 **위가 아니라 오른쪽**이다 (로켓 글러브, #161).
 ## 기본값(false)은 지금까지처럼 날 끝이 위를 향하는 원화다 — `_face()` 참고.
 var art_points_right := false
+## 맞으면 데미지 대신 쏜 쪽과 맞은 쪽의 위치를 맞바꾼다 (빨간 표창).
+var swap_positions := false
+## 맞은 자리에 번개가 내려친다 (삼지창 특수). 데미지·기절은 그대로고 연출만 붙는다.
+var hit_lightning := false
 ## 이만큼 날아가면 사라진다 (로켓 글러브). 0 이면 제한 없음 — 지금까지의 투사체가 그렇다.
 var max_distance := 0.0
 ## 탄 크기 배율 (대포 총). 1.0 이면 씬에 잡아 둔 기본 크기다.
@@ -159,6 +170,8 @@ func setup(data: Dictionary) -> void:
 	art_file = data.get("art_file", "")
 	art_upright = data.get("art_upright", false)
 	art_points_right = data.get("art_points_right", false)
+	swap_positions = data.get("swap_positions", false)
+	hit_lightning = data.get("hit_lightning", false)
 	max_distance = data.get("max_distance", 0.0)
 	size_scale = data.get("size_scale", 1.0)
 	art_scale = data.get("art_scale", 1.0)
@@ -487,6 +500,24 @@ func _find_jelly(peer_id: int) -> Node:
 	return null
 
 
+## 빨간 표창 — 맞은 쪽과 던진 쪽의 자리를 맞바꾼다. **서버에서만 부른다.**
+##
+## 던진 쪽이 이미 죽었거나(낙사 등) 나가 버렸으면 아무 일도 일어나지 않는다.
+## 살아 있지 않은 젤리를 옮기면 사망 연출이 엉뚱한 자리에서 끝난다.
+##
+## 두 위치를 **옮기기 전에 먼저 읽어 둔다** — 하나를 옮긴 뒤에 다른 쪽을 읽으면
+## 둘 다 같은 자리로 겹친다.
+func _swap_with_shooter(target: Node) -> void:
+	var shooter := _find_jelly(shooter_peer)
+	if shooter == null or not shooter.alive:
+		return
+	var shooter_at: Vector2 = shooter.global_position
+	var target_at: Vector2 = target.global_position
+	shooter.server_teleport(target_at)
+	target.server_teleport(shooter_at)
+	swapped.emit(shooter_at, target_at)
+
+
 ## 폭탄 — 반경 안의 상대를 때리고 사라진다.
 func _explode() -> void:
 	if _done:
@@ -512,7 +543,17 @@ func _on_body_entered(body: Node) -> void:
 			_explode()
 			return
 		_hit_peers[peer_id] = true
+		# 빨간 표창은 때리는 대신 자리를 바꾼다 (데미지 0). 여기서 끝내는 것은
+		# 아래 `server_apply_hit`이 데미지 0으로도 넉백과 피격 연출을 일으키기 때문이다 —
+		# "데미지 없이 위치만 바뀐다"가 기획서에 적힌 그대로다.
+		if swap_positions:
+			_swap_with_shooter(body)
+			_finish()
+			return
 		body.server_apply_hit(_damage_at(position), knockback, _origin.x, stun, SOURCE, knockback_speed)
+		# 번개는 맞은 젤리의 **발밑**으로 떨어진다 (검 특수의 빛기둥과 같은 기준).
+		if hit_lightning:
+			struck.emit(body.global_position + Vector2(0.0, Player.BODY_BOTTOM))
 		# 주울 수 있는 것(단검)은 맞힌 뒤에도 사라지지 않고 바닥으로 떨어진다.
 		# 안 그러면 한 번만 쓸 수 있는 무기가 된다.
 		if pickup_owner != 0:
