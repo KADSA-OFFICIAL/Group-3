@@ -274,7 +274,10 @@ func _process(_delta: float) -> void:
 	var now := _now()
 	if _protocol_deadline > 0.0 and now >= _protocol_deadline:
 		_fail_protocol("서버가 오래된 버전입니다 — 서버를 최신 코드로 다시 켜 주세요.")
-	# 서버 쪽: 버전을 안 알린 피어를 끊는다. keys() 로 복사해서 도는 동안 지운다.
+	# 서버 쪽: 버전을 안 알린 피어를 끊는다. 대개 비어 있으므로 먼저 걸러 낸다 —
+	# `keys()` 는 부를 때마다 배열을 새로 만들고 이 함수는 매 프레임 돈다.
+	if _pending_protocol.is_empty():
+		return
 	for peer_id in _pending_protocol.keys():
 		if now < float(_pending_protocol[peer_id]):
 			continue
