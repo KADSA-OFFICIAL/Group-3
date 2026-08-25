@@ -542,6 +542,12 @@ func _on_body_entered(body: Node) -> void:
 		if explosion_radius > 0.0:
 			_explode()
 			return
+		# 방패를 크게 들어 올린 상대는 앞에서 오는 탄을 막는다 (`Player.is_guarding`).
+		# **폭탄보다 뒤에 둔다** — 반경으로 흩뿌리는 것은 막기를 거치지 않는 것이
+		# 이 게임의 규칙이다(샷건 부채꼴·도끼 착지 충격파와 같은 취급).
+		if _guarded_by(body):
+			_blocked(body)
+			return
 		_hit_peers[peer_id] = true
 		# 빨간 표창은 때리는 대신 자리를 바꾼다 (데미지 0). 여기서 끝내는 것은
 		# 아래 `server_apply_hit`이 데미지 0으로도 넉백과 피격 연출을 일으키기 때문이다 —
@@ -580,6 +586,37 @@ func _on_body_entered(body: Node) -> void:
 			var keep := minf(absf(velocity.x), ROLL_SPEED)
 			velocity = Vector2(signf(velocity.x) * keep, 0.0)
 			_landed = true
+
+
+## 이 젤리가 방패를 들어 **이 탄을 막고 있는가** (방패 특수).
+##
+## 자세만으로는 부족하고 **앞에서 와야 막힌다** — 근접 막기(`Main.is_blocked()`)가
+## "등을 보이고 있으면 못 막는다"인 것과 같은 기준이다. 방패를 들었다고 등 뒤까지
+## 가려지면 4초 동안 무적이 된다.
+##
+## 오는 방향은 진행 방향(`velocity.x`)의 반대다. 가로로 거의 안 움직이는 탄
+## (곧게 떨어지는 것)은 앞뒤를 가릴 수 없으므로 막지 않는다.
+func _guarded_by(jelly: Player) -> bool:
+	if not jelly.is_guarding():
+		return false
+	if absf(velocity.x) < 1.0:
+		return false
+	return signf(float(jelly.facing)) == signf(-velocity.x)
+
+
+## 방패에 막혔다. 데미지도 넉백도 없다.
+##
+## 주울 수 있는 탄(단검)은 없애지 않고 **발밑에 떨어뜨린다** — 맞혔을 때와 같은
+## 처리다. 없애면 막히는 것만으로 상대의 단검이 영구히 사라져 한 번만 쓸 수 있는
+## 무기가 된다.
+func _blocked(jelly: Player) -> void:
+	if pickup_owner != 0:
+		homing_peer = 0
+		velocity = Vector2.ZERO
+		use_gravity = true
+		_hit_peers[jelly.owner_peer_id] = true   # 떨어지는 동안 다시 닿아도 조용하다
+		return
+	_finish()
 
 
 ## 굴러서 발판 끝을 벗어났다 — 다시 떨어진다 (#131).

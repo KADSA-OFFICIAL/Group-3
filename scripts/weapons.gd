@@ -37,6 +37,11 @@ extends RefCounted
 ##                   그림이 없는 무기는 임시 막대의 두께가 이 버프를 보여 주고 있었으므로,
 ##                   그림을 붙이면서 이 줄을 안 적으면 특수가 화면에서 사라진다
 ##                   (Player._art_growth 참고)
+##   size_buff_guards 크기 버프가 걸린 동안 **날아오는 탄을 막고, 그 대신 기본 근접
+##                   공격이 안 나간다** (방패를 들어 올린 자세). 근접 막기는 따로
+##                   적을 필요가 없다 — 크기 버프가 current_reach()를 같이 늘려서
+##                   is_blocked()의 사거리 비교가 이미 참이 된다
+##                   (Player.is_guarding 참고)
 ##   weapon_art_scale 손에 든 그림을 이 배율로 줄인다. 없으면 1.0(지금까지의 크기).
 ##                   세로 WEAPON_HEIGHT 규칙이 검처럼 가늘고 긴 무기 기준이라,
 ##                   글러브처럼 뭉툭한 원화만 여기서 더 줄인다 (art_scale 참고)
@@ -96,8 +101,11 @@ const LIST: Array[Dictionary] = [
 		"basic": "닿으면 일정 지속 데미지",
 		"special": "일정 시간 관통 능력 부여",
 		# 특수가 능력 부여라 기본 지속 데미지만으로 싸운다 — 12 → 20 (#55).
-		# 초당 20은 그대로 두고 0.2초마다 4씩 촘촘하게 넣는다 (#103).
-		"basic_damage": 4.0, "basic_interval": 0.2, "basic_kind": "melee_dot",
+		# 0.2초마다 한 틱씩 촘촘하게 넣는다 (#103) — 초당은 이 값의 5배다.
+		# 4 → 4.5 로 소폭 올렸다(초당 20 → 22.5). 특수(`special_damage` 0)가 관통
+		# 부여뿐이라 이 무기는 기본 하나로만 싸우고, 지속 데미지 무기 중 유일하게
+		# 넉백도 없어서(전기톱은 특수에 20 + 출혈이 붙는다) 붙어 있는 값을 받는다.
+		"basic_damage": 4.5, "basic_interval": 0.2, "basic_kind": "melee_dot",
 		"special_damage": 0.0, "special_cooldown": 8.0, "knockback": 0,
 		"special_duration": 3.0,
 	},
@@ -118,7 +126,16 @@ const LIST: Array[Dictionary] = [
 		"file": "hammer.png",
 		"basic": "닿으면 일정 데미지",
 		"special": "닿으면 일정 시간 피격 시 기절 효과 부여",
-		"basic_damage": 14.0, "basic_interval": 0.0, "basic_kind": "melee",
+		# **"닿으면" 근접 무기 중 유일하게 자기 간격을 적는다.** 나머지 여덟 종은 0.0 으로
+		# 두어 `Combat.MELEE_HIT_INTERVAL`(0.6초) 바닥을 쓰는데, 망치는 타당 데미지가 가장
+		# 높은(14) 무기라 같은 박자를 쓰면 초당 23.3 으로 근접 1위가 된다 —
+		# 큰 것이 느리게 들어와야 하는 무기에서 세기와 빠르기를 둘 다 가진 셈이었다.
+		# 0.9초면 초당 15.6 이다. 타당 14는 그대로 두었다: 줄여야 할 것은 세기가
+		# 아니라 그 세기가 들어오는 빠르기다.
+		#
+		# 넉백은 지금까지와 똑같이 매 타 들어간다 — 넉백 문틈은 0.6초 고정이고
+		# 0.9초 간격이면 데미지가 들어갈 때 그쪽은 늘 열려 있다 (_try_melee_basic 참고).
+		"basic_damage": 14.0, "basic_interval": 0.9, "basic_kind": "melee",
 		"special_damage": 16.0, "special_cooldown": 8.0, "knockback": 2,
 		"stun_duration": 1.2,
 	},
@@ -128,7 +145,12 @@ const LIST: Array[Dictionary] = [
 		"basic": "일정 시간 일정 데미지",
 		"special": "추가 데미지 + 넉백 미사일 발사",
 		# 6 → 7 (#55). 원거리 계열 중 가장 낮아서 조금 올렸다.
-		"basic_damage": 7.0, "basic_interval": 0.5, "basic_kind": "ranged",
+		#
+		# 발사 간격은 0.5 → 0.6초로 늘려 발사 속도를 조금 낮췄다. 타당 7은 그대로고
+		# 초당이 14 → 11.7 이 된다 — 활(10/0.7초, 초당 14.3)과 거의 같았던 자리에서
+		# 내려와 소총(5/0.5초, 초당 10)과 활 사이에 놓인다. 특수가 미사일 25 + 최고
+		# 단계보다 센 넉백(850)이라 기본이 앞줄에 있을 무기가 아니다.
+		"basic_damage": 7.0, "basic_interval": 0.6, "basic_kind": "ranged",
 		"special_damage": 25.0, "special_cooldown": 6.0, "knockback": 2,
 		# 전용 투사체 그림이 없어 공용 노란 막대(18×6)로 나가는데, "대포" 치고 탄이
 		# 빈약해 보이고 눈에 안 띄었다 — 1.5배로 키운다 (#118).
@@ -294,11 +316,21 @@ const LIST: Array[Dictionary] = [
 		# **전기톱 돌진("dash")에는 주지 않는다** — 바라보는 쪽으로 내지르는 기술이라
 		# 도중에 꺾이면 다른 기술이 된다.
 		"special_air_control": true,
-		# 착지 순간 이 반경 안의 상대도 맞는다 (#167). 낙하 중 직격(28)을 놓쳤을 때만
-		# 들어가므로 두 번 맞는 일은 없다 — 직격이 성공하면 기회가 사라진다.
+		# 착지 순간 **좌우로 땅이 갈라져 나가며** 그 앞선에 닿는 상대를 때린다.
+		# 낙하 중 직격(28)을 놓쳤을 때만 들어가므로 두 번 맞는 일은 없다 —
+		# 직격이 성공하면 기회가 사라진다.
+		#
 		# 데미지는 직격의 절반이다. 머리 위에 정확히 떨어뜨린 것과 근처에 떨어뜨린 것이
-		# 같은 값이면 조준할 이유가 없다. 반경은 폭탄(200)보다 좁고 근접 사거리(72)보다 넓다.
+		# 같은 값이면 조준할 이유가 없다. 거리는 폭탄 반경(200)보다 좁고 근접 사거리(72)보다
+		# 넓으며, 착지 자리에서 **좌우 각각** 이만큼 뻗는다.
 		"landing_damage": 14.0, "landing_radius": 160.0,
+		# 갈라짐이 뻗어 나가는 속도(px/s). 160px을 0.18초에 지난다 — "빠르게 갈라진다"가
+		# 요점이라 앞선이 눈에 보이기는 하지만 걸어서 피할 수는 없는 빠르기다.
+		#
+		# **연출과 판정이 이 값 하나를 같이 쓴다** — `main.gd`가 `_play_shockwave`에
+		# 그대로 넘겨서 화면에 보이는 앞선이 곧 맞는 경계다. 둘이 따로 놀면 이 연출이
+		# 거짓말이 된다 (폭탄 반경을 그린 이유와 같다, #140).
+		"landing_rupture_speed": 900.0,
 	},
 	{
 		"name": "샷건",
@@ -366,15 +398,16 @@ const LIST: Array[Dictionary] = [
 		# 샷건은 부채꼴이고, 대포 총은 미사일, 활은 결정질 화살로 따로 그린다.
 		"projectile_file": "bullet.png",
 		# 그림 세로를 40px에 맞추는 기본값이면 15 x 40px으로, 젤리(72px) 절반이 넘는 탄이 된다.
-		# 0.6이면 9 x 24px — 지금까지의 노란 막대(18 x 6px)와 같은 자리에 들어간다.
-		# 연사가 0.1초마다 20발을 뿌리므로 한 발이 커지면 화면이 탄으로 덮인다.
-		# **판정은 하나도 안 바뀐다** (`projectile_scale`과 다른 점이다).
-		"projectile_art_scale": 0.6,
+		# 0.75면 11 x 30px — 노란 막대(18 x 6px) 자리보다 살짝 크게, 눈에 띌 만큼만 키운
+		# 것이다(처음엔 0.6이었다). 연사가 0.1초마다 20발을 뿌리므로 너무 키우면
+		# 화면이 탄으로 덮인다. **판정은 하나도 안 바뀐다** (`projectile_scale`과 다른 점이다).
+		"projectile_art_scale": 0.75,
 		"basic": "일정 시간 일정 데미지",
 		"special": "스킬 누르고 있으면 연사",
-		"basic_damage": 5.0, "basic_interval": 0.4, "basic_kind": "ranged",
+		"basic_damage": 5.0, "basic_interval": 0.5, "basic_kind": "ranged",
 		"special_damage": 1.5, "special_cooldown": 8.0, "knockback": 0,
-		# 발당 3 → 1.5 로 낮춤 (확정).
+		# 발당 3 → 1.5 로 낮춤 (확정). 기본 공격 간격도 0.4 → 0.5초로 늘려 발사 속도를
+		# 낮췄다 — 발당 데미지(5)는 그대로고 초당 데미지가 12.5 → 10으로 줄었다.
 		# 연사 지속시간도 3초 → 2초 로 줄였다 (확정) — 개별 무적이 되면서 다 맞으면 너무 셌다.
 		"burst_interval": 0.1, "burst_duration": 2.0,
 	},
@@ -390,6 +423,11 @@ const LIST: Array[Dictionary] = [
 		# 장대가 똑같이 겪었던 일이다. 방패는 길이가 아니라 통째로 커지므로
 		# `art_grows_with_reach`(길이만)가 아니라 이쪽을 쓴다.
 		"art_grows_with_size": true,
+		# **막는 자세다.** 커져 있는 동안 날아오는 탄을 막고, 그 대신 기본 근접 공격이
+		# 안 나간다 — 크게 든 방패로 몸을 가리는 것이라 그 자세로 때릴 수는 없다.
+		# 근접 막기는 여기 적을 필요가 없다: 크기 버프가 `current_reach()`를 2배로
+		# 늘려서 `is_blocked()`의 "상대 사거리 > 내 사거리"가 이미 참이 된다.
+		"size_buff_guards": true,
 		"basic": "닿으면 일정 데미지",
 		"special": "방패 크기 증가 or 방패 던지기",
 		"basic_damage": 7.0, "basic_interval": 0.0, "basic_kind": "melee",
@@ -469,6 +507,12 @@ static func art_faces_left(weapon_name: String) -> bool:
 ## 가로 제한(`WEAPON_MAX_WIDTH`)도 세로로 긴 것을 못 잡듯이 이쪽도 못 잡는다.
 static func art_scale(weapon_name: String) -> float:
 	return float(get_weapon(weapon_name).get("weapon_art_scale", 1.0))
+
+
+## 크기 버프가 "막는 자세"인가 (방패). 참이면 커져 있는 동안 날아오는 탄을 막고
+## 기본 근접 공격이 안 나간다 — 판단은 `Player.is_guarding()` 한 곳에서만 한다.
+static func size_buff_guards(weapon_name: String) -> bool:
+	return bool(get_weapon(weapon_name).get("size_buff_guards", false))
 
 
 static func resolve(weapon_name: String) -> String:

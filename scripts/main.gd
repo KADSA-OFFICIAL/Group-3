@@ -41,6 +41,9 @@ var _special_pending := {}
 var _bleeds := {}
 ## 소총 연사. 한 번 누르면 지속시간 동안 자동으로 나간다.
 var _bursts := {}
+## 진행 중인 땅 격파 (양날 도끼 착지). 착지 자리에서 좌우로 뻗는 앞선이고,
+## 앞선이 닿는 순간에 데미지가 들어간다 — 착지 순간 반경을 한꺼번에 때리지 않는다.
+var _ruptures: Array[Dictionary] = []
 ## 단검을 손에 들고 있는가. 발사하면 false, 주우면 다시 true.
 var _dagger_held := {}
 var _next_projectile_id := 1
@@ -248,6 +251,7 @@ func _start_round() -> void:
 	_special_pending.clear()
 	_bleeds.clear()
 	_bursts.clear()
+	_ruptures.clear()
 
 	for player: Player in players_root.get_children():
 		var index := maxi(Lobby.slot_of(player.owner_peer_id), 0)
@@ -308,6 +312,7 @@ func _server_reset_match() -> void:
 	_special_pending.clear()
 	_bleeds.clear()
 	_bursts.clear()
+	_ruptures.clear()
 	_dagger_held.clear()
 
 
@@ -549,6 +554,7 @@ func _physics_process(_delta: float) -> void:
 	_check_pending_specials()
 	_tick_bleeds()
 	_tick_bursts()
+	_tick_ruptures()
 	_check_falls()
 	_tick_round()
 
@@ -577,6 +583,10 @@ func _try_melee_basic(attacker: Player, target: Player) -> void:
 	if not weapon["basic_kind"].begins_with("melee"):
 		return
 	if not attacker.can_act():
+		return
+	# 방패를 크게 들어 올린 동안은 막기만 한다. 크게 든 방패로 몸을
+	# 가리는 자세라 그 자세로 때릴 수는 없다 — 탄을 막는 것과 맞바꾸는 값이다.
+	if attacker.is_guarding():
 		return
 	if target.is_invulnerable() or is_blocked(attacker, target):
 		return
@@ -786,7 +796,11 @@ func is_blocked(attacker: Player, target: Player) -> bool:
 
 
 # ─────────────────────────── 투사체 ───────────────────────────
-## 상대 무기에 막히지 않고, 속도는 무기와 무관하게 전부 같다.
+## 속도는 무기와 무관하게 전부 같다.
+##
+## 근접 막기(`is_blocked()`, 사거리 비교)는 거치지 않는다. **단 하나 예외가 방패다** —
+## 크게 들어 올린 방패는 앞에서 오는 탄을 막는다 (`Projectile._guarded_by`). 반경으로
+## 흩뿌리는 것(폭탄)은 그것도 못 막는다.
 
 ## 서버에서만 호출한다. offsets로 여러 발을 한 번에 낼 수 있다 (활 특수의 평행 3발).
 func _server_fire(attacker: Player, base: Dictionary, offsets: Array = [0.0]) -> void:
@@ -1031,6 +1045,7 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 				"modes": ["fall"],
 				"landing_damage": weapon["landing_damage"],
 				"landing_radius": weapon["landing_radius"],
+				"landing_rupture_speed": weapon["landing_rupture_speed"],
 			}
 			return true
 		"활":
@@ -1235,14 +1250,14 @@ func _play_swap_burst(from_position: Vector2, to_position: Vector2) -> void:
 		effects_root.add_child(burst)
 
 
-## 강제 낙하(양날 도끼)가 땅에 닿았다 — 그 자리 주변을 때린다 (#167). 서버 전용.
+## 강제 낙하(양날 도끼)가 땅에 닿았다 — **좌우로 땅을 갈라 보낸다** (#167). 서버 전용.
+##
+## 여기서는 시작만 한다. 실제로 때리는 것은 `_tick_ruptures()`가 앞선을 밀면서 하고,
+## 그래서 멀리 선 상대는 가까이 선 상대보다 조금 늦게 맞는다 — 착지 순간 반경을
+## 한꺼번에 때리면 "갈라져 나간다"가 아니라 "닿으면 맞는다"가 된다.
 ##
 ## **낙하 중 직격을 놓쳤을 때만 들어간다.** 직격이 성공하면 `_check_pending_specials()`가
 ## 예약을 지우므로 여기 올 것이 없다 — 한 번의 특수로 두 번 맞는 일은 생기지 않는다.
-##
-## 반경 판정은 좌우를 따지지 않는다(`_faces()`를 거치지 않는다). 바로 아래를 때리는
-## 기술이라 좌우를 따지면 영영 안 맞는 것과 같은 이유다.
-## 상대 무기에 막히는지도 보지 않는다 — 땅을 타고 오는 충격파라 앞으로 든 무기와 무관하다.
 func _on_forced_landed(peer_id: int, at: Vector2) -> void:
 	if not multiplayer.is_server():
 		return
@@ -1251,27 +1266,74 @@ func _on_forced_landed(peer_id: int, at: Vector2) -> void:
 	if radius <= 0.0:
 		return
 	_special_pending.erase(peer_id)   # 착지로 기회를 다 썼다
+	var speed: float = info.get("landing_rupture_speed", 0.0)
+	if speed <= 0.0:
+		return
 
 	# 연출은 맞았는지와 무관하게 띄운다 — 빗나간 것도 "여기까지였다"로 보여야 한다.
-	_play_shockwave.rpc(at, radius)
+	# 속도까지 넘겨서 **화면에 보이는 앞선이 곧 맞는 경계**가 되게 한다.
+	_play_shockwave.rpc(at, radius, speed)
 
 	var damage: float = info.get("landing_damage", 0.0)
 	if damage <= 0.0:
 		return
-	for target: Player in players_root.get_children():
-		if target.owner_peer_id == peer_id or not target.alive:
-			continue
-		if at.distance_to(target.global_position) > radius:
-			continue
-		target.server_apply_hit(damage, info["knockback"], at.x, 0.0, "special")
+	# 착지 순간 반경을 한꺼번에 때리지 않는다. 앞선이 거기까지 가는 데 걸리는 시간이
+	# 있어야 "갈라져 나간다"로 읽히고, 멀리 선 상대는 조금 늦게 맞는다.
+	_ruptures.append({
+		"peer": peer_id,
+		"at": at,
+		"damage": damage,
+		"knockback": info["knockback"],
+		"reach": radius,
+		"speed": speed,
+		"started": _now(),
+		# 앞선은 지나가면서 한 번만 때린다 — 매 프레임 판정이라 이게 없으면
+		# 앞선 안에 서 있는 동안 계속 맞는다.
+		"hit": {},
+	})
 
 
-## 착지 충격파. `at`은 떨어진 자리이고 `radius`는 **실제로 맞는 반경**이다 —
-## 보이는 크기와 맞는 범위가 어긋나면 이 연출이 거짓말이 된다.
+## 땅 격파의 앞선을 좌우로 밀고, 닿는 상대를 한 번씩 때린다 (서버 전용).
+##
+## **가로 거리로만 잰다.** 땅을 타고 갈라져 나가는 것이라 위아래로 퍼지는 것이 아니다.
+## 대신 다른 높이의 발판에 선 상대는 맞지 않아야 해서 세로로 한 몸통(BODY_HEIGHT)까지만
+## 같은 땅으로 본다 — 그게 없으면 머리 위 발판에 있는 상대도 같이 맞는다.
+##
+## 좌우(`_faces()`)도 상대 무기 막기(`is_blocked()`)도 보지 않는다. 바로 아래를 때리는
+## 기술이라 좌우를 따지면 영영 안 맞고, 땅을 타고 오는 것이라 앞으로 든 무기와 무관하다.
+func _tick_ruptures() -> void:
+	var now := _now()
+	for i in range(_ruptures.size() - 1, -1, -1):
+		var rupture: Dictionary = _ruptures[i]
+		var origin: Vector2 = rupture["at"]
+		var front: float = (now - float(rupture["started"])) * float(rupture["speed"])
+		var reach: float = rupture["reach"]
+		for target: Player in players_root.get_children():
+			var target_peer: int = target.owner_peer_id
+			if target_peer == rupture["peer"] or not target.alive:
+				continue
+			if rupture["hit"].has(target_peer):
+				continue
+			if absf(target.global_position.y - origin.y) > Player.BODY_HEIGHT:
+				continue
+			var span := absf(target.global_position.x - origin.x)
+			if span > minf(front, reach):
+				continue
+			rupture["hit"][target_peer] = true
+			target.server_apply_hit(rupture["damage"], rupture["knockback"],
+				origin.x, 0.0, "special")
+		if front >= reach:
+			_ruptures.remove_at(i)
+
+
+## 착지 땅 격파. `at`은 떨어진 자리, `radius`는 **좌우 각각 실제로 맞는 거리**,
+## `speed`는 앞선이 뻗어 나가는 속도다 — 셋 다 판정에 쓰는 값 그대로다.
+## 보이는 것과 맞는 범위가 어긋나면 이 연출이 거짓말이 된다.
 @rpc("authority", "call_local", "reliable")
-func _play_shockwave(at: Vector2, radius: float) -> void:
+func _play_shockwave(at: Vector2, radius: float, speed: float) -> void:
 	var wave := SHOCKWAVE_SCENE.instantiate()
 	wave.radius = radius
+	wave.speed = speed
 	effects_root.add_child(wave)
 	wave.global_position = at + Vector2(0.0, Player.BODY_BOTTOM)
 

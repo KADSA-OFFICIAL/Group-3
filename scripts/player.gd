@@ -763,6 +763,22 @@ func is_piercing() -> bool:
 	return _now() < _pierce_until
 
 
+## 방패를 크게 들어 올린 동안인가 (방패 특수, 무기 표의 `size_buff_guards`).
+##
+## 그동안 **날아오는 탄이 막히고**(`Projectile._on_body_entered`) 그 대신 **기본 근접
+## 공격이 안 나간다**(`Main._try_melee_basic`). 크게 든 방패로 몸을 가리는 자세라
+## 그 자세로 때릴 수는 없다는 것이다.
+##
+## 근접 막기는 여기서 따로 하지 않는다 — 크기 버프가 `current_reach()`를 2배로 늘려서
+## `Main.is_blocked()`의 "상대 사거리 > 내 사거리"가 이미 참이 된다.
+##
+## `_size_multiplier`는 `_receive_buff`로 두 피어에 복제되므로 양쪽이 같은 판단을 한다.
+## 무기 표를 함께 보는 이유는 크기 버프를 다른 무기가 받게 되어도 그쪽이 막는 자세가
+## 되지는 않아야 하기 때문이다.
+func is_guarding() -> bool:
+	return _size_multiplier > 1.0 and Weapons.size_buff_guards(weapon_id)
+
+
 func is_forced() -> bool:
 	return forced_mode != ""
 
