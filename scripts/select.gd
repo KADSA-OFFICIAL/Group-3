@@ -1,5 +1,7 @@
 extends Control
-## 대기실 겸 무기 선택 화면.
+## 대기실 겸 캐릭터·맵 선택 화면.
+##
+## **무기는 여기서 고르지 않는다**(#205) — 라운드가 시작될 때마다 전투 화면에서 고른다.
 ##
 ## 자기 패널만 조작할 수 있고 상대 패널에는 서버가 보낸 상대 선택이 표시된다.
 ## 둘 다 준비되면 **서버 지시로** 전투 화면으로 전환된다.
@@ -131,23 +133,7 @@ func _refresh() -> void:
 	go_button.visible = not observing
 
 	_refresh_maps()
-	_refresh_weapons()
 	_update_status()
-
-
-## 양쪽이 고른 무기를 가운데 카드에 보여준다.
-## 그림이 있는 무기는 7종뿐이라 이름 라벨은 항상 채운다 — 나머지는 이름만 보인다.
-func _refresh_weapons() -> void:
-	for slot in panels.size():
-		var preview: Control = $WeaponBox.get_node("P%dPreview" % (slot + 1))
-		var name_label := $WeaponBox.get_node("P%dName" % (slot + 1)) as Label
-		if slot >= Lobby.order.size():
-			preview.weapon_id = ""
-			name_label.text = "—"
-			continue
-		var weapon := Lobby.weapon_of(Lobby.order[slot])
-		preview.weapon_id = weapon
-		name_label.text = weapon
 
 
 ## 양쪽이 고른 맵을 나란히 보여준다. 실제로 쓸 맵은 시작할 때 서버가 둘 중 하나를 뽑는다.

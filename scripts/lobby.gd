@@ -2,14 +2,15 @@ extends Node
 ## 대기실 상태 (오토로드 싱글턴 Lobby). **서버가 권위를 갖는다.**
 ##
 ## 클라이언트는 자기 선택과 준비 여부만 서버로 보내고, 서버가 전체 상태를
-## 정리해 양쪽에 복제한다. 무기 "랜덤" 확정도 서버가 해야 양쪽이 같은 값을 갖는다.
+## 정리해 양쪽에 복제한다. 맵 "랜덤" 확정도 서버가 해야 양쪽이 같은 지형을 깐다.
 ##
 ## **역할(플레이어·관전) 배정도 여기가 한다**(이슈 #167). 접속만으로는 자리가 생기지 않고,
 ## 클라이언트가 `submit_role()` 로 알려야 서버가 order(플레이어) 또는 observers(관전)에 넣는다.
 ## 정원이 차면 배정하지 않고 사유를 돌려준다 — 조용히 잠기는 상태를 만들지 않기 위해서다.
 ## 어느 역할로 신고할지는 **실행 파일이 정한다**(`is_observer_build()`, 이슈 #180).
 ##
-## 무기 **동작**은 여기서 다루지 않는다 — 무기 id 문자열을 전달하는 것까지가 범위다.
+## **무기는 여기서 다루지 않는다**(#205). 라운드가 시작될 때마다 전투 화면에서 고르므로
+## 대기실 설정에는 무기 항목 자체가 없다 — 무기 선택은 `main.gd`의 무기 선택 단계에 있다.
 
 signal lobby_changed
 signal match_starting
@@ -32,7 +33,7 @@ const ROLE_OBSERVER := "observer"
 var order: Array = []
 ## 관전자 peer 목록. 플레이어 자리를 차지하지 않고 대기실·경기를 보기만 한다.
 var observers: Array = []
-## peer_id -> {"weapon": String, "character": String, "map": String}
+## peer_id -> {"character": String, "map": String}
 ##
 ## 맵은 **플레이어마다 하나씩** 고르고, 시작할 때 서버가 둘 중 하나를 뽑는다 (`_pick_map`).
 var configs: Dictionary = {}
@@ -74,7 +75,6 @@ func is_observer_build() -> bool:
 
 func default_config(slot: int) -> Dictionary:
 	return {
-		"weapon": Weapons.RANDOM,
 		"character": Characters.id_at(slot),
 		"map": Maps.RANDOM,
 	}
@@ -161,12 +161,6 @@ func reset() -> void:
 ## 표에서 꺼낸 값은 Variant라 명시 타입으로 받는다.
 func map_of(peer_id: int) -> String:
 	var picked: String = config_for(peer_id).get("map", DEFAULT_MAP)
-	return picked
-
-
-## 이 플레이어가 고른 무기. 시작 전에는 "랜덤"일 수 있다.
-func weapon_of(peer_id: int) -> String:
-	var picked: String = config_for(peer_id).get("weapon", Weapons.RANDOM)
 	return picked
 
 
@@ -336,22 +330,13 @@ func _receive_map(new_map: String) -> void:
 ## 클라이언트가 보낸 값이 목록에 있는 값인지 확인한다.
 func _sanitize(config: Dictionary, slot: int) -> Dictionary:
 	var base := default_config(slot)
-	var weapon: String = config.get("weapon", base["weapon"])
 	var character: String = config.get("character", base["character"])
 	var map: String = config.get("map", base["map"])
 	return {
-		"weapon": weapon if GameState.WEAPONS.has(weapon) else base["weapon"],
 		"character": character if Characters.has(character) else base["character"],
 		# "랜덤"은 실제 맵이 아니지만 선택지로는 유효하다.
 		"map": map if GameState.MAPS.has(map) else base["map"],
 	}
-
-
-## "랜덤"을 실제 무기로 확정한다. 서버에서만 호출되므로 양쪽이 같은 값을 받는다.
-## 클라이언트가 각자 뽑으면 서로 다른 무기가 되므로 이 호출을 클라이언트로 옮기지 말 것.
-## 뽑기 자체는 무기 표가 들고 있다 — 무기 시스템 통합 가이드: docs/weapon-system.md
-func _resolve_weapon(weapon: String) -> String:
-	return Weapons.resolve(weapon)
 
 
 ## 둘이 고른 맵 중 하나를 뽑는다. **서버에서만 호출한다.**
@@ -377,11 +362,8 @@ func _check_start() -> void:
 	for peer_id in order:
 		if not ready_flags.get(peer_id, false):
 			return
-	for peer_id in order:
-		var config: Dictionary = configs[peer_id]
-		config["weapon"] = _resolve_weapon(config["weapon"])
-		configs[peer_id] = config
-	# 맵도 여기서 확정해야 양쪽이 같은 지형을 깐다.
+	# 맵은 여기서 확정해야 양쪽이 같은 지형을 깐다.
+	# 무기는 확정할 것이 없다 (#205) — 라운드마다 전투 화면에서 고른다.
 	map_name = _pick_map()
 	# 경기 중임을 먼저 켜고 알린다 — 이 뒤에 들어온 관전자는 다음 경기를 기다려야 한다.
 	in_match = true
