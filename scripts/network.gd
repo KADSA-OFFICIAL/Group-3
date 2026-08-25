@@ -53,6 +53,32 @@ const CLIENT_CONFIG_PATH := "user://client.cfg"
 ## 접속 화면과 관전자의 방 전환이 같은 값을 쓴다 — 붙는 방식이 같으므로 한 곳에 둔다.
 const JOIN_TIMEOUT_SEC := 8.0
 
+# ─────────────────────────── 버전 악수 (이슈 #228) ───────────────────────────
+## 서버와 클라이언트가 **같은 코드로 도는지** 접속 직후에 확인한다.
+##
+## RPC 는 함수 이름이 아니라 **번호**로 오간다. Godot 이 노드마다 `@rpc` 함수 이름을
+## 정렬해 그 자리를 번호로 쓰기 때문이다. 그래서 한쪽에만 `@rpc` 함수가 하나 더 있으면
+## 이름이 뒤인 함수들의 번호가 전부 한 칸씩 밀려 **엉뚱한 함수가 호출된다.**
+##
+## 실제로 #225 가 `main.gd` 에 `_play_heavy_punch` 를 더하면서, 옛 코드로 돌던 서버의
+## `_receive_pick_start` 가 새 클라이언트에서는 `_receive_pick_made` 로 도착했다.
+## 무기 선택 창이 안 뜬 채 두 젤리가 얼어 있다가 20초 뒤 서버가 무기를 대신 뽑는,
+## 원인과 한참 먼 증상이 되었다. Godot 도 `The rpc node checksum failed` 를 찍기는
+## 하지만 **막지는 않고**, 배포 빌드에서는 그 오류가 화면에 보이지 않는다.
+## 그래서 여기서 직접 막고 사유를 접속 화면에 띄운다.
+
+## 서명에 넣을 스크립트. **RPC 를 가진 스크립트 전부**여야 한다 —
+## 새로 생기면 여기에 추가한다 (`grep -l "@rpc" scripts/*.gd` 로 확인).
+const PROTOCOL_SCRIPTS := [
+	"res://scripts/lobby.gd",
+	"res://scripts/main.gd",
+	"res://scripts/player.gd",
+]
+
+## 악수를 기다리는 한계 시간(초). `JOIN_TIMEOUT_SEC`(8초) 보다 짧아야
+## "버전이 다릅니다"가 접속 화면의 "접속하지 못했습니다"보다 **먼저** 뜬다.
+const PROTOCOL_TIMEOUT_SEC := 5.0
+
 var is_server := false
 
 ## 마지막으로 접속을 시도한 주소와 포트. **방을 옮길 때 주소를 다시 입력받지 않으려고** 기억한다
@@ -63,6 +89,13 @@ var current_port := 0
 ## 마지막 접속 실패 사유. 타이틀 화면이 한 번 읽고 비운다 —
 ## 전투 화면에서 방을 옮기다 실패하면 화면이 바뀐 뒤에 사유를 보여줘야 한다.
 var last_failure := ""
+
+## 이 빌드의 코드 서명 (이슈 #228). 한 번 계산해 두고 다시 쓴다.
+var _protocol_signature := ""
+## **서버 전용.** 아직 버전을 알리지 않은 피어 -> 끊을 시각.
+var _pending_protocol := {}
+## **클라이언트 전용.** 서버 답을 기다리는 마감 시각. 0이면 기다리는 중이 아니다.
+var _protocol_deadline := 0.0
 
 
 func _ready() -> void:
@@ -116,8 +149,11 @@ func start_server(target_port: int = ROOMS[0]["port"]) -> Error:
 		return err
 	multiplayer.multiplayer_peer = peer
 	is_server = true
-	print("서버 시작 — %s, 포트 %d, 플레이어 %d명 + 관전 %d명" % [
+	# 서명도 함께 적는다 (이슈 #228) — 클라이언트가 거부당했을 때 서버 로그의 이 줄과
+	# 접속 화면에 뜬 값을 견주면 어느 쪽이 뒤처졌는지 바로 안다.
+	print("서버 시작 — %s, 포트 %d, 플레이어 %d명 + 관전 %d명, 버전 %s" % [
 		room_name_for(target_port), target_port, MAX_PLAYERS, MAX_OBSERVERS,
+		protocol_signature(),
 	])
 	server_started.emit()
 	return OK
@@ -190,6 +226,8 @@ func take_last_failure() -> String:
 
 
 func leave() -> void:
+	_protocol_deadline = 0.0
+	_pending_protocol.clear()
 	if multiplayer.multiplayer_peer != null:
 		multiplayer.multiplayer_peer.close()
 		multiplayer.multiplayer_peer = null
@@ -197,15 +235,23 @@ func leave() -> void:
 
 
 func _on_peer_connected(peer_id: int) -> void:
+	# 붙자마자 버전을 알려야 한다 (이슈 #228). 제한 시간 안에 안 오면 악수를 모르는
+	# 옛 클라이언트이므로 끊는다 — 그대로 들이면 RPC 가 조용히 어긋난 채로 논다.
+	if is_server:
+		_pending_protocol[peer_id] = _now() + PROTOCOL_TIMEOUT_SEC
 	peer_joined.emit(peer_id)
 
 
 func _on_peer_disconnected(peer_id: int) -> void:
+	_pending_protocol.erase(peer_id)
 	peer_left.emit(peer_id)
 
 
 func _on_connected_to_server() -> void:
-	join_succeeded.emit()
+	# **여기서 바로 성공을 알리지 않는다** (이슈 #228). 서버와 코드가 같은지 확인한 뒤에
+	# 알린다 — 답이 오면 `_protocol_answer()` 가, 안 오면 `_process()` 가 결론을 낸다.
+	_protocol_deadline = _now() + PROTOCOL_TIMEOUT_SEC
+	_check_protocol.rpc_id(1, protocol_signature())
 
 
 func _on_connection_failed() -> void:
@@ -218,3 +264,101 @@ func _on_server_disconnected() -> void:
 	multiplayer.multiplayer_peer = null
 	last_failure = "서버와 연결이 끊겼습니다."
 	join_failed.emit(last_failure)
+
+
+# ─────────────────────────── 버전 악수 (이슈 #228) ───────────────────────────
+
+## 악수 제한 시간을 잰다. **답이 없다는 것도 결론이다** — 이 검사가 없던 시절의 코드로
+## 돌고 있다는 뜻이므로 그것도 버전 불일치다.
+func _process(_delta: float) -> void:
+	var now := _now()
+	if _protocol_deadline > 0.0 and now >= _protocol_deadline:
+		_fail_protocol("서버가 오래된 버전입니다 — 서버를 최신 코드로 다시 켜 주세요.")
+	# 서버 쪽: 버전을 안 알린 피어를 끊는다. 대개 비어 있으므로 먼저 걸러 낸다 —
+	# `keys()` 는 부를 때마다 배열을 새로 만들고 이 함수는 매 프레임 돈다.
+	if _pending_protocol.is_empty():
+		return
+	for peer_id in _pending_protocol.keys():
+		if now < float(_pending_protocol[peer_id]):
+			continue
+		_pending_protocol.erase(peer_id)
+		print("피어 %d 가 버전을 알리지 않았습니다 — 끊습니다 (옛 클라이언트)" % peer_id)
+		_drop_peer(peer_id)
+
+
+## 이 빌드의 코드 서명. 같은 코드면 같은 값이 나오고 한 군데라도 다르면 달라진다.
+##
+## `@rpc` 함수만 골라낼 방법이 스크립트 쪽에 없어서(`get_node_rpc_config()` 는 런타임에
+## `rpc_config()` 로 덧씌운 것만 준다) **함수 이름 전부**를 넣는다. `@rpc` 가 늘거나 줄면
+## 함수 목록도 반드시 달라지므로 위험한 어긋남을 놓치지 않는다. 대신 RPC 와 상관없는
+## 함수 하나만 이름이 달라도 다른 버전으로 본다 — 서버와 클라이언트가 같은 코드로 도는
+## 것이 이 프로젝트의 규칙이므로(#215) 그 정도는 엄한 편이 낫다.
+func protocol_signature() -> String:
+	if not _protocol_signature.is_empty():
+		return _protocol_signature
+	var parts: Array[String] = []
+	for path in PROTOCOL_SCRIPTS:
+		var script := load(path) as Script
+		if script == null:
+			push_error("서명에 넣을 스크립트를 못 읽었습니다: %s" % path)
+			continue
+		var names: Array[String] = []
+		for method in script.get_script_method_list():
+			names.append(str(method["name"]))
+		# 함수를 적은 순서는 빌드마다 같다는 보장이 없다 — 정렬해서 순서를 지운다.
+		names.sort()
+		parts.append("%s=%s" % [path, "|".join(PackedStringArray(names))])
+	_protocol_signature = "\n".join(PackedStringArray(parts)).sha256_text().substr(0, 16)
+	return _protocol_signature
+
+
+## 클라이언트가 자기 서명을 알린다 (**서버가 받는다**).
+##
+## **network.gd 에 `@rpc` 함수를 더 만들지 말 것.** 악수도 번호로 오가므로 여기에
+## 함수를 더하면 그 번호부터 밀린다 — 버전이 달라도 다르다는 말조차 못 하게 된다.
+@rpc("any_peer", "call_remote", "reliable")
+func _check_protocol(signature: String) -> void:
+	if not is_server:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	_pending_protocol.erase(sender)
+	var mine := protocol_signature()
+	# 답을 먼저 보내고 끊는다 — 순서를 바꾸면 사유가 도착하기 전에 연결이 사라진다.
+	_protocol_answer.rpc_id(sender, signature == mine, mine)
+	if signature == mine:
+		return
+	print("피어 %d 버전 불일치 — 끊습니다 (서버 %s / 클라이언트 %s)" % [sender, mine, signature])
+	_drop_peer(sender)
+
+
+## 서버의 답 (**클라이언트가 받는다**). 여기까지 와야 접속이 성사된 것으로 친다.
+@rpc("authority", "call_remote", "reliable")
+func _protocol_answer(matched: bool, server_signature: String) -> void:
+	_protocol_deadline = 0.0
+	if matched:
+		join_succeeded.emit()
+		return
+	_fail_protocol("게임 버전이 서버와 다릅니다 (서버 %s / 이 기기 %s) — 같은 버전으로 맞춰 주세요." % [
+		server_signature, protocol_signature(),
+	])
+
+
+## 피어를 끊는다. `force` 를 주지 않아 보낸 것이 나간 뒤에 닫힌다 — 위의 답이 그걸 탄다.
+func _drop_peer(peer_id: int) -> void:
+	var peer := multiplayer.multiplayer_peer as ENetMultiplayerPeer
+	if peer != null:
+		peer.disconnect_peer(peer_id)
+
+
+## 버전 때문에 접속이 깨졌다. **먼저 끊고** 사유를 알린다 — 남겨 두면 뒤이어 오는
+## `server_disconnected` 가 사유를 "서버와 연결이 끊겼습니다"로 덮어쓴다.
+func _fail_protocol(reason: String) -> void:
+	_protocol_deadline = 0.0
+	leave()
+	last_failure = reason
+	push_warning(reason)
+	join_failed.emit(reason)
+
+
+func _now() -> float:
+	return Time.get_ticks_msec() / 1000.0
