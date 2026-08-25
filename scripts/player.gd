@@ -70,6 +70,18 @@ const PIERCE_TINT := Color(0.8, 1.5, 1.35)
 const PIERCE_AURA_RADIUS := 58.0
 const PIERCE_AURA_CENTER := Vector2(0.0, -8.0)
 
+## 게이지가 `charged_ratio`(너클 75%)를 넘은 동안 몸을 감싸는 오라 (#225).
+## 색은 사용자가 첨부한 참고 스크린샷의 자홍/보라 계열이고, 강펀치 연출
+## (`heavy_punch.gd`의 충전 디자인)도 같은 색을 쓴다 — 오라가 돌던 젤리가 그 색으로
+## 내지르는 것으로 읽혀야 한다.
+const CHARGE_AURA_RADIUS := 46.0
+const CHARGE_AURA_CENTER := Vector2(0.0, -8.0)
+const CHARGE_AURA_COLOR := Color(0.95, 0.36, 0.88)
+const CHARGE_AURA_EDGE := Color(0.55, 0.28, 0.92)
+## 몸을 따라 오르는 조각의 색과 개수.
+const CHARGE_SPARK_COLOR := Color(0.78, 0.58, 1.0)
+const CHARGE_SPARK_COUNT := 6
+
 ## 평소와 다른 그림을 든 동안 무기에서 피어오르는 연기 색 (빨간 표창·빨간 도끼).
 ## 무기 표에 `smoke_puffs`가 있는 무기에만 뜬다. 두 빨간 그림의 붉은색에 맞췄다 —
 ## 손에 든 것과 연기가 다른 색이면 무엇에서 나는지 안 읽힌다.
@@ -404,6 +416,10 @@ func _apply_weapon() -> void:
 	sprite.texture = texture
 	_weapon_has_art = texture != null
 	_weapon_faces_left = Weapons.art_faces_left(weapon_id)
+	# 머리 위 게이지 바는 게이지를 쓰는 무기에만 뜬다 (#225). 무기가 바뀌는 순간이
+	# 이 함수 하나뿐이라 여기서 정한다 — 라운드마다 무기를 새로 고르므로(#205)
+	# 다른 무기로 바뀌면 저절로 숨는다.
+	$GaugeBar.visible = uses_gauge()
 	if texture == null:
 		return
 	var texture_size := Vector2(texture.get_size())
@@ -437,9 +453,11 @@ func _apply_weapon() -> void:
 ## 관통 빛은 매 프레임 모양이 바뀌니 켜져 있는 동안 계속 다시 그린다.
 ## 꺼진 프레임에도 한 번 더 그려야 화면에서 지워진다 — 안 그러면 마지막 모양이 남는다.
 func _update_pierce_aura() -> void:
-	var piercing := is_piercing()
-	if piercing or _aura_shown:
-		_aura_shown = piercing
+	# 관통 빛과 게이지 오라(#225)를 한 자리에서 본다 — `_draw()` 가 둘 다 그리므로
+	# 어느 쪽이든 켜져 있거나 방금 꺼졌으면 다시 그려야 한다.
+	var lit := is_piercing() or is_charged()
+	if lit or _aura_shown:
+		_aura_shown = lit
 		queue_redraw()
 
 
@@ -450,6 +468,10 @@ func _update_pierce_aura() -> void:
 ##
 ## `_pierce_until`이 `_receive_buff`로 양쪽 피어에 복제되므로 두 화면에 똑같이 뜬다.
 func _draw() -> void:
+	# 게이지 오라가 먼저다 — 관통과 겹칠 수 있고(광선검은 게이지가 없으니 지금은 안 겹친다),
+	# 겹칠 때 관통 빛이 위에 오는 편이 무엇이 켜졌는지 읽기 쉽다.
+	if is_charged():
+		_draw_charge_aura()
 	if not is_piercing():
 		return
 	var pulse := 0.72 + 0.28 * sin(_now() * 9.0)
@@ -462,6 +484,37 @@ func _draw() -> void:
 	# 윤곽선을 덧그려 "지금 켜져 있다"가 확실히 보이게 한다.
 	draw_arc(PIERCE_AURA_CENTER, PIERCE_AURA_RADIUS * 0.82, 0.0, TAU, 44,
 		Color(PIERCE_COLOR, 0.95 * pulse), 3.5, true)
+
+
+## 게이지가 `charged_ratio`를 넘은 동안 몸을 감싸는 오라 (#225).
+##
+## 관통 빛과 같은 자리에 그리지만 **모양이 다르다** — 서로 반대로 도는 고리 두 개 위에
+## 몸을 따라 오르는 조각이 붙는다. 가만히 있는 빛은 "켜졌다"로만 읽히는데, 이쪽은
+## "차올라 있다"로 읽혀야 해서 움직이는 것을 넣었다.
+##
+## `gauge`가 `_receive_hit`·`_receive_gauge`로 복제되므로 두 화면에 똑같이 뜬다.
+func _draw_charge_aura() -> void:
+	var t := _now()
+	var pulse := 0.7 + 0.3 * sin(t * 6.0)
+	Art.draw_glow(self, CHARGE_AURA_CENTER, CHARGE_AURA_RADIUS * (1.3 + 0.1 * pulse),
+		CHARGE_AURA_EDGE, 0.42 * pulse)
+	Art.draw_glow(self, CHARGE_AURA_CENTER, CHARGE_AURA_RADIUS * (0.95 + 0.07 * pulse),
+		CHARGE_AURA_COLOR, 0.68 * pulse)
+	# 고리 둘은 서로 반대로 돈다. 한 바퀴를 다 그리지 않고 끊어 두어야 도는 것이 보인다.
+	for i in 2:
+		var spin := t * 2.4 * (1.0 if i == 0 else -1.0)
+		var radius := CHARGE_AURA_RADIUS * (0.72 + 0.12 * float(i))
+		draw_arc(CHARGE_AURA_CENTER, radius, spin, spin + TAU * 0.62, 34,
+			Color(CHARGE_AURA_COLOR, 0.8 * pulse), 3.0, true)
+	# 몸을 따라 오르는 조각. 위로 갈수록 작아지고 옅어진다.
+	for i in CHARGE_SPARK_COUNT:
+		var phase := fposmod(t * 0.9 + float(i) / float(CHARGE_SPARK_COUNT), 1.0)
+		var angle := TAU * float(i) / float(CHARGE_SPARK_COUNT) + t * 1.6
+		var at := CHARGE_AURA_CENTER + Vector2(
+			cos(angle) * CHARGE_AURA_RADIUS * 0.7,
+			lerpf(26.0, -34.0, phase))
+		Art.draw_glow(self, at, lerpf(7.0, 2.5, phase), CHARGE_SPARK_COLOR,
+			(1.0 - phase) * 0.75)
 
 
 ## 평소와 다른 그림을 든 동안 무기에서 피어오르는 연기 (빨간 표창·빨간 도끼).
@@ -787,6 +840,29 @@ func is_guarding() -> bool:
 	return _size_multiplier > 1.0 and Weapons.size_buff_guards(weapon_id)
 
 
+## 이 무기가 게이지를 쓰는가 (#225). 머리 위 게이지 바가 뜰지 정하는 조건이고,
+## 지금 이 값을 가진 것은 너클뿐이다.
+func uses_gauge() -> bool:
+	return Weapons.get_weapon(weapon_id).get("gauge_max", 0.0) > 0.0
+
+
+## 게이지가 얼마나 찼는가 (0~1). 게이지를 쓰지 않는 무기는 0이다.
+func gauge_ratio() -> float:
+	var top: float = Weapons.get_weapon(weapon_id).get("gauge_max", 0.0)
+	if top <= 0.0:
+		return 0.0
+	return clampf(gauge / top, 0.0, 1.0)
+
+
+## 오라가 돌 만큼 게이지가 찼는가 (너클 75% 이상, #225).
+##
+## 이 하나가 **오라·게이지 바 색·강펀치 연출 디자인**을 함께 정한다 — 세 곳이 각자
+## 기준을 두면 셋이 어긋난 순간이 생긴다.
+func is_charged() -> bool:
+	var need: float = Weapons.get_weapon(weapon_id).get("charged_ratio", 0.0)
+	return need > 0.0 and gauge_ratio() >= need
+
+
 func is_forced() -> bool:
 	return forced_mode != ""
 
@@ -827,11 +903,8 @@ func server_apply_hit(damage: float, knockback_level: int, from_x: float,
 	var direction := signf(global_position.x - from_x)
 	if direction == 0.0:
 		direction = 1.0
-	# 너클은 내가 맞을 때 게이지가 찬다.
-	var new_gauge := gauge
-	var data := Weapons.get_weapon(weapon_id)
-	if data.get("gauge_per_hit", 0.0) > 0.0:
-		new_gauge = minf(gauge + data["gauge_per_hit"], data["gauge_max"])
+	# 너클은 내가 맞을 때 게이지가 찬다. **받은 데미지에 비례한다** (#225).
+	var new_gauge := _gauge_after(damage)
 	_receive_hit.rpc(new_hp, knockback_level, direction, stun, source, new_gauge, knockback_speed)
 
 
@@ -840,6 +913,26 @@ func server_apply_dot(damage: float) -> void:
 	if not multiplayer.is_server() or not alive:
 		return
 	_receive_dot.rpc(maxf(hp - damage, 0.0))
+	# 출혈도 "받은 데미지"다 (#225) — 너클 게이지는 여기서도 찬다.
+	# `_receive_dot` 의 인자를 늘리지 않고 따로 보내는 것은, 게이지를 쓰지 않는 무기에는
+	# 보낼 것이 없어서다(아래 비교에서 걸러진다).
+	var filled := _gauge_after(damage)
+	if not is_equal_approx(filled, gauge):
+		server_set_gauge(filled)
+
+
+## 이만큼 데미지를 받은 뒤의 게이지 (#225).
+##
+## **받은 데미지에 비례해 찬다** — 무기 표의 `gauge_fill_damage`(너클 40)만큼 받으면
+## `gauge_max`(100)가 된다. 그 위로는 넘지 않는다.
+## 게이지를 쓰지 않는 무기(그 필드가 없는 무기)는 지금 값을 그대로 돌려준다.
+func _gauge_after(damage: float) -> float:
+	var data := Weapons.get_weapon(weapon_id)
+	var fill: float = data.get("gauge_fill_damage", 0.0)
+	if fill <= 0.0 or damage <= 0.0:
+		return gauge
+	var top: float = data["gauge_max"]
+	return minf(gauge + damage * top / fill, top)
 
 
 ## 데미지 없는 사망 (낙사 등).
