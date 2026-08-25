@@ -19,12 +19,17 @@ const SWAP_BURST_SCENE := preload("res://scenes/swap_burst.tscn")
 const LIGHTNING_STRIKE_SCENE := preload("res://scenes/lightning_strike.tscn")
 const SHOTGUN_BLAST_SCENE := preload("res://scenes/shotgun_blast.tscn")
 const SHOCKWAVE_SCENE := preload("res://scenes/shockwave.tscn")
+const HEAVY_PUNCH_SCENE := preload("res://scenes/heavy_punch.tscn")
 ## 위치 교환 연출을 띄울 높이 보정. 젤리의 `global_position`은 충돌 상자(48x56)의
 ## 가운데이고 몸(72px)은 발밑이 +`Player.BODY_BOTTOM`(28)이라, 몸 한가운데가 -8이다.
 ## 검 특수의 빛기둥은 반대로 발밑(+28)에 띄운다 — 거기서 위로 솟는 연출이라서다.
 const SWAP_BURST_CENTER := Vector2(0.0, -8.0)
 ## 맵에 Spawns가 없을 때만 쓰는 대비값. 정상 경로에서는 맵 씬이 위치를 들고 있다.
 const SPAWN_POSITIONS := [Vector2(300, 500), Vector2(852, 500)]
+
+## 강펀치 부채꼴이 시작되는 자리 — 몸 중심에서 바라보는 쪽으로 이만큼 (#225).
+## 젤리가 무기를 드는 자리(`Player.WEAPON_OFFSET_X` 26)와 같은 쪽이라 주먹에서 터진다.
+const PUNCH_ORIGIN_X := 24.0
 
 ## 근접 "닿으면" 판정 거리. 젤리 몸통이 48px이므로 두 몸통이 맞닿는 거리다.
 ## 무기별 사거리는 player.current_reach()로 더한다.
@@ -1203,6 +1208,60 @@ func _guarded_cone(attacker: Player, target: Player) -> bool:
 	return signf(float(target.facing)) == toward_attacker
 
 
+## 너클 강펀치 (#225). 게이지를 전부 소모하고 **부채꼴**로 때린다.
+##
+## 부채꼴 안에서 **가운데가 가장 세다** — 바라보는 쪽에서 벗어난 각도만큼 약해지고
+## 가장자리는 가운데의 `punch_edge_ratio`(45%)다. 샷건이 **거리**로 줄어드는 것과 다르다:
+## 강펀치는 코앞에서 내지르는 것이라 거리보다 조준이 값이어야 한다.
+##
+## **게이지는 맞았는지와 무관하게 비워진다.** 헛치면 아무 일도 없이 게이지만 날아가는 것이
+## 이 무기의 무게다 — 빗나갈 때마다 공짜로 다시 시도할 수 있으면 조준에 값이 없다.
+## 그래서 쿨타임도 늘 돌도록 항상 true를 돌려준다.
+##
+## 크게 들어 올린 방패는 이 부채꼴도 막는다 (#222와 같은 판정). 근접 특수였을 때는
+## `is_blocked()`(사거리 비교)에 막혔는데 부채꼴로 바뀌면서 그 길이 사라지므로,
+## 막을 수단이 아예 없어지지 않게 같은 규칙을 잇는다.
+func _punch_cone(attacker: Player, weapon: Dictionary) -> bool:
+	var reach: float = weapon["punch_cone_range"]
+	var spread: float = weapon["punch_cone_angle"]
+	var aim := signf(float(attacker.facing))
+	var charged := attacker.is_charged()
+	# 한가운데 데미지. 게이지 0%에서 10, 100%에서 40이다.
+	var center: float = lerpf(weapon["gauge_min_damage"], weapon["gauge_max_damage"],
+		attacker.gauge_ratio())
+
+	# **맞았는지와 무관하게 먼저 띄운다** — 빗나간 것도 "여기까지였다"로 보여야 한다
+	# (샷건 부채꼴·도끼 착지 충격파와 같은 이유). 게이지도 여기서 비운다:
+	# 아래에서 일찍 돌아가는 갈래가 여럿이라 그 뒤에 두면 새는 길이 생긴다.
+	_play_heavy_punch.rpc(
+		attacker.global_position + Vector2(aim * PUNCH_ORIGIN_X, Player.WEAPON_CENTER_Y),
+		aim, reach, spread, charged)
+	attacker.server_set_gauge(0.0)
+
+	var target := _opponent_of(attacker.owner_peer_id)
+	if target == null or not target.alive:
+		return true
+	var offset := target.global_position - attacker.global_position
+	var distance := offset.length()
+	if distance > reach:
+		return true
+	# 바라보는 쪽에서 벗어난 각도가 부채꼴 절반을 넘으면 빗나간다.
+	# 두 젤리가 정확히 겹치면 방향을 못 재므로 그때는 한가운데로 둔다.
+	var half := deg_to_rad(spread) * 0.5
+	var edge := 0.0
+	if distance > 0.001:
+		var away := absf(Vector2(aim, 0.0).angle_to(offset))
+		if away > half:
+			return true
+		edge = away / maxf(half, 0.001)
+	if _guarded_cone(attacker, target):
+		return true
+	var damage := lerpf(center, center * float(weapon["punch_edge_ratio"]), edge)
+	target.server_apply_hit(damage, weapon["knockback"], attacker.global_position.x,
+		0.0, "special")
+	return true
+
+
 ## 다음에 던질 것이 강화인지 뽑는다 (#134). **서버에서만 부른다** —
 ## 클라이언트가 각자 뽑으면 손에 든 그림이 양쪽에서 달라진다.
 ##
@@ -1325,12 +1384,7 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 				})
 			return true
 		"너클":
-			# 게이지 비례 데미지 → 쓰면 게이지는 전부 소모된다.
-			var ratio: float = attacker.gauge / weapon["gauge_max"]
-			var punch: float = lerpf(weapon["gauge_min_damage"], weapon["gauge_max_damage"], ratio)
-			var landed := _melee_special(attacker, target, punch, weapon["knockback"])
-			attacker.server_set_gauge(0.0)
-			return landed
+			return _punch_cone(attacker, weapon)
 		"광선검":
 			# 관통 — 일정 시간 상대 무기의 막기를 무시한다.
 			attacker.server_apply_buff("pierce", 1.0, weapon["special_duration"])
@@ -1530,6 +1584,21 @@ func _play_shotgun_blast(at: Vector2, aim: float, reach: float, spread: float) -
 	blast.reach = reach
 	blast.spread = spread
 	effects_root.add_child(blast)
+
+
+## 너클 강펀치의 부채꼴 (#225). `charged`면 다른 디자인으로 뜬다.
+@rpc("authority", "call_local", "reliable")
+func _play_heavy_punch(at: Vector2, aim: float, reach: float, spread: float,
+		charged: bool) -> void:
+	var punch := HEAVY_PUNCH_SCENE.instantiate()
+	# **위치를 add_child 전에 넣는다** — 연출이 `_ready()`에서 위치로 씨앗을 잡으므로
+	# 나중에 넣으면 모든 강펀치가 같은 모양이 된다 (`heavy_punch.gd` 참고).
+	punch.position = at
+	punch.aim = aim
+	punch.reach = reach
+	punch.spread = spread
+	punch.charged = charged
+	effects_root.add_child(punch)
 
 
 ## 삼지창 특수가 맞혔다 (서버 전용 — 투사체가 알려 온다).
