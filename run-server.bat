@@ -3,6 +3,8 @@ rem ============================================================
 rem  젤리 워즈 전용 서버 실행기 (이슈 #201)
 rem
 rem  더블클릭하면 방마다 콘솔 창 하나씩 열고 그 안에서 헤드리스 서버를 띄운다.
+rem  띄우기 전에 원격 저장소와 게임 파일을 맞춘다 - 서버와 클라이언트의 파일이
+rem  다르면 입장이 안 되기 때문이다. 자세한 내용은 아래 2번 단락.
 rem  방 목록(포트)은 scripts/network.gd 의 ROOMS 에서 읽는다 -
 rem  방 구성의 유일한 출처가 그곳이므로 이 파일에 포트를 적지 않는다.
 rem  ROOMS 에 줄을 추가하면 이 스크립트를 고치지 않아도 그 방까지 함께 뜬다.
@@ -23,10 +25,37 @@ rem ============================================================
 setlocal enabledelayedexpansion
 title 젤리 워즈 서버 실행기
 
+rem ---------- 0. 임시 폴더로 자신을 옮겨 실행 ----------
+rem 아래 2번에서 원격과 파일을 맞출 때 이 파일 자신이 덮어써질 수 있다.
+rem cmd 는 배치 파일을 "파일 안 몇 번째 바이트" 로 기억해 두고 한 줄 끝날 때마다
+rem 다시 읽기 때문에, 실행 도중에 파일이 바뀌면 그 다음부터 줄 중간을 명령으로
+rem 실행한다. 실제로 "echo LINE-B" 가 "B" 만 명령으로 실행되는 것을 확인했다.
+rem 그래서 먼저 %TEMP% 로 자신을 복사해 그쪽에서 실행하고, 원본은 마음대로
+rem 덮이게 둔다. 복사본의 %~dp0 는 %TEMP% 라서 못 쓰므로 원래 폴더를 인자로 넘긴다.
+rem
 rem %~dp0 는 끝에 \ 가 붙어 있다. 그대로 "..." 안에 넣으면 마지막 \ 가 닫는
 rem 따옴표를 이스케이프해 버리므로 잘라낸다.
 set "PROJECT_DIR=%~dp0"
 set "PROJECT_DIR=%PROJECT_DIR:~0,-1%"
+
+if /i "%~1"=="--relaunched" goto :RELAUNCHED
+
+set "SELF_COPY=%TEMP%\jellywars-run-server.bat"
+copy /y "%~f0" "%SELF_COPY%" >nul 2>&1
+if errorlevel 1 (
+	echo.
+	echo  [경고] 임시 폴더로 복사하지 못해 원본에서 그대로 실행합니다.
+	echo         실행기 자신이 갱신되면 이 창이 이상하게 동작할 수 있습니다.
+	echo         그럴 때는 창을 닫고 한 번 더 실행하면 됩니다.
+	goto :RELAUNCHED
+)
+
+rem call 이 아니라 그냥 부른다. call 이면 끝나고 원본으로 돌아오려고 원본을
+rem 계속 읽으므로 위험이 그대로 남는다. 이렇게 부르면 제어가 넘어가고 끝난다.
+"%SELF_COPY%" --relaunched "%PROJECT_DIR%"
+
+:RELAUNCHED
+if /i "%~1"=="--relaunched" set "PROJECT_DIR=%~2"
 set "NETWORK_GD=%PROJECT_DIR%\scripts\network.gd"
 
 echo.
@@ -88,7 +117,101 @@ echo  Godot    : %GODOT_EXE%
 echo  프로젝트 : %PROJECT_DIR%
 echo.
 
-rem ---------- 2. scripts/network.gd 의 ROOMS 에서 포트 읽기 ----------
+rem ---------- 2. 최신 게임 파일 받기 ----------
+rem 서버가 옛 파일로 떠 있으면 최신 클라이언트가 접속해도 입장이 안 된다.
+rem 그래서 띄우기 전에 원격과 강제로 맞춘다. 이 컴퓨터는 서버 전용이라
+rem 여기서 게임 파일을 고칠 일이 없다는 전제다 - 고쳐야 하면 다른 컴퓨터에서
+rem 고치고 push 한 뒤 이 스크립트를 다시 돌린다.
+rem
+rem merge(=git pull) 가 아니라 fetch + reset --hard 를 쓴다. Godot 이 .import
+rem 파일을 LF 로 다시 쓰는데 저장소에는 CRLF 로 들어 있어서, 내용이 같아도
+rem git 은 "수정됨" 으로 보고 merge 를 거부한다. 이 컴퓨터에서는 그 상태가
+rem 상시라 merge 로는 거의 매번 막힌다.
+rem
+rem 인터넷이 안 되면 있는 파일로 그냥 띄운다 - 서버가 아예 안 뜨는 것보다 낫다.
+rem GIT_TERMINAL_PROMPT=0 은 git 이 아이디/비밀번호를 물으며 창을 붙잡고
+rem 멈추는 것을 막는다. 물어야 하는 상황이면 그냥 실패시키고 넘어간다.
+set "GIT_TERMINAL_PROMPT=0"
+set "GIT_SKIP="
+where git >nul 2>&1
+if errorlevel 1 set "GIT_SKIP=git 이 설치되어 있지 않습니다"
+if not exist "%PROJECT_DIR%\.git" set "GIT_SKIP=이 폴더가 git 저장소가 아닙니다"
+
+if defined GIT_SKIP (
+	echo  [경고] 최신 파일 받기를 건너뜁니다 - !GIT_SKIP!
+	echo         서버가 옛 파일로 떠서 클라이언트가 입장하지 못할 수 있습니다.
+	echo.
+	goto :SYNC_DONE
+)
+
+rem git 에 경로를 넘기지 않고 폴더로 들어가서 부른다. 프로젝트 경로에 한글이
+rem 들어 있어도 cmd 가 알아서 처리하므로 인코딩 사고가 나지 않는다.
+pushd "%PROJECT_DIR%"
+
+set "HEAD_BEFORE="
+for /f "delims=" %%H in ('git rev-parse HEAD 2^>nul') do set "HEAD_BEFORE=%%H"
+set "BRANCH="
+for /f "delims=" %%B in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set "BRANCH=%%B"
+
+if not defined BRANCH (
+	echo  [경고] 현재 브랜치를 알 수 없어 최신 파일 받기를 건너뜁니다.
+	echo.
+	popd
+	goto :SYNC_DONE
+)
+
+echo  최신 게임 파일을 받는 중... [브랜치 !BRANCH!]
+git fetch --prune origin
+if errorlevel 1 (
+	echo.
+	echo  [경고] 원격에서 받지 못했습니다. 인터넷 연결을 확인하세요.
+	echo         지금 있는 파일로 띄웁니다 - 클라이언트와 버전이 다르면
+	echo         입장이 안 될 수 있습니다.
+	echo.
+	popd
+	goto :SYNC_DONE
+)
+
+git rev-parse --verify "origin/!BRANCH!" >nul 2>&1
+if errorlevel 1 (
+	echo  [경고] origin/!BRANCH! 가 없어 최신화를 건너뜁니다.
+	echo.
+	popd
+	goto :SYNC_DONE
+)
+
+rem 여기서 이 폴더의 로컬 변경은 버려진다. 위에 적은 전제가 그래서 중요하다.
+git reset --hard "origin/!BRANCH!"
+if errorlevel 1 (
+	echo.
+	echo  [경고] 최신화에 실패했습니다. 지금 있는 파일로 띄웁니다.
+	echo.
+	popd
+	goto :SYNC_DONE
+)
+
+set "HEAD_AFTER="
+for /f "delims=" %%H in ('git rev-parse HEAD 2^>nul') do set "HEAD_AFTER=%%H"
+popd
+
+if "!HEAD_BEFORE!"=="!HEAD_AFTER!" (
+	echo  이미 최신입니다.
+	echo.
+	goto :SYNC_DONE
+)
+
+rem class_name 이 붙은 스크립트가 새로 들어오면 .godot 의 클래스 캐시가 낡아서
+rem "Could not find type ..." 파스 에러가 쏟아지고 서버가 제구실을 못 한다.
+rem --import 는 캐시만 다시 만들고 추적 파일은 건드리지 않는다.
+rem (--editor 로 열면 .tscn 의 uid 까지 다시 써서 저장소가 더러워진다.)
+echo  게임 파일이 바뀌었습니다. Godot 캐시를 다시 만드는 중...
+"%GODOT_EXE%" --headless --import --path "%PROJECT_DIR%" >nul 2>&1
+echo  준비가 끝났습니다.
+echo.
+
+:SYNC_DONE
+
+rem ---------- 3. scripts/network.gd 의 ROOMS 에서 포트 읽기 ----------
 rem 포트만 읽고 방 이름은 읽지 않는다. network.gd 는 UTF-8 이고 이 창은 CP949
 rem 라서 한글 방 이름을 그대로 가져오면 창 제목이 깨진다. 창은 ROOMS 의 몇 번째
 rem 줄인지와 포트로 구분한다 - 포트가 곧 방이다.
@@ -121,7 +244,7 @@ if "%ROOM_COUNT%"=="0" (
 	exit /b 1
 )
 
-rem ---------- 3. 이미 쓰고 있는 포트가 없는지 미리 본다 ----------
+rem ---------- 4. 이미 쓰고 있는 포트가 없는지 미리 본다 ----------
 rem 포트를 못 열면 서버는 일부러 죽는다(exit 1). 미리 알려주면 창을 안 뒤져도 된다.
 for /l %%I in (1,1,%ROOM_COUNT%) do (
 	netstat -ano -p UDP | findstr /c:":!ROOM_PORT_%%I! " >nul
@@ -132,7 +255,7 @@ for /l %%I in (1,1,%ROOM_COUNT%) do (
 	)
 )
 
-rem ---------- 4. 방마다 창 하나씩 띄운다 ----------
+rem ---------- 5. 방마다 창 하나씩 띄운다 ----------
 rem cmd /k 라서 서버가 죽어도 창이 남는다. 실패 메시지를 읽을 수 있다.
 rem 새 창에서 chcp 65001 을 하는 이유는 Godot 로그가 UTF-8 이기 때문이다.
 echo  방 %ROOM_COUNT%개를 띄웁니다.
