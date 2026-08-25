@@ -37,6 +37,13 @@ const WEAPON_CHOICES := 3
 ## 한 사람이 자리를 비웠다고 경기가 그 자리에서 영영 멈추면 안 된다.
 const WEAPON_PICK_TIME := 20.0
 
+## 싸울 사람이 부족한 채로 이만큼 지나면 판을 접는다.
+##
+## **경기가 시작된 직후에는 아무도 스폰되어 있지 않다** — 클라이언트가 전투 화면을
+## 불러온 뒤에야 `_notify_ready()`로 알리고 그때 서버가 스폰한다. 그 시간을 기다려
+## 주지 않으면 시작하자마자 판을 접어 버린다. 씬 로드보다 넉넉하게 잡는다.
+const ABANDON_GRACE_SEC := 15.0
+
 ## 아래 상태는 전부 **서버에서만** 쓴다. 클라이언트에서는 비어 있다.
 ## "공격자peer>피격자peer" -> 다음 기본 공격이 들어갈 수 있는 시각
 var _next_hit_at := {}
@@ -73,6 +80,8 @@ var _pick_is_mine := false
 var _pick_sent := false
 ## 대기실로 돌려보낼 시각. 0이면 예약 없음.
 var _return_at := 0.0
+## 싸울 사람이 부족해진 시각. 0이면 부족하지 않다 (`ABANDON_GRACE_SEC` 참고).
+var _short_handed_since := 0.0
 
 ## 아래 둘은 서버가 정하고 모든 피어에 복제된다 — HUD가 읽는다.
 ## peer_id -> 점수
@@ -241,6 +250,14 @@ func _on_peer_left(peer_id: int) -> void:
 	# 기다릴 이유가 없으니 바로 라운드를 연다 — 안 그러면 제한 시간까지 멈춰 있는다.
 	_pick_options.erase(peer_id)
 	_pick_choices.erase(peer_id)
+
+	# 싸우던 사람이 빠졌다 — 1 VS 1 이 성립하지 않으면 판을 접는다.
+	# 여기서 안 접으면 `Lobby.in_match` 가 켜진 채로 남아 다음 경기를 시작할 수 없다.
+	# 선택 중이었어도 여는 것이 아니라 접는 쪽이 먼저다 — 혼자 남은 판을 열 이유가 없다.
+	if Lobby.in_match and not _match_over and _fighter_count() < Network.MAX_PLAYERS:
+		_abandon_match()
+		return
+
 	if _picking and _all_picked():
 		_finish_pick_phase()
 
@@ -469,6 +486,62 @@ func _tick_round() -> void:
 		_return_at = 0.0
 		Lobby.server_end_match()
 		_server_reset_match()
+	_tick_abandon(now)
+
+
+## 싸울 사람이 없는 판이 영원히 남지 않게 하는 마지막 안전망.
+##
+## 사람이 빠지는 것은 대개 `_on_peer_left()`가 먼저 잡는다. 하지만 **아직 스폰되지 않은
+## 피어가 끊기면** 거기서는 잡을 수 없다 — 전투 화면에 그 피어의 노드가 없어서 나간 것이
+## 싸울 사람인지 관전자인지 구별이 안 되기 때문이다. 경기 시작 직후(클라이언트가 씬을
+## 불러오는 동안)에 끊기면 그 상태가 된다.
+##
+## 그렇게 남은 판은 화면상 "맵만 깔려 있고 아무도 없는" 모습이고, `Lobby.in_match`가
+## 켜진 채라 **다음 경기를 시작할 수 없다**(`Lobby._check_start()`가 일찍 돌아간다).
+## 서버는 씬을 벗어나지 않으므로 스스로 알아차리는 곳이 여기밖에 없다.
+func _tick_abandon(now: float) -> void:
+	# 경기 중이 아니면 셀 것이 없다 — 전용 서버는 경기 사이에도 이 씬에 그냥 머문다.
+	if not Lobby.in_match or _match_over or _fighter_count() >= Network.MAX_PLAYERS:
+		_short_handed_since = 0.0
+		return
+	if _short_handed_since == 0.0:
+		_short_handed_since = now
+		return
+	if now - _short_handed_since >= ABANDON_GRACE_SEC:
+		_abandon_match()
+
+
+## 지금 판에서 싸우고 있는 사람 수.
+## `queue_free()`는 프레임 끝에야 노드를 떼므로 **지워질 예정인 것은 빼고 센다** —
+## 안 그러면 방금 나간 사람이 아직 싸우는 중으로 잡힌다.
+func _fighter_count() -> int:
+	var count := 0
+	for player: Player in players_root.get_children():
+		if not player.is_queued_for_deletion():
+			count += 1
+	return count
+
+
+## 싸울 사람이 부족해 판을 접는다. 점수는 주지 않는다 — 이긴 것이 아니라 못 끝낸 것이다.
+## 남은 사람과 관전자는 `_return_at`이 되면 대기실로 돌아간다(정상 종료와 같은 길).
+func _abandon_match() -> void:
+	_match_over = true
+	_round_restart_at = 0.0
+	_short_handed_since = 0.0
+	# 선택을 열어 둔 채로 두면 제한 시간이 되어 `_finish_pick_phase()`가 판을 다시 연다 (#205).
+	# 남은 사람의 카드도 닫아 준다 — 접힌 경기 위에 카드가 떠 있으면 고르라는 화면이 된다.
+	if _picking:
+		_picking = false
+		_pick_deadline = 0.0
+		for peer in Lobby.viewers:
+			_receive_pick_end.rpc_id(peer)
+	_pick_options.clear()
+	_pick_choices.clear()
+	# 고르는 동안 잠겼던 조작을 풀어 준다. 얼어 있는 채로 남으면 멈춘 화면으로 보인다.
+	for player: Player in players_root.get_children():
+		player.server_set_frozen(false)
+	_return_at = _now() + Combat.MATCH_END_DELAY
+	_broadcast_round("상대가 나가서 경기를 끝냅니다")
 
 
 ## 전용 서버는 씬을 벗어나지 않으므로 다음 경기를 위해 직접 판을 비운다.
@@ -486,6 +559,7 @@ func _server_reset_match() -> void:
 	_hide_result()
 	_match_over = false
 	_round_restart_at = 0.0
+	_short_handed_since = 0.0
 	# 선택 도중에 경기가 끝나는 일은 없지만, 다음 경기는 깨끗한 표로 시작해야 한다 (#205).
 	_picking = false
 	_pick_deadline = 0.0
