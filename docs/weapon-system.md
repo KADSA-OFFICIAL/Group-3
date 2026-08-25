@@ -4,21 +4,29 @@
 > 이 문서는 무기를 추가·수정할 때 어디를 고쳐야 하는지와, 지켜야 할 계약을 설명합니다.
 
 관련 이슈: [#32](https://github.com/KADSA-OFFICIAL/Group-3/issues/32) (온라인 전환 로드맵),
-[#46](https://github.com/KADSA-OFFICIAL/Group-3/issues/46) (무기·전투 레이어 이식)
+[#46](https://github.com/KADSA-OFFICIAL/Group-3/issues/46) (무기·전투 레이어 이식),
+[#205](https://github.com/KADSA-OFFICIAL/Group-3/issues/205) (라운드마다 무기 선택)
 
 수치의 근거와 미확정 항목은 [무기_수치_초안.md](%EB%AC%B4%EA%B8%B0_%EC%88%98%EC%B9%98_%EC%B4%88%EC%95%88.md)에 있습니다.
 
 ## 값이 흐르는 경로
 
+**무기는 대기실이 아니라 라운드가 시작될 때 고릅니다** (이슈 #205).
+대기실에서 고르는 것은 캐릭터와 맵뿐이고, 무기는 판마다 새로 뽑은 후보 3개에서 하나를 고릅니다.
+
 ```
-선택 UI (player_panel.gd)
-  → Lobby.submit_config()          클라이언트가 자기 선택만 전송
-  → 서버: _sanitize()              목록에 있는 값인지 검증
-  → 서버: _resolve_weapon()        "랜덤"을 실제 무기로 확정 (Weapons.resolve)
-  → main.gd: spawn(data)           스폰 데이터에 weapon_id 포함
-  → Player.weapon_id               무기 이름 보관
+라운드 시작 (main.gd: _start_round)
+  → 서버: _begin_pick_phase()      Weapons.random_choices(3) 으로 **사람마다 따로** 후보 3개
+                                   두 젤리를 얼린다 (Player.frozen → can_act() 가 false)
+  → 클라이언트: weapon_pick.gd     카드 3장 — 이름 + 그림(preview_texture) + 설명(description)
+  → 클라이언트: _receive_pick()    누른 카드의 **자리 번호만** 서버로 (이름을 보내면 위조된다)
+  → 서버: _finish_pick_phase()     후보 배열에서 꺼내 확정. 20초 안에 안 고르면 서버가 대신 뽑는다
+  → Player.server_set_weapon()     weapon_id 를 양쪽에 복제하고 얼음을 푼다
   → main.gd 서버 전투 틱            이 이름으로 Weapons.get_weapon()을 조회해 판정
 ```
+
+**후보를 뽑는 것도 고른 것을 확정하는 것도 서버입니다.** 클라이언트가 각자 뽑으면 화면에
+보이는 카드와 서버가 아는 후보가 어긋나서, 고른 것이 엉뚱한 무기로 확정됩니다.
 
 ## 파일 구성
 
@@ -26,16 +34,17 @@
 | --- | --- |
 | `scripts/weapons.gd` | **무기 표(17종)**. 이름·데미지·쿨타임·넉백 등 모든 수치의 출처 |
 | `scripts/combat.gd` | 전투 공통 수치. 최대 체력·무적 시간·넉백 세기·투사체 속도 |
-| `scripts/game_state.gd` | `WEAPONS` — "랜덤" + `Weapons.names()`. 선택 UI가 쓰는 목록 |
-| `scripts/lobby.gd` | `_resolve_weapon()` — "랜덤" 확정 (서버 전용) |
-| `scripts/main.gd` | **공격 판정 전부**. 기본 공격 틱, 특수 공격, 투사체 발사, 출혈·연사 |
-| `scripts/player.gd` | 체력·무적·기절·게이지·버프·강제 이동. `server_*` 함수가 판정 결과를 받는 창구 |
+| `scripts/weapon_pick.gd` | **라운드 시작 선택 카드 3장** (이름·그림·설명). 보여주고 누르는 일만 한다 |
+| `scripts/main.gd` | **공격 판정 전부**, 그리고 **무기 선택 단계**(후보 뽑기·확정·제한 시간) |
+| `scripts/player.gd` | 체력·무적·기절·게이지·버프·강제 이동, `server_set_weapon()`·`frozen`. `server_*` 함수가 판정 결과를 받는 창구 |
 | `scripts/projectile.gd` | 허공을 나는 것 — 화살·총알·표창·던진 단검·폭탄 |
 
 ## 무기를 추가·수정하려면
 
 1. `scripts/weapons.gd`의 `LIST`에 항목을 넣거나 고칩니다. **목록의 유일한 출처입니다** —
-   선택 UI·검증·전송이 전부 이 배열을 따라가므로 다른 곳을 손댈 필요가 없습니다.
+   후보 뽑기(`random_choices`)도 선택 카드도 전부 이 배열을 따라가므로 다른 곳을 손댈 필요가 없습니다.
+   **`desc` 한 줄을 반드시 채웁니다** — 선택 카드에 적히는 설명이고, 빠지면 카드가 이름과
+   그림만 나옵니다. 문구의 출처는 "무기 증강 설명 리스트" 문서입니다.
 2. 특수 공격에 새 동작이 필요하면 `main.gd`의 `_execute_special()`에 `match` 가지를 추가합니다.
 3. 기본 공격은 `basic_kind`가 `"melee"` / `"melee_dot"` / `"ranged"`면 자동으로 동작합니다.
    - `"melee"` — `basic_interval`에 **0.6초 바닥**(`Combat.MELEE_HIT_INTERVAL`)이 걸립니다.

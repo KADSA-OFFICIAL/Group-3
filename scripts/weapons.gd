@@ -5,6 +5,9 @@ extends RefCounted
 ## 문서에 적힌 무기는 17종이며, 기존 코드에 있던 "의자"와 "우산"은 이 목록에 없다.
 ##
 ## 필드
+##   desc            **라운드 무기 선택 카드**에 적히는 설명 (#205). 출처는 "무기 증강 설명 리스트"
+##                   문서이고 문구를 그대로 옮겼다 — 아래 basic·special 은 개발용 요약이라
+##                   플레이어에게 보여줄 글이 아니다. 줄바꿈은 카드에서 그대로 나온다
 ##   basic_damage    기본 공격 데미지. 0 이면 기본 공격 없음 (문서에 "X" — 폭탄·샷건)
 ##   basic_interval  기본 공격 간격(초). 0 이면 접촉 판정(피격 무적 시간에만 걸림)
 ##   basic_kind      "melee" 근접 / "melee_dot" 근접 지속 / "ranged" 원거리
@@ -65,9 +68,6 @@ extends RefCounted
 ##                   손에 든 모습과 무기 자체의 모습이 다른 무기에만 적는다 —
 ##                   너클은 선택창에 금속 너클, 손에는 뻗은 주먹이 나온다 (preview_texture 참고)
 
-## 실제 무기가 아닌 특수값. 서버가 실제 무기 하나로 확정한다 (resolve 참고).
-const RANDOM := "랜덤"
-
 ## 무기 그림 폴더. `file` 필드가 있는 무기만 전투 화면에 그림이 나오고,
 ## 없는 무기는 지금까지처럼 임시 막대로 그려진다.
 const ART_DIR := "res://assets/weapons/"
@@ -75,6 +75,7 @@ const ART_DIR := "res://assets/weapons/"
 const LIST: Array[Dictionary] = [
 	{
 		"name": "검",
+		"desc": "크고 강력한 검입니다.\n스킬 사용 시, ‘데마시아’를 시전합니다.",
 		"file": "sword.png",
 		"basic": "닿으면 일정 데미지",
 		"special": "일정 체력 비례 데미지 + 이펙트",
@@ -87,6 +88,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "단검",
+		"desc": "바닥에 드랍된 단검을 주으면 적에게 날라가 공격합니다.\n스킬 사용 시, 드랍된 단검을 다시 줍고 던집니다.",
 		"file": "dagger.png",
 		"basic": "드랍된 단검을 주우면 자동으로 상대 피격",
 		"special": "자동 재수집 (피격 가능)",
@@ -97,6 +99,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "광선검",
+		"desc": "적에게 지속 데미지를 입힙니다.\n스킬 사용 시, 일정 시간동안 적의 무기를 관통합니다.",
 		"file": "laser_sword.png",
 		"basic": "닿으면 일정 지속 데미지",
 		"special": "일정 시간 관통 능력 부여",
@@ -111,6 +114,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "전기톱",
+		"desc": "적에게 지속 데미지를 입힙니다.\n스킬 사용 시, 돌진하고 적에게 ‘출혈’ 효과를 부여합니다.",
 		"file": "chainsaw.png",
 		# 원화가 톱날 왼쪽·손잡이 오른쪽으로 그려져 있다 — 그대로 붙이면 등 뒤를 벤다 (#109).
 		"art_faces_left": true,
@@ -123,6 +127,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "망치",
+		"desc": "약해보이지만 강력한 망치입니다.\n스킬 사용 시, 공격마다 적에게 ‘기절’ 효과를 부여합니다.",
 		"file": "hammer.png",
 		"basic": "닿으면 일정 데미지",
 		"special": "닿으면 일정 시간 피격 시 기절 효과 부여",
@@ -141,6 +146,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "대포 총",
+		"desc": "포탄을 발사합니다.\n스킬 사용 시, 거대 미사일을 날립니다.",
 		"file": "cannon.png",
 		"basic": "일정 시간 일정 데미지",
 		"special": "추가 데미지 + 넉백 미사일 발사",
@@ -162,6 +168,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "폭탄",
+		"desc": "스킬 사용 시, 폭탄을 던집니다.\n일정 확률로 강화 폭탄이 등장합니다.",
 		"file": "bomb.png",
 		"basic": "",  # 문서에 "X" — 기본 공격 없음
 		"special": "피격하거나 일정 시간이 지나면 터지는 폭탄 투하 (일정 확률로 데미지·넉백 증가 폭탄 등장)",
@@ -178,6 +185,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "활",
+		"desc": "화살을 날립니다.\n스킬 사용시, 적을 화살로 폭격합니다.",
 		"file": "bow.png",
 		# 원화가 활대 왼쪽·시위 오른쪽으로 그려져 있다. 화살은 시위 반대쪽으로 나가므로
 		# 이건 왼쪽을 보는 그림이다 — 그대로 붙이면 활대가 자기 쪽을 향한다 (#137).
@@ -200,6 +208,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "삼지창",
+		"desc": "강력한 유물 삼지창입니다.\n스킬 사용시, 적에게 삼지창을 던져 번개를 내리칩니다.",
 		"file": "trident.png",
 		"basic": "닿으면 일정 데미지",
 		"special": "던지고 피격 시 일정 데미지 + 기절 효과 부여, 자동 회수",
@@ -217,6 +226,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "글러브",
+		"desc": "UFC 글러브입니다.\n스킬 사용 시, 단거리 난타를 시전합니다.",
 		"file": "glove.png",
 		# 뭉툭한 원화(1.18:1)라 세로 56px 규칙 그대로면 몸통만 해진다 (#158).
 		# 0.6이면 40 x 34px — 젤리 몸통(72px)의 절반쯤이라 손에 낀 것으로 보인다.
@@ -245,6 +255,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "표창",
+		"desc": "스킬 사용 시, 표창을 던집니다.\n일정 확률로 강화 표창이 등장합니다.",
 		"file": "shuriken.png",
 		# 사방으로 뻗은 별 모양이라 원화가 1:1이다. 세로 56px 규칙 그대로면
 		# 몸통만 해져 젤리를 덮는다 (#158과 같은 문제) — 글러브와 같은 0.6을 쓴다.
@@ -273,6 +284,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "너클",
+		"desc": "데미지를 받으면 게이지를 충전합니다.\n스킬 사용 시, 게이지 비례 ‘강펀치’를 선사합니다.",
 		# 손에 든 모습(앞으로 뻗은 주먹)과 무기 자체의 모습(금속 너클)이 다르다 (#173).
 		# 주먹 그림을 선택창에 쓰면 무엇을 고르는 것인지 알 수 없고, 너클 그림을
 		# 젤리 손에 붙이면 쥔 것처럼 보이지 않는다 — 그림이 갈라지는 첫 무기다.
@@ -291,6 +303,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "양날 도끼",
+		"desc": "칠흑의 양날 도끼입니다.\n스킬 사용 시, ‘처형’합니다.",
 		# 원화가 0.74:1(가로:세로)이라 세로 56px 규칙에 그대로 맡긴다 — 42 x 56px다.
 		# 글러브·표창처럼 뭉툭하지 않으므로 `weapon_art_scale`은 없다.
 		# 큰 날이 오른쪽이라 오른쪽 보기 기준이 맞다 (`art_faces_left` 없음).
@@ -334,6 +347,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "샷건",
+		"desc": "스킬 사용 시, 근거리의 적에게 강력한 데미지를 입힙니다.",
 		# 원화가 3.23:1로 가로로 길어서 가로 80px 제한에 먼저 걸린다 — 80 x 25px다
 		# (전기톱과 같은 경로). 세로 56px 규칙에는 닿지 않는다.
 		"file": "shotgun.png",
@@ -356,6 +370,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "장대",
+		"desc": "기다란 장대입니다.\n스킬 사용 시, 장대가 더 길어지며 근접전에서 우위를 가집니다.",
 		# 원화가 0.113:1(가로:세로)로 지금까지 중 가장 가늘고 길다 — 56 x 6px이 된다.
 		# 세워 들면 선 한 줄이지만 눕혀 들면 앞으로 뻗은 봉으로 읽힌다 (아래 참고).
 		"file": "pole.png",
@@ -386,6 +401,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "소총",
+		"desc": "우리 동네는 밤마다 울려 총성\n스킬 사용 시, ‘연발’ 사격합니다.",
 		# 원화가 1.79:1로 가로로 길어서 가로 80px 제한에 먼저 걸린다 — 80 x 45px다
 		# (샷건·전기톱·대포 총과 같은 경로). 세로 56px 규칙에는 닿지 않는다.
 		"file": "rifle.png",
@@ -413,6 +429,7 @@ const LIST: Array[Dictionary] = [
 	},
 	{
 		"name": "방패",
+		"desc": "스킬 버튼을 짧게 누를 시, 방패를 던집니다.\n길게 누를 시, 방패 크기를 증가시킵니다.",
 		# 원화가 0.815:1(가로:세로)라 46 x 56px이 된다 — 가로 제한(80px)에는 안 걸리고,
 		# 몸통(48px)과 거의 같은 폭이다. 방패는 원래 넓게 막는 물건이라 이 폭이 맞다.
 		# 폭탄(0.949:1)도 `weapon_art_scale` 없이 그대로 두었으므로 기준도 어긋나지 않는다.
@@ -461,8 +478,6 @@ static func has_basic_attack(weapon_name: String) -> bool:
 	return not weapon.is_empty() and weapon["basic_damage"] > 0.0
 
 
-## "랜덤" 을 실제 무기 이름으로 바꾼다.
-## **서버에서만 호출한다** — 클라이언트가 각자 뽑으면 양쪽이 다른 무기를 갖는다.
 ## 무기 그림. 그림이 없는 무기이거나 파일이 아직 없으면 null을 돌려준다 —
 ## 부르는 쪽이 임시 막대로 대신 그린다.
 static func texture(weapon_name: String) -> Texture2D:
@@ -515,14 +530,20 @@ static func size_buff_guards(weapon_name: String) -> bool:
 	return bool(get_weapon(weapon_name).get("size_buff_guards", false))
 
 
-static func resolve(weapon_name: String) -> String:
-	if weapon_name == RANDOM:
-		return names().pick_random()
-	return weapon_name
-
-
-## 라운드마다 제시할 후보를 겹치지 않게 뽑는다 (계획서: 모든 무기 중 랜덤 3개).
+## 라운드마다 제시할 후보를 겹치지 않게 뽑는다 (#205: 모든 무기 중 랜덤 3개).
+##
+## `pool` 을 섞어서 앞에서 끊으므로 **한 사람의 후보 안에서는 무기가 겹치지 않는다.**
+## 두 사람의 후보끼리는 겹칠 수 있다 — 서로 따로 뽑고, 같은 무기를 둘이 들어도 문제가 없다.
 static func random_choices(count: int) -> Array[String]:
 	var pool := names()
 	pool.shuffle()
 	return pool.slice(0, count)
+
+
+## 선택 카드에 적을 설명 (#205). 출처는 "무기 증강 설명 리스트" 문서다.
+##
+## 개발용 요약인 `basic`·`special` 과 섞지 말 것 — 그쪽은 "닿으면 일정 데미지" 처럼
+## 표를 읽는 사람을 위한 글이고, 이쪽은 플레이어가 카드에서 읽는 글이다.
+static func description(weapon_name: String) -> String:
+	var text: String = get_weapon(weapon_name).get("desc", "")
+	return text
