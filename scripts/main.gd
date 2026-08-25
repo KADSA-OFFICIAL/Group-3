@@ -30,6 +30,13 @@ const SPAWN_POSITIONS := [Vector2(300, 500), Vector2(852, 500)]
 ## 무기별 사거리는 player.current_reach()로 더한다.
 const MELEE_REACH := 48.0
 
+## 라운드마다 제시할 무기 후보 수 (#205). `weapon_pick.tscn`의 카드 수와 같아야 한다 —
+## 카드가 모자라면 뽑아 놓고 못 보여주고, 남으면 빈 카드가 나온다.
+const WEAPON_CHOICES := 3
+## 무기 선택 제한 시간(초). 다 되면 서버가 후보 중 하나를 대신 뽑는다 —
+## 한 사람이 자리를 비웠다고 경기가 그 자리에서 영영 멈추면 안 된다.
+const WEAPON_PICK_TIME := 20.0
+
 ## 아래 상태는 전부 **서버에서만** 쓴다. 클라이언트에서는 비어 있다.
 ## "공격자peer>피격자peer" -> 다음 기본 공격이 들어갈 수 있는 시각
 var _next_hit_at := {}
@@ -41,6 +48,9 @@ var _special_pending := {}
 var _bleeds := {}
 ## 소총 연사. 한 번 누르면 지속시간 동안 자동으로 나간다.
 var _bursts := {}
+## 진행 중인 땅 격파 (양날 도끼 착지). 착지 자리에서 좌우로 뻗는 앞선이고,
+## 앞선이 닿는 순간에 데미지가 들어간다 — 착지 순간 반경을 한꺼번에 때리지 않는다.
+var _ruptures: Array[Dictionary] = []
 ## 단검을 손에 들고 있는가. 발사하면 false, 주우면 다시 true.
 var _dagger_held := {}
 var _next_projectile_id := 1
@@ -48,6 +58,19 @@ var _next_projectile_id := 1
 var _round_restart_at := 0.0
 ## 경기가 끝났으면 더 이상 라운드를 시작하지 않는다.
 var _match_over := false
+
+## 무기 선택이 진행 중인가 (#205). 켜져 있는 동안 두 젤리는 얼어 있다.
+var _picking := false
+## peer -> 그 사람에게 제시한 무기 이름 배열 (서버 전용).
+var _pick_options := {}
+## peer -> 고른 무기 이름 (서버 전용). 후보를 받은 사람이 전부 여기 들어오면 라운드가 열린다.
+var _pick_choices := {}
+## 안 고른 사람 몫을 서버가 대신 뽑을 시각. 0이면 선택 중이 아니다.
+var _pick_deadline := 0.0
+## 이번 선택에서 내가 고르는 쪽인가 · 이미 보냈는가 (**클라이언트 전용, 안내 문구용**).
+## 판정에는 안 쓴다 — 서버가 자기 표(`_pick_choices`)로 다시 확인한다.
+var _pick_is_mine := false
+var _pick_sent := false
 ## 대기실로 돌려보낼 시각. 0이면 예약 없음.
 var _return_at := 0.0
 
@@ -79,6 +102,8 @@ const LOSE_COLOR := Color(0.72, 0.70, 0.80)
 @onready var player_spawner: MultiplayerSpawner = $PlayerSpawner
 @onready var projectile_spawner: MultiplayerSpawner = $ProjectileSpawner
 @onready var result_overlay: Control = $UI/HUD/ResultOverlay
+## weapon_pick.gd는 class_name이 없어 타입을 붙이지 않는다 (jelly_preview.gd와 같은 방식).
+@onready var weapon_pick = $UI/HUD/WeaponPick
 ## jelly_preview.gd는 class_name이 없어 타입을 붙이지 않는다 (player_panel.gd와 같은 방식).
 @onready var result_jelly = $UI/HUD/ResultOverlay/Jelly
 @onready var result_label: Label = $UI/HUD/ResultOverlay/ResultLabel
@@ -99,6 +124,9 @@ func _ready() -> void:
 	# 접속이 끊기면 멈춘 화면에 남지 않고 타이틀로 나간다 (이슈 #184).
 	# 관전자가 방을 옮기면서 접속 종료가 평상시 일어나는 일이 되었다.
 	Network.join_failed.connect(_on_disconnected)
+	# 라운드마다 뜨는 무기 선택 카드 (#205). 전용 서버는 화면이 없어 열 일이 없지만
+	# 연결은 양쪽에서 해 둔다 — 서버도 이 씬을 그대로 쓴다.
+	weapon_pick.weapon_chosen.connect(_on_weapon_chosen)
 
 	if multiplayer.is_server():
 		Network.peer_left.connect(_on_peer_left)
@@ -130,6 +158,10 @@ func _notify_ready() -> void:
 	# 진행 중인 점수와 배너를 그 피어에게만 보낸다 (이슈 #182) — 경기 도중에 들어온 관전자는
 	# 지난 방송을 못 받았으므로, 안 보내면 다음 득점까지 0 : 0 을 보게 된다.
 	_receive_round.rpc_id(sender, scores, banner)
+	# 무기 선택 중에 들어온 피어에게도 지금 단계를 알린다 (#205). 안 보내면 두 젤리가
+	# 멈춰 있는 화면만 보다가 다음 라운드에야 무슨 일이었는지 알게 된다.
+	if _picking:
+		_receive_pick_start.rpc_id(sender, _pick_options, maxf(_pick_deadline - _now(), 0.0))
 	# 관전자에게는 젤리를 주지 않는다. 스폰하면 셋째 플레이어가 판에 끼어든다.
 	if Lobby.is_observer(sender):
 		return
@@ -144,15 +176,16 @@ func _add_player(peer_id: int) -> void:
 	if index < 0:
 		index = players_root.get_child_count()
 	var config: Dictionary = Lobby.config_for(peer_id)
-	# 강화 폭탄은 **스폰 데이터로** 실어 보낸다 (#134). 첫 라운드는 `_start_round()`를
-	# 거치지 않으므로 여기서 안 정하면 접속 직후에는 늘 일반 폭탄을 들고 시작한다.
-	# 스폰 데이터는 모든 피어의 `_spawn_player()`에 그대로 전달되어 `_ready()` 전에 박힌다.
+	# **빈손으로 스폰한다** (#205). 무기는 대기실이 아니라 라운드 시작의 선택이 정하므로
+	# 이 시점에는 아직 아무것도 안 들었다 — `Weapons.get_weapon("")`이 빈 표를 돌려주어
+	# 판정도 그림도 없는 상태가 된다. 곧바로 선택이 열리므로 오래 가는 상태는 아니다.
+	# 강화 뽑기(#134)도 무기가 정해진 뒤라야 뜻이 있어서 `_finish_pick_phase()`로 옮겼다.
 	var player := player_spawner.spawn({
 		"peer_id": peer_id,
 		"index": index,
-		"weapon_id": config["weapon"],
+		"weapon_id": "",
 		"character": config["character"],
-		"empowered": _roll_empowered(config["weapon"]),
+		"empowered": false,
 	}) as Player
 	if player == null:
 		return
@@ -165,6 +198,11 @@ func _add_player(peer_id: int) -> void:
 	if not scores.has(peer_id):
 		scores[peer_id] = 0
 	_broadcast_round(banner)
+
+	# 두 사람이 다 들어왔으면 첫 라운드를 연다 (#205). 라운드가 무기 선택으로 시작하게
+	# 되면서 "첫 판"에도 여는 순간이 필요해졌다 — 전에는 스폰이 곧 시작이었다.
+	if not _match_over and not _picking and players_root.get_child_count() >= Network.MAX_PLAYERS:
+		_start_round()
 
 
 ## 모든 피어에서 호출되어 플레이어 노드를 만든다. 반환한 노드는 spawn_path 아래에 붙는다.
@@ -198,6 +236,13 @@ func _on_peer_left(peer_id: int) -> void:
 	_dagger_held.erase(peer_id)
 	# 키가 "공격자>피격자" 조합이라 한쪽이 빠지면 전부 의미가 없어진다.
 	_next_hit_at.clear()
+
+	# 고르던 사람이 나갔다 (#205). 그 사람 몫을 지우고, 남은 사람이 이미 골랐으면
+	# 기다릴 이유가 없으니 바로 라운드를 연다 — 안 그러면 제한 시간까지 멈춰 있는다.
+	_pick_options.erase(peer_id)
+	_pick_choices.erase(peer_id)
+	if _picking and _all_picked():
+		_finish_pick_phase()
 
 
 # ─────────────────────────── 라운드 진행 (서버 판정) ───────────────────────────
@@ -248,15 +293,150 @@ func _start_round() -> void:
 	_special_pending.clear()
 	_bleeds.clear()
 	_bursts.clear()
+	_ruptures.clear()
 
 	for player: Player in players_root.get_children():
 		var index := maxi(Lobby.slot_of(player.owner_peer_id), 0)
 		player.server_reset(_spawn_position(index), _spawn_facing(index))
 		_dagger_held[player.owner_peer_id] = true
-		# 라운드마다 새로 뽑는다 — 안 하면 지난 라운드에서 들고 있던 것이 그대로 남는다.
-		player.server_set_empowered(_roll_empowered(player.weapon_id))
 
 	_broadcast_round("")
+	# 판을 치웠으면 곧바로 싸우는 것이 아니라 **무기부터 고른다** (#205).
+	# 강화 뽑기(#134)가 여기서 빠진 것은 그래서다 — 무기가 정해진 뒤에 뽑아야
+	# 이번 라운드에 들 무기로 뽑는다.
+	_begin_pick_phase()
+
+
+# ──────────────────────── 무기 선택 (서버 판정, #205) ────────────────────────
+## 라운드는 **무기 선택으로 열린다.** 두 사람이 각자 후보 3개 중 하나를 고르고,
+## 둘 다 고르면(또는 제한 시간이 지나면) 그때부터 판이 돈다.
+##
+## **후보는 서버가 뽑는다.** 클라이언트가 각자 뽑으면 화면에 보이는 카드와 서버가 아는
+## 후보가 어긋나서, 고른 것이 엉뚱한 무기로 확정된다 — 대기실의 "랜덤"을 서버가
+## 확정했던 것과 같은 이유다.
+
+
+## 고를 동안 젤리를 얼리고 후보를 뽑아 각자에게 보낸다.
+func _begin_pick_phase() -> void:
+	if not multiplayer.is_server() or _match_over:
+		return
+	_pick_options.clear()
+	_pick_choices.clear()
+	for player: Player in players_root.get_children():
+		# 카드를 읽는 사람이 그 자리에서 맞지 않도록 조작과 판정을 함께 잠근다.
+		player.server_set_frozen(true)
+		_pick_options[player.owner_peer_id] = Weapons.random_choices(WEAPON_CHOICES)
+
+	# 아직 아무도 없다 (전용 서버가 혼자 도는 사이). 열어 둘 판이 없으므로 시작하지 않는다 —
+	# 사람이 들어오면 `_add_player()`가 다시 연다.
+	if _pick_options.is_empty():
+		_picking = false
+		_pick_deadline = 0.0
+		return
+
+	_picking = true
+	_pick_deadline = _now() + WEAPON_PICK_TIME
+	for peer in Lobby.viewers:
+		_receive_pick_start.rpc_id(peer, _pick_options, WEAPON_PICK_TIME)
+
+
+## 클라이언트가 고른 카드를 알려 온다. 넘어오는 값은 **후보 배열에서의 자리**다 —
+## 무기 이름을 받으면 후보에 없는 무기를 적어 보낼 수 있다.
+@rpc("any_peer", "call_remote", "reliable")
+func _receive_pick(index: int) -> void:
+	if not multiplayer.is_server() or not _picking:
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	var choices: Array = _pick_options.get(sender, [])
+	# 후보를 못 받은 피어(관전자)와 이미 고른 피어는 버린다 — 두 번째 요청을 받아 주면
+	# 상대가 기다리는 동안 무기를 바꿔 가며 고를 수 있다.
+	if choices.is_empty() or _pick_choices.has(sender):
+		return
+	if index < 0 or index >= choices.size():
+		return
+	_pick_choices[sender] = choices[index]
+	for peer in Lobby.viewers:
+		_receive_pick_made.rpc_id(peer, sender)
+	if _all_picked():
+		_finish_pick_phase()
+
+
+## 후보를 받은 사람이 전부 골랐는가.
+func _all_picked() -> bool:
+	for peer_id in _pick_options:
+		if not _pick_choices.has(peer_id):
+			return false
+	return true
+
+
+## 고른 무기를 손에 쥐여 주고 라운드를 시작한다.
+## 안 고른 사람 몫은 서버가 후보 중에서 뽑는다 — 기다리기만 해도 판은 열려야 한다.
+func _finish_pick_phase() -> void:
+	if not multiplayer.is_server() or not _picking:
+		return
+	_picking = false
+	_pick_deadline = 0.0
+
+	for peer_id in _pick_options:
+		var player := get_player(peer_id)
+		if player == null:
+			continue
+		var choices: Array = _pick_options[peer_id]
+		var chosen: String = _pick_choices.get(peer_id, choices.pick_random())
+		player.server_set_weapon(chosen)
+		# 뽑기는 무기를 바꾼 **뒤에** 한다 (#134) — 지난 무기로 뽑으면 폭탄·표창이
+		# 아닌 무기에서는 늘 false가 되어 강화가 영영 안 나온다.
+		player.server_set_empowered(_roll_empowered(chosen))
+		player.server_set_frozen(false)
+		# 자리와 무적을 여기서 한 번 더 준다. 고르는 데 쓴 시간만큼
+		# `Combat.ROUND_START_GRACE`가 이미 흘렀으므로, 판이 실제로 열리는 지금부터 새로 잰다.
+		var index := maxi(Lobby.slot_of(peer_id), 0)
+		player.server_reset(_spawn_position(index), _spawn_facing(index))
+		_dagger_held[peer_id] = true
+
+	_pick_options.clear()
+	_pick_choices.clear()
+	for peer in Lobby.viewers:
+		_receive_pick_end.rpc_id(peer)
+
+
+# ─────────────────────── 무기 선택 (클라이언트 화면, #205) ───────────────────────
+
+## 무기 선택이 시작됐다. 후보 표에는 두 사람 몫이 다 들어 있고 화면은 **자기 몫만** 연다 —
+## 상대 카드까지 보여주면 무엇을 들지 알고 고르는 다른 게임이 된다.
+@rpc("authority", "call_remote", "reliable")
+func _receive_pick_start(options: Dictionary, seconds: float) -> void:
+	var mine: Array = options.get(multiplayer.get_unique_id(), [])
+	_pick_is_mine = not mine.is_empty()
+	_pick_sent = false
+	if _pick_is_mine:
+		weapon_pick.open(mine, seconds)
+	else:
+		weapon_pick.open_watching(seconds)
+
+
+## 누가 골랐다. 관전자 화면은 그대로 두고, 고르는 사람에게만 상황을 알려 준다.
+@rpc("authority", "call_remote", "reliable")
+func _receive_pick_made(peer_id: int) -> void:
+	if not _pick_is_mine or peer_id == multiplayer.get_unique_id():
+		return
+	if _pick_sent:
+		weapon_pick.set_status("둘 다 골랐습니다 — 곧 시작합니다.")
+	else:
+		weapon_pick.set_status("상대가 먼저 골랐습니다. 고를 차례입니다.")
+
+
+@rpc("authority", "call_remote", "reliable")
+func _receive_pick_end() -> void:
+	weapon_pick.close()
+
+
+## 카드를 눌렀다 (클라이언트). 확정은 서버가 하므로 여기서는 보내기만 한다.
+func _on_weapon_chosen(index: int) -> void:
+	if multiplayer.is_server():
+		return
+	_pick_sent = true
+	_receive_pick.rpc_id(1, index)
 
 
 ## 낙사 — 화면 밖으로 나가거나 즉사 구역(물·용암)에 닿으면 죽는다.
@@ -282,6 +462,9 @@ func _tick_round() -> void:
 	var now := _now()
 	if _round_restart_at > 0.0 and now >= _round_restart_at:
 		_start_round()
+	# 제한 시간이 다 됐다 — 안 고른 사람 몫은 서버가 뽑고 라운드를 연다 (#205).
+	if _picking and _pick_deadline > 0.0 and now >= _pick_deadline:
+		_finish_pick_phase()
 	if _return_at > 0.0 and now >= _return_at:
 		_return_at = 0.0
 		Lobby.server_end_match()
@@ -303,11 +486,17 @@ func _server_reset_match() -> void:
 	_hide_result()
 	_match_over = false
 	_round_restart_at = 0.0
+	# 선택 도중에 경기가 끝나는 일은 없지만, 다음 경기는 깨끗한 표로 시작해야 한다 (#205).
+	_picking = false
+	_pick_deadline = 0.0
+	_pick_options.clear()
+	_pick_choices.clear()
 	_next_hit_at.clear()
 	_special_ready_at.clear()
 	_special_pending.clear()
 	_bleeds.clear()
 	_bursts.clear()
+	_ruptures.clear()
 	_dagger_held.clear()
 
 
@@ -549,6 +738,7 @@ func _physics_process(_delta: float) -> void:
 	_check_pending_specials()
 	_tick_bleeds()
 	_tick_bursts()
+	_tick_ruptures()
 	_check_falls()
 	_tick_round()
 
@@ -577,6 +767,10 @@ func _try_melee_basic(attacker: Player, target: Player) -> void:
 	if not weapon["basic_kind"].begins_with("melee"):
 		return
 	if not attacker.can_act():
+		return
+	# 방패를 크게 들어 올린 동안은 막기만 한다. 크게 든 방패로 몸을
+	# 가리는 자세라 그 자세로 때릴 수는 없다 — 탄을 막는 것과 맞바꾸는 값이다.
+	if attacker.is_guarding():
 		return
 	if target.is_invulnerable() or is_blocked(attacker, target):
 		return
@@ -786,7 +980,11 @@ func is_blocked(attacker: Player, target: Player) -> bool:
 
 
 # ─────────────────────────── 투사체 ───────────────────────────
-## 상대 무기에 막히지 않고, 속도는 무기와 무관하게 전부 같다.
+## 속도는 무기와 무관하게 전부 같다.
+##
+## 근접 막기(`is_blocked()`, 사거리 비교)는 거치지 않는다. **단 하나 예외가 방패다** —
+## 크게 들어 올린 방패는 앞에서 오는 탄을 막는다 (`Projectile._guarded_by`). 반경으로
+## 흩뿌리는 것(폭탄)은 그것도 못 막는다.
 
 ## 서버에서만 호출한다. offsets로 여러 발을 한 번에 낼 수 있다 (활 특수의 평행 3발).
 func _server_fire(attacker: Player, base: Dictionary, offsets: Array = [0.0]) -> void:
@@ -1031,6 +1229,7 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 				"modes": ["fall"],
 				"landing_damage": weapon["landing_damage"],
 				"landing_radius": weapon["landing_radius"],
+				"landing_rupture_speed": weapon["landing_rupture_speed"],
 			}
 			return true
 		"활":
@@ -1235,14 +1434,14 @@ func _play_swap_burst(from_position: Vector2, to_position: Vector2) -> void:
 		effects_root.add_child(burst)
 
 
-## 강제 낙하(양날 도끼)가 땅에 닿았다 — 그 자리 주변을 때린다 (#167). 서버 전용.
+## 강제 낙하(양날 도끼)가 땅에 닿았다 — **좌우로 땅을 갈라 보낸다** (#167). 서버 전용.
+##
+## 여기서는 시작만 한다. 실제로 때리는 것은 `_tick_ruptures()`가 앞선을 밀면서 하고,
+## 그래서 멀리 선 상대는 가까이 선 상대보다 조금 늦게 맞는다 — 착지 순간 반경을
+## 한꺼번에 때리면 "갈라져 나간다"가 아니라 "닿으면 맞는다"가 된다.
 ##
 ## **낙하 중 직격을 놓쳤을 때만 들어간다.** 직격이 성공하면 `_check_pending_specials()`가
 ## 예약을 지우므로 여기 올 것이 없다 — 한 번의 특수로 두 번 맞는 일은 생기지 않는다.
-##
-## 반경 판정은 좌우를 따지지 않는다(`_faces()`를 거치지 않는다). 바로 아래를 때리는
-## 기술이라 좌우를 따지면 영영 안 맞는 것과 같은 이유다.
-## 상대 무기에 막히는지도 보지 않는다 — 땅을 타고 오는 충격파라 앞으로 든 무기와 무관하다.
 func _on_forced_landed(peer_id: int, at: Vector2) -> void:
 	if not multiplayer.is_server():
 		return
@@ -1251,27 +1450,74 @@ func _on_forced_landed(peer_id: int, at: Vector2) -> void:
 	if radius <= 0.0:
 		return
 	_special_pending.erase(peer_id)   # 착지로 기회를 다 썼다
+	var speed: float = info.get("landing_rupture_speed", 0.0)
+	if speed <= 0.0:
+		return
 
 	# 연출은 맞았는지와 무관하게 띄운다 — 빗나간 것도 "여기까지였다"로 보여야 한다.
-	_play_shockwave.rpc(at, radius)
+	# 속도까지 넘겨서 **화면에 보이는 앞선이 곧 맞는 경계**가 되게 한다.
+	_play_shockwave.rpc(at, radius, speed)
 
 	var damage: float = info.get("landing_damage", 0.0)
 	if damage <= 0.0:
 		return
-	for target: Player in players_root.get_children():
-		if target.owner_peer_id == peer_id or not target.alive:
-			continue
-		if at.distance_to(target.global_position) > radius:
-			continue
-		target.server_apply_hit(damage, info["knockback"], at.x, 0.0, "special")
+	# 착지 순간 반경을 한꺼번에 때리지 않는다. 앞선이 거기까지 가는 데 걸리는 시간이
+	# 있어야 "갈라져 나간다"로 읽히고, 멀리 선 상대는 조금 늦게 맞는다.
+	_ruptures.append({
+		"peer": peer_id,
+		"at": at,
+		"damage": damage,
+		"knockback": info["knockback"],
+		"reach": radius,
+		"speed": speed,
+		"started": _now(),
+		# 앞선은 지나가면서 한 번만 때린다 — 매 프레임 판정이라 이게 없으면
+		# 앞선 안에 서 있는 동안 계속 맞는다.
+		"hit": {},
+	})
 
 
-## 착지 충격파. `at`은 떨어진 자리이고 `radius`는 **실제로 맞는 반경**이다 —
-## 보이는 크기와 맞는 범위가 어긋나면 이 연출이 거짓말이 된다.
+## 땅 격파의 앞선을 좌우로 밀고, 닿는 상대를 한 번씩 때린다 (서버 전용).
+##
+## **가로 거리로만 잰다.** 땅을 타고 갈라져 나가는 것이라 위아래로 퍼지는 것이 아니다.
+## 대신 다른 높이의 발판에 선 상대는 맞지 않아야 해서 세로로 한 몸통(BODY_HEIGHT)까지만
+## 같은 땅으로 본다 — 그게 없으면 머리 위 발판에 있는 상대도 같이 맞는다.
+##
+## 좌우(`_faces()`)도 상대 무기 막기(`is_blocked()`)도 보지 않는다. 바로 아래를 때리는
+## 기술이라 좌우를 따지면 영영 안 맞고, 땅을 타고 오는 것이라 앞으로 든 무기와 무관하다.
+func _tick_ruptures() -> void:
+	var now := _now()
+	for i in range(_ruptures.size() - 1, -1, -1):
+		var rupture: Dictionary = _ruptures[i]
+		var origin: Vector2 = rupture["at"]
+		var front: float = (now - float(rupture["started"])) * float(rupture["speed"])
+		var reach: float = rupture["reach"]
+		for target: Player in players_root.get_children():
+			var target_peer: int = target.owner_peer_id
+			if target_peer == rupture["peer"] or not target.alive:
+				continue
+			if rupture["hit"].has(target_peer):
+				continue
+			if absf(target.global_position.y - origin.y) > Player.BODY_HEIGHT:
+				continue
+			var span := absf(target.global_position.x - origin.x)
+			if span > minf(front, reach):
+				continue
+			rupture["hit"][target_peer] = true
+			target.server_apply_hit(rupture["damage"], rupture["knockback"],
+				origin.x, 0.0, "special")
+		if front >= reach:
+			_ruptures.remove_at(i)
+
+
+## 착지 땅 격파. `at`은 떨어진 자리, `radius`는 **좌우 각각 실제로 맞는 거리**,
+## `speed`는 앞선이 뻗어 나가는 속도다 — 셋 다 판정에 쓰는 값 그대로다.
+## 보이는 것과 맞는 범위가 어긋나면 이 연출이 거짓말이 된다.
 @rpc("authority", "call_local", "reliable")
-func _play_shockwave(at: Vector2, radius: float) -> void:
+func _play_shockwave(at: Vector2, radius: float, speed: float) -> void:
 	var wave := SHOCKWAVE_SCENE.instantiate()
 	wave.radius = radius
+	wave.speed = speed
 	effects_root.add_child(wave)
 	wave.global_position = at + Vector2(0.0, Player.BODY_BOTTOM)
 
@@ -1319,7 +1565,9 @@ func _update_hud() -> void:
 			continue
 		bar.max_value = Combat.MAX_HP
 		bar.value = player.hp
-		label.text = "%dP  %s" % [slot + 1, player.weapon_id]
+		# 무기 선택이 끝나기 전에는 아직 아무것도 안 들었다 (#205) — 빈칸 대신 줄표를 둔다.
+		var weapon_text := player.weapon_id if player.weapon_id != "" else "—"
+		label.text = "%dP  %s" % [slot + 1, weapon_text]
 		# 올림으로 낸다 — 0.4처럼 남은 체력을 "0"으로 적으면 살아 있는데 죽은 것으로 읽힌다.
 		hp_label.text = "%d" % ceili(player.hp)
 

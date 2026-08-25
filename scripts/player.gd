@@ -104,6 +104,14 @@ var forced_mode := ""
 ## `server_set_empowered()`가 갱신한다 — 라운드 시작과 던진 직후다.
 var empowered_ready := false
 
+## 무기 선택 중인가 (#205). 라운드는 무기 선택으로 열리는데, 그동안 두 젤리가
+## 스폰 지점에 서 있기만 해야 한다 — 안 그러면 카드를 읽는 사람이 그 자리에서 맞는다.
+##
+## **`can_act()` 에 넣어서 잠근다.** 이동·기본 공격·특수가 전부 그 하나를 보고 있어서
+## 여기 한 줄이면 셋이 같이 멈춘다 — 기절과 같은 방식이다(`is_stunned`).
+## 중력은 그대로 받으므로 공중에서 시작해도 발이 땅에 닿는다.
+var frozen := false
+
 ## 무적 시간은 기본 공격용과 특수 공격용을 따로 잰다.
 ## 합치면 기본 공격이 계속 무적을 새로 걸어서 특수 공격이 거의 안 들어간다.
 var _invuln_until := {"basic": 0.0, "special": 0.0}
@@ -763,12 +771,28 @@ func is_piercing() -> bool:
 	return _now() < _pierce_until
 
 
+## 방패를 크게 들어 올린 동안인가 (방패 특수, 무기 표의 `size_buff_guards`).
+##
+## 그동안 **날아오는 탄이 막히고**(`Projectile._on_body_entered`) 그 대신 **기본 근접
+## 공격이 안 나간다**(`Main._try_melee_basic`). 크게 든 방패로 몸을 가리는 자세라
+## 그 자세로 때릴 수는 없다는 것이다.
+##
+## 근접 막기는 여기서 따로 하지 않는다 — 크기 버프가 `current_reach()`를 2배로 늘려서
+## `Main.is_blocked()`의 "상대 사거리 > 내 사거리"가 이미 참이 된다.
+##
+## `_size_multiplier`는 `_receive_buff`로 두 피어에 복제되므로 양쪽이 같은 판단을 한다.
+## 무기 표를 함께 보는 이유는 크기 버프를 다른 무기가 받게 되어도 그쪽이 막는 자세가
+## 되지는 않아야 하기 때문이다.
+func is_guarding() -> bool:
+	return _size_multiplier > 1.0 and Weapons.size_buff_guards(weapon_id)
+
+
 func is_forced() -> bool:
 	return forced_mode != ""
 
 
 func can_act() -> bool:
-	return alive and not is_stunned() and forced_mode == ""
+	return alive and not frozen and not is_stunned() and forced_mode == ""
 
 
 func _now() -> float:
@@ -869,6 +893,24 @@ func server_set_empowered(value: bool) -> void:
 	_receive_empowered.rpc(value)
 
 
+## 이번 라운드에 들 무기를 갈아 끼운다 (#205). 서버가 선택 결과를 확정한 뒤 부른다.
+##
+## 무기는 스폰할 때 한 번 박히는 값이었는데(대기실에서 고른 것), 라운드마다 새로
+## 고르게 되면서 경기 중에 바뀌는 값이 되었다. 판정에 쓰는 수치도 그림도 전부
+## `weapon_id` 하나에서 나오므로(`Weapons.get_weapon`) 이 값만 바꾸면 둘 다 따라온다.
+func server_set_weapon(new_weapon: String) -> void:
+	if not multiplayer.is_server():
+		return
+	_receive_weapon.rpc(new_weapon)
+
+
+## 무기 선택 중 조작 잠금 (#205).
+func server_set_frozen(value: bool) -> void:
+	if not multiplayer.is_server() or frozen == value:
+		return
+	_receive_frozen.rpc(value)
+
+
 ## 승리·패배 포즈 (#176). 판정은 main.gd가 한다 — 누가 점수를 얻었는지 아는 곳이 거기다.
 ##
 ## **패배 포즈는 여기를 거치지 않는다** — `_check_death()`가 이미 모든 피어에서 돌아가므로
@@ -933,6 +975,35 @@ func _receive_empowered(value: bool) -> void:
 		return
 	empowered_ready = value
 	_apply_weapon()
+
+
+## 무기가 바뀐다 (#205). 그림을 갈아 끼우고 무기 도형도 새 사거리로 다시 잰다.
+##
+## 지난 무기가 남긴 상태(강화 뽑기·쿨타임)는 여기서 안 지운다 — 라운드 시작이
+## `server_reset()` 과 `server_set_empowered()` 로 이미 정리하고 있어서다.
+@rpc("authority", "call_local", "reliable")
+func _receive_weapon(new_weapon: String) -> void:
+	if weapon_id == new_weapon:
+		return
+	weapon_id = new_weapon
+	_apply_weapon()
+	_update_weapon_shape(0.0)
+
+
+## 조작 잠금 (#205). 판정은 `can_act()` 를 보는 쪽들이 알아서 하고 여기는 값만 복제한다.
+## 잠그는 순간 서 있던 자리에서 멈춘다 — 밀리던 기세가 남으면 카드를 읽는 동안 미끄러진다.
+@rpc("authority", "call_local", "reliable")
+func _receive_frozen(value: bool) -> void:
+	frozen = value
+	if not frozen:
+		return
+	velocity.x = 0.0
+	# 들고 있던 입력도 버린다 — 얼기 직전에 누르고 있던 키가 풀리는 순간 되살아나지 않도록.
+	_input_direction = 0.0
+	_input_fast_fall = false
+	_jump_queued = false
+	_skill_held_since = -1.0
+	_skill_was_pressed = false
 
 
 ## 포즈만 바꾼다 (#176). 판정과는 무관하고 그림을 갈아 끼우는 일만 한다.
