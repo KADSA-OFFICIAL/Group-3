@@ -35,6 +35,7 @@
 | `scripts/weapons.gd` | **무기 표(17종)**. 이름·데미지·쿨타임·넉백 등 모든 수치의 출처 |
 | `scripts/combat.gd` | 전투 공통 수치. 최대 체력·무적 시간·넉백 세기·투사체 속도 |
 | `scripts/weapon_pick.gd` | **라운드 시작 선택 카드 3장** (이름·그림·설명). 보여주고 누르는 일만 한다 |
+| `scripts/gauge_bar.gd` | 머리 위 게이지 바 (너클). `Player.gauge` 를 읽어 그리기만 한다 |
 | `scripts/main.gd` | **공격 판정 전부**, 그리고 **무기 선택 단계**(후보 뽑기·확정·제한 시간) |
 | `scripts/player.gd` | 체력·무적·기절·게이지·버프·강제 이동, `server_set_weapon()`·`frozen`. `server_*` 함수가 판정 결과를 받는 창구 |
 | `scripts/projectile.gd` | 허공을 나는 것 — 화살·총알·표창·던진 단검·폭탄 |
