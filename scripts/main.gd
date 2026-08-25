@@ -1142,9 +1142,14 @@ func _server_fire(attacker: Player, base: Dictionary, offsets: Array = [0.0]) ->
 ## 투사체로 흉내내면 회피가 "옆으로 비키기"가 되는데, 부채꼴은 **거리를 벌리거나
 ## 부채 밖으로 나가는 것**이 회피여야 한다.
 ##
-## **막기(`is_blocked`)를 거치지 않는다.** 막기는 무기 끝과 무기 끝이 부딪히는 판정인데
-## 이건 흩뿌리는 것이다 — 폭탄 반경·양날 도끼 착지 충격파와 같은 취급이다.
+## **사거리 비교 막기(`is_blocked`)는 거치지 않는다.** 그것은 무기 끝과 무기 끝이
+## 부딪히는 판정인데 이건 흩뿌리는 것이다 — 폭탄 반경·양날 도끼 착지 충격파와 같은 취급이다.
 ## 다만 `_faces()`는 뜻이 있다: 부채꼴 자체가 바라보는 쪽으로만 열린다.
+##
+## **예외가 하나 있다 — 크게 들어 올린 방패는 이 산탄을 막는다** (#222).
+## 부채꼴은 바라보는 쪽으로만 열리는 **정면 공격**이라, 정면을 가린 방패가 못 막을 이유가
+## 없다. 방패의 사각이 샷건 하나로 남아 있었던 것을 메우는 것이다. 폭탄 반경과 착지
+## 충격파는 그대로 못 막는다 — 그쪽은 정면이라는 것이 없다.
 ##
 ## 데미지는 가까울수록 세다(34 → 14). 감소 기준 거리는 부채꼴 사거리와 같은 값이라
 ## 부채 끝에 겨우 닿으면 최소값이 들어간다.
@@ -1170,12 +1175,32 @@ func _cone_blast(attacker: Player, weapon: Dictionary) -> void:
 		var aim := Vector2(signf(float(attacker.facing)), 0.0)
 		if absf(aim.angle_to(offset)) > half:
 			return
+	# 크게 들어 올린 방패에 막혔다 (#222). 데미지도 넉백도 없다 —
+	# 탄이 막혔을 때(`Projectile._blocked`)와 같다. 부채꼴 연출은 위에서 이미 띄웠으므로
+	# 쏜 쪽에는 "여기까지였는데 막혔다"가 보인다.
+	if _guarded_cone(attacker, target):
+		return
 	# 표에서 꺼낸 값은 Variant라 명시 타입으로 받는다 (#66).
 	var near: float = weapon["special_damage"]
 	var far: float = weapon["falloff_min_damage"]
 	var damage := lerpf(near, far, clampf(distance / reach, 0.0, 1.0))
 	target.server_apply_hit(damage, weapon["knockback"], attacker.global_position.x,
 		0.0, "special")
+
+
+## 크게 들어 올린 방패가 정면에서 오는 산탄을 막는가 (#222).
+##
+## 자세만으로는 부족하고 **앞에서 와야** 막힌다 — 탄을 막는 `Projectile._guarded_by`,
+## 근접 막기 `is_blocked()` 와 같은 기준이다. 방패를 들었다고 등 뒤까지 가려지면
+## `special_duration`(4초) 동안 무적이 된다.
+##
+## 좌우가 정확히 겹치면(위아래로 포개졌을 때) 어느 쪽이 앞인지 못 재므로 막지 못한 것으로
+## 둔다 — 부채꼴 쪽이 그때를 "맞은 것"으로 두는 것과 짝이 맞는다.
+func _guarded_cone(attacker: Player, target: Player) -> bool:
+	if not target.is_guarding():
+		return false
+	var toward_attacker := signf(attacker.global_position.x - target.global_position.x)
+	return signf(float(target.facing)) == toward_attacker
 
 
 ## 다음에 던질 것이 강화인지 뽑는다 (#134). **서버에서만 부른다** —
