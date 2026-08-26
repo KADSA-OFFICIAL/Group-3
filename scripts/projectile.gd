@@ -19,11 +19,16 @@ signal swapped(from_position: Vector2, to_position: Vector2)
 ## 번개를 부르는 탄(삼지창 특수)이 맞혔다. 값은 **맞은 젤리의 발밑**이다 —
 ## 번개가 거기로 내려온다. 연출을 띄우는 쪽이 `main.gd`인 이유는 위 `swapped`와 같다.
 signal struck(at: Vector2)
+## 알갱이를 튀기는 탄(단검)이 맞혔다. 값은 **날이 닿은 자리**다 — 발밑으로 내려오는
+## 번개와 달리 맞은 그 점에서 튄다. 연출을 띄우는 쪽이 `main.gd`인 이유는 위와 같다.
+signal sparked(at: Vector2)
 
 ## 폭발 반경 표시 노드의 타입 (#140). `class_name` 대신 preload 로 받는다 —
 ## 전역 클래스 이름은 에디터가 만드는 `.godot` 캐시에 등록되어야 풀리므로,
 ## 캐시가 없는 상태(새로 받은 저장소·헤드리스 실행)에서 이 스크립트가 통째로 파싱되지 않는다.
 const BlastRadiusNode := preload("res://scripts/blast_radius.gd")
+## 떨어진 단검의 오라 노드 타입 (#250). 위와 같은 이유로 `class_name` 대신 preload 다.
+const DropAuraNode := preload("res://scripts/drop_aura.gd")
 
 ## 허공을 나는 것은 공유 무적을 타지 않는다. 항상 "projectile" 이다.
 const SOURCE := "projectile"
@@ -117,6 +122,8 @@ var art_points_right := false
 var swap_positions := false
 ## 맞은 자리에 번개가 내려친다 (삼지창 특수). 데미지·기절은 그대로고 연출만 붙는다.
 var hit_lightning := false
+## 맞은 자리에 빨간 알갱이가 튄다 (단검, #250). 위와 같이 연출만 붙는 값이다.
+var hit_sparks := false
 ## 이만큼 날아가면 사라진다 (로켓 글러브). 0 이면 제한 없음 — 지금까지의 투사체가 그렇다.
 var max_distance := 0.0
 ## 탄 크기 배율 (대포 총). 1.0 이면 씬에 잡아 둔 기본 크기다.
@@ -133,8 +140,17 @@ var knockback_speed := 0.0
 
 var velocity := Vector2.ZERO
 
+## 벽·바닥에 닿아 그 자리에 멈췄는가 (`on_solid` 이 "stay"·"roll" 인 것).
+##
+## **판정은 서버만 하지만 이 값은 복제된다** (씬의 `Sync` 설정) — 떨어진 단검 주변에
+## 도는 오라(#250)를 두 화면이 각자 그려야 하고, 클라이언트는 속도를 받지 않아서
+## 스스로는 멈춘 것을 알 수 없다. 스폰 상태에도 실려서, 경기 중에 들어온 관전자는
+## 이미 떨어져 있던 단검의 오라를 바로 본다 (#182).
+##
+## 그래서 이름에 밑줄이 없다 — 서버만 보는 값이 아니라 `position` 처럼 양쪽이 보는 값이다.
+var landed := false
+
 var _spawn_time := 0.0
-var _landed := false
 var _origin := Vector2.ZERO
 var _hit_peers := {}
 var _done := false
@@ -149,6 +165,7 @@ var _wisps: Array[Dictionary] = []
 @onready var art_sprite: Sprite2D = $ArtSprite
 @onready var collision_shape: CollisionShape2D = $CollisionShape2D
 @onready var blast_radius: BlastRadiusNode = $BlastRadius
+@onready var drop_aura: DropAuraNode = $DropAura
 
 
 ## 모든 피어에서 스폰 데이터로 호출된다 (add_child 전).
@@ -172,6 +189,7 @@ func setup(data: Dictionary) -> void:
 	art_points_right = data.get("art_points_right", false)
 	swap_positions = data.get("swap_positions", false)
 	hit_lightning = data.get("hit_lightning", false)
+	hit_sparks = data.get("hit_sparks", false)
 	max_distance = data.get("max_distance", 0.0)
 	size_scale = data.get("size_scale", 1.0)
 	art_scale = data.get("art_scale", 1.0)
@@ -272,6 +290,10 @@ func _face(direction: Vector2) -> void:
 ## 그리기는 모든 피어가 한다. 클라이언트는 속도를 받지 않으므로 복제된 위치의
 ## 변화로 진행 방향을 잡는다 — 유도(단검)로 방향이 바뀌어도 그림이 따라 돈다.
 func _process(delta: float) -> void:
+	# 떨어져서 주울 수 있는 단검 주변의 오라 (#250). `landed` 가 복제되므로 두 화면에
+	# 같이 뜬다. **아래 일찍 돌아가는 조건보다 앞에 둔다** — 그 조건은 그림이 있는
+	# 탄만 통과시키는데, 오라는 그림과 상관없이 켜지고 꺼져야 한다.
+	drop_aura.active = landed and pickup_owner != 0
 	if not _has_art and not missile:
 		return
 	var moved := position - _last_position
@@ -453,13 +475,13 @@ func _physics_process(delta: float) -> void:
 		return
 
 	# 바닥에 닿은 뒤 굴러가는 것 (폭탄) — 감속해서 스스로 멈춘다.
-	if _landed and on_solid == "roll" and not is_zero_approx(velocity.x):
+	if landed and on_solid == "roll" and not is_zero_approx(velocity.x):
 		var speed := maxf(absf(velocity.x) - ROLL_FRICTION * delta, 0.0)
 		velocity.x = signf(velocity.x) * speed
 		position += velocity * delta
 
 	# 바닥에 남은 것은 주인이 다가오면 회수된다 (단검).
-	if _landed:
+	if landed:
 		if pickup_owner != 0:
 			var owner_jelly := _find_jelly(pickup_owner)
 			if owner_jelly != null and position.distance_to(owner_jelly.global_position) <= PICKUP_RANGE:
@@ -560,6 +582,10 @@ func _on_body_entered(body: Node) -> void:
 		# 번개는 맞은 젤리의 **발밑**으로 떨어진다 (검 특수의 빛기둥과 같은 기준).
 		if hit_lightning:
 			struck.emit(body.global_position + Vector2(0.0, Player.BODY_BOTTOM))
+		# 알갱이는 **날이 닿은 자리**에서 튄다 (#250) — 번개처럼 발밑으로 내려보내면
+		# 어디에 맞았는지가 아니라 어디에 서 있었는지가 남는다.
+		if hit_sparks:
+			sparked.emit(position)
 		# 주울 수 있는 것(단검)은 맞힌 뒤에도 사라지지 않고 바닥으로 떨어진다.
 		# 안 그러면 한 번만 쓸 수 있는 무기가 된다.
 		if pickup_owner != 0:
@@ -577,7 +603,7 @@ func _on_body_entered(body: Node) -> void:
 			_finish()
 		"stay":
 			velocity = Vector2.ZERO
-			_landed = true
+			landed = true
 		"roll":
 			# 세로 속도만 죽이고 가로로 조금 굴린다 (#131).
 			# **가지고 있던 속도를 넘겨받지 않고 ROLL_SPEED 로 깎는다** — 안 그러면
@@ -585,7 +611,7 @@ func _on_body_entered(body: Node) -> void:
 			# 발판을 벗어났다 다시 떨어진 경우에는 남은 속도가 더 작으므로 그쪽을 쓴다.
 			var keep := minf(absf(velocity.x), ROLL_SPEED)
 			velocity = Vector2(signf(velocity.x) * keep, 0.0)
-			_landed = true
+			landed = true
 
 
 ## 이 젤리가 방패를 들어 **이 탄을 막고 있는가** (방패 특수).
@@ -624,11 +650,11 @@ func _blocked(jelly: Player) -> void:
 ## 이게 없으면 폭탄이 발판 밖 허공을 그대로 굴러간다. 떨어지다 아래 바닥에 닿으면
 ## `_on_body_entered`가 다시 굴리는데, 그때는 남은 속도가 더 작아 조금만 구른다.
 func _on_body_exited(body: Node) -> void:
-	if not multiplayer.is_server() or _done or not _landed:
+	if not multiplayer.is_server() or _done or not landed:
 		return
 	if on_solid != "roll" or body is Player:
 		return
-	_landed = false
+	landed = false
 
 
 ## 샷건처럼 거리에 따라 데미지가 줄어드는 경우.

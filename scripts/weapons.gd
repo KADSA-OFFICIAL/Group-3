@@ -106,6 +106,9 @@ const LIST: Array[Dictionary] = [
 		"special_damage": 0.0, "special_cooldown": 5.0, "knockback": 0,
 		# 주우면 자동으로 상대를 향해 날아간다 — 조준 불필요 (확정).
 		"homing": true,
+		# 맞으면 그 자리에 빨간 알갱이가 튄다 (#250). 작은 그림이 지나가고 체력만
+		# 줄던 무기라, 맞은 자리가 화면에 남게 한다.
+		"hit_sparks": true,
 	},
 	{
 		"name": "광선검",
