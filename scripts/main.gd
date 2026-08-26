@@ -56,6 +56,10 @@ var _next_hit_at := {}
 var _special_ready_at := {}
 ## 강제 이동 중에 한 번만 터지는 특수 공격 (전기톱 돌진, 양날 도끼 낙하).
 var _special_pending := {}
+## 범위를 보여 주고 기다리는 중인 강펀치 (#231). peer -> 누른 순간에 굳힌 값.
+## **자리·방향·데미지가 다 여기 들어 있다** — 기다리는 동안 쓰는 쪽이 움직여도
+## 주먹은 보여 준 자리에 들어간다. 예고한 범위와 맞는 범위가 달라지면 예고가 거짓말이 된다.
+var _punch_pending := {}
 ## 출혈. 무적 시간을 무시하고 1초마다 들어간다.
 var _bleeds := {}
 ## 소총 연사. 한 번 누르면 지속시간 동안 자동으로 나간다.
@@ -270,6 +274,7 @@ func _on_peer_left(peer_id: int) -> void:
 	player.queue_free()
 	_special_ready_at.erase(peer_id)
 	_special_pending.erase(peer_id)
+	_punch_pending.erase(peer_id)
 	_bleeds.erase(peer_id)
 	_bursts.erase(peer_id)
 	_dagger_held.erase(peer_id)
@@ -338,6 +343,7 @@ func _start_round() -> void:
 	_next_hit_at.clear()
 	_special_ready_at.clear()
 	_special_pending.clear()
+	_punch_pending.clear()
 	_bleeds.clear()
 	_bursts.clear()
 	_ruptures.clear()
@@ -598,6 +604,7 @@ func _server_reset_match() -> void:
 	_next_hit_at.clear()
 	_special_ready_at.clear()
 	_special_pending.clear()
+	_punch_pending.clear()
 	_bleeds.clear()
 	_bursts.clear()
 	_ruptures.clear()
@@ -850,6 +857,7 @@ func _physics_process(_delta: float) -> void:
 	_sync_special_ready()
 	_check_basic_attacks()
 	_check_pending_specials()
+	_tick_punches()
 	_tick_bleeds()
 	_tick_bursts()
 	_tick_ruptures()
@@ -1225,41 +1233,93 @@ func _punch_cone(attacker: Player, weapon: Dictionary) -> bool:
 	var reach: float = weapon["punch_cone_range"]
 	var spread: float = weapon["punch_cone_angle"]
 	var aim := signf(float(attacker.facing))
-	var charged := attacker.is_charged()
-	# 한가운데 데미지. 게이지 0%에서 10, 100%에서 40이다.
-	var center: float = lerpf(weapon["gauge_min_damage"], weapon["gauge_max_damage"],
-		attacker.gauge_ratio())
+	var windup: float = weapon.get("punch_windup", 0.0)
+	var peer_id: int = attacker.owner_peer_id
 
-	# **맞았는지와 무관하게 먼저 띄운다** — 빗나간 것도 "여기까지였다"로 보여야 한다
-	# (샷건 부채꼴·도끼 착지 충격파와 같은 이유). 게이지도 여기서 비운다:
-	# 아래에서 일찍 돌아가는 갈래가 여럿이라 그 뒤에 두면 새는 길이 생긴다.
-	_play_heavy_punch.rpc(
-		attacker.global_position + Vector2(aim * PUNCH_ORIGIN_X, Player.WEAPON_CENTER_Y),
-		aim, reach, spread, charged)
+	# **누른 순간의 것으로 다 굳힌다** (#231) — 자리·방향·데미지·충전 여부.
+	# 기다리는 동안 쓰는 쪽이 움직이거나(자리) 돌아서거나(방향) 다시 맞아도(게이지)
+	# 이번 주먹은 안 바뀐다. 예고한 범위와 맞는 범위가 달라지면 예고가 거짓말이 된다.
+	var shot := {
+		# 판정을 재는 기준은 **몸 중심**이다 (즉발이었을 때와 같은 계산을 이어 쓴다).
+		"body": attacker.global_position,
+		# 그림이 시작되는 자리는 **주먹**이다. 둘이 `PUNCH_ORIGIN_X`만큼 어긋나 있다.
+		"origin": attacker.global_position + Vector2(aim * PUNCH_ORIGIN_X, Player.WEAPON_CENTER_Y),
+		"aim": aim,
+		"reach": reach,
+		"spread": spread,
+		"charged": attacker.is_charged(),
+		# 한가운데 데미지. 게이지 0%에서 10, 100%에서 40이다.
+		"center": lerpf(weapon["gauge_min_damage"], weapon["gauge_max_damage"],
+			attacker.gauge_ratio()),
+		"edge_ratio": float(weapon["punch_edge_ratio"]),
+		"knockback": int(weapon["knockback"]),
+	}
+
+	# 게이지는 **누른 순간** 비워진다. 기다리는 동안 다시 차는 것은 다음 주먹 몫이다.
 	attacker.server_set_gauge(0.0)
+
+	# 예고가 없는 값(0)이면 지금까지처럼 즉발이다 — 무기 표만 고쳐도 되돌릴 수 있게 남겨 둔다.
+	if windup <= 0.0:
+		_resolve_punch(attacker, shot)
+		return true
+
+	_play_punch_range.rpc(shot["origin"], aim, reach, spread, shot["charged"], windup)
+	shot["at"] = _now() + windup
+	_punch_pending[peer_id] = shot
+	return true
+
+
+## 예고가 찬 강펀치를 터뜨린다 (#231). 예약은 한 사람당 하나뿐이다 —
+## 쿨타임(5초)이 예고(0.2초)보다 훨씬 길어서 겹칠 수가 없다.
+func _tick_punches() -> void:
+	var now := _now()
+	for peer_id: int in _punch_pending.keys():
+		var shot: Dictionary = _punch_pending[peer_id]
+		if now < shot["at"]:
+			continue
+		_punch_pending.erase(peer_id)
+		var attacker := get_player(peer_id)
+		# 예고 중에 죽었으면 주먹은 들어가지 않는다. 게이지는 이미 비워졌으니
+		# 헛친 것과 같다 — 그것이 이 무기의 무게다.
+		if attacker == null or not attacker.alive:
+			continue
+		_resolve_punch(attacker, shot)
+
+
+## 굳혀 둔 부채꼴로 판정하고 주먹 연출을 띄운다 (#231).
+##
+## **맞았는지와 무관하게 연출을 먼저 띄운다** — 빗나간 것도 "여기까지였다"로 보여야 한다
+## (샷건 부채꼴·도끼 착지 충격파와 같은 이유).
+##
+## 부채꼴 안에서 **가운데가 가장 세다.** 가장자리는 가운데의 `edge_ratio`(45%)다.
+## 크게 들어 올린 방패는 이 부채꼴도 막는다 (#222와 같은 판정).
+func _resolve_punch(attacker: Player, shot: Dictionary) -> void:
+	var aim: float = shot["aim"]
+	var reach: float = shot["reach"]
+	_play_heavy_punch.rpc(shot["origin"], aim, reach, shot["spread"], shot["charged"])
 
 	var target := _opponent_of(attacker.owner_peer_id)
 	if target == null or not target.alive:
-		return true
-	var offset := target.global_position - attacker.global_position
+		return
+	var body: Vector2 = shot["body"]
+	var offset := target.global_position - body
 	var distance := offset.length()
 	if distance > reach:
-		return true
+		return
 	# 바라보는 쪽에서 벗어난 각도가 부채꼴 절반을 넘으면 빗나간다.
 	# 두 젤리가 정확히 겹치면 방향을 못 재므로 그때는 한가운데로 둔다.
-	var half := deg_to_rad(spread) * 0.5
+	var half := deg_to_rad(float(shot["spread"])) * 0.5
 	var edge := 0.0
 	if distance > 0.001:
 		var away := absf(Vector2(aim, 0.0).angle_to(offset))
 		if away > half:
-			return true
+			return
 		edge = away / maxf(half, 0.001)
 	if _guarded_cone(attacker, target):
-		return true
-	var damage := lerpf(center, center * float(weapon["punch_edge_ratio"]), edge)
-	target.server_apply_hit(damage, weapon["knockback"], attacker.global_position.x,
-		0.0, "special")
-	return true
+		return
+	var center: float = shot["center"]
+	var damage := lerpf(center, center * float(shot["edge_ratio"]), edge)
+	target.server_apply_hit(damage, int(shot["knockback"]), body.x, 0.0, "special")
 
 
 ## 다음에 던질 것이 강화인지 뽑는다 (#134). **서버에서만 부른다** —
@@ -1584,6 +1644,22 @@ func _play_shotgun_blast(at: Vector2, aim: float, reach: float, spread: float) -
 	blast.reach = reach
 	blast.spread = spread
 	effects_root.add_child(blast)
+
+
+## 강펀치가 곧 들어올 범위 (#231). 안쪽이 `windup`에 걸쳐 차오르므로 **언제 들어오는지**도
+## 같이 보인다. 그리는 부채꼴은 실제로 맞는 부채꼴과 같다.
+@rpc("authority", "call_local", "reliable")
+func _play_punch_range(at: Vector2, aim: float, reach: float, spread: float,
+		charged: bool, windup: float) -> void:
+	var range_hint := HEAVY_PUNCH_SCENE.instantiate()
+	range_hint.position = at
+	range_hint.aim = aim
+	range_hint.reach = reach
+	range_hint.spread = spread
+	range_hint.charged = charged
+	range_hint.preview = true
+	range_hint.preview_time = windup
+	effects_root.add_child(range_hint)
 
 
 ## 너클 강펀치의 부채꼴 (#225). `charged`면 다른 디자인으로 뜬다.
