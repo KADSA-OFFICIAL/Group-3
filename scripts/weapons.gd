@@ -129,6 +129,10 @@ const LIST: Array[Dictionary] = [
 		"basic_damage": 5.0, "basic_interval": 0.2, "basic_kind": "melee_dot",
 		"special_damage": 0.0, "special_cooldown": 8.0, "knockback": 0,
 		"special_duration": 3.0,
+		# 날이 지나간 자리에 남는 잔상 수 (#253). 붙어서 비벼야 하는 무기인데 손에 든
+		# 그림은 서 있는 것과 뛰어드는 것이 똑같이 보여서, 움직임을 날 쪽에 표시한다.
+		# 5개면 달릴 때 40px쯤 되는 꼬리다 — 날(56px)보다 짧아야 잔상으로 읽힌다.
+		"trail_ghosts": 5,
 	},
 	{
 		"name": "전기톱",
