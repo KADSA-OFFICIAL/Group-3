@@ -60,6 +60,10 @@ var _special_pending := {}
 ## **자리·방향·데미지가 다 여기 들어 있다** — 기다리는 동안 쓰는 쪽이 움직여도
 ## 주먹은 보여 준 자리에 들어간다. 예고한 범위와 맞는 범위가 달라지면 예고가 거짓말이 된다.
 var _punch_pending := {}
+## 내려베는 중인 검 특수 (#247). peer -> 누른 순간에 굳힌 값과 검이 다 내려오는 시각.
+## **강펀치와 달리 자리를 굳히지 않는다** — 빛기둥은 맞는 순간의 상대 발밑에 서고
+## 체력 비례 데미지도 그때의 체력에 걸리므로, 미리 재 둘 것이 없다.
+var _sword_swings := {}
 ## 출혈. 무적 시간을 무시하고 1초마다 들어간다.
 var _bleeds := {}
 ## 소총 연사. 한 번 누르면 지속시간 동안 자동으로 나간다.
@@ -275,6 +279,7 @@ func _on_peer_left(peer_id: int) -> void:
 	_special_ready_at.erase(peer_id)
 	_special_pending.erase(peer_id)
 	_punch_pending.erase(peer_id)
+	_sword_swings.erase(peer_id)
 	_bleeds.erase(peer_id)
 	_bursts.erase(peer_id)
 	_dagger_held.erase(peer_id)
@@ -344,6 +349,7 @@ func _start_round() -> void:
 	_special_ready_at.clear()
 	_special_pending.clear()
 	_punch_pending.clear()
+	_sword_swings.clear()
 	_bleeds.clear()
 	_bursts.clear()
 	_ruptures.clear()
@@ -605,6 +611,7 @@ func _server_reset_match() -> void:
 	_special_ready_at.clear()
 	_special_pending.clear()
 	_punch_pending.clear()
+	_sword_swings.clear()
 	_bleeds.clear()
 	_bursts.clear()
 	_ruptures.clear()
@@ -858,6 +865,7 @@ func _physics_process(_delta: float) -> void:
 	_check_basic_attacks()
 	_check_pending_specials()
 	_tick_punches()
+	_tick_sword_swings()
 	_tick_bleeds()
 	_tick_bursts()
 	_tick_ruptures()
@@ -1286,6 +1294,34 @@ func _tick_punches() -> void:
 		_resolve_punch(attacker, shot)
 
 
+## 검이 다 내려온 순간에 검 특수를 넣는다 (#247).
+##
+## **거리는 누를 때 이미 봤고 여기서 다시 보지 않는다.** 이 무기는 휘두르는 방향도
+## 상대 무기의 막기도 따지지 않고 들어가던 무기고(빛기둥이 상대에게 꽂히는 연출이다),
+## 이번에 바꾼 것은 **언제** 들어가는가뿐이다 — 여기서 거리를 다시 재면 회피할 수
+## 있는 무기가 되어 수치를 건드리지 않고도 세기가 달라진다.
+##
+## 들어 올리는 도중에 쓰는 쪽이 죽으면 사라진다. 쿨타임은 이미 돌기 시작했으니 헛친
+## 것과 같다 — 강펀치(`_tick_punches`)와 같은 규칙이다.
+func _tick_sword_swings() -> void:
+	var now := _now()
+	for peer_id: int in _sword_swings.keys():
+		var swing: Dictionary = _sword_swings[peer_id]
+		if now < swing["at"]:
+			continue
+		_sword_swings.erase(peer_id)
+		var attacker := get_player(peer_id)
+		if attacker == null or not attacker.alive:
+			continue
+		var target := _opponent_of(peer_id)
+		if target == null or not target.alive:
+			continue
+		# 비율은 **맞는 순간의** 현재 체력에 걸린다 — 휘두르는 동안 깎였으면 그만큼 적다.
+		target.server_apply_hit(target.hp * float(swing["hp_ratio"]),
+			int(swing["knockback"]), attacker.global_position.x, 0.0, "special")
+		_play_light_burst.rpc(target.global_position + Vector2(0.0, Player.BODY_BOTTOM))
+
+
 ## 굳혀 둔 부채꼴로 판정하고 주먹 연출을 띄운다 (#231).
 ##
 ## **맞았는지와 무관하게 연출을 먼저 띄운다** — 빗나간 것도 "여기까지였다"로 보여야 한다
@@ -1421,10 +1457,18 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 				return false
 			# 거리만 맞으면 들어간다. 빛기둥이 상대에게 꽂히는 연출이라 휘두르는 방향이나
 			# 상대 무기의 막기(is_blocked)는 따지지 않는다.
-			var hp_ratio: float = weapon["special_hp_ratio"]
-			target.server_apply_hit(target.hp * hp_ratio, weapon["knockback"],
-				attacker.global_position.x, 0.0, "special")
-			_play_light_burst.rpc(target.global_position + Vector2(0.0, Player.BODY_BOTTOM))
+			#
+			# **누른 프레임에 때리지 않는다** (#247). 검을 머리 위로 들어 올렸다
+			# 내려베고, 다 내려온 순간에 들어간다 — 손에 든 검이 가만히 있는데
+			# 상대가 맞으면 무엇이 때렸는지 화면에서 읽히지 않는다(강펀치 #231과 같은 이유).
+			# 그림은 각 피어가 복제된 시작 신호를 받아 알아서 그리고, 시각은
+			# `_tick_sword_swings()`가 잰다. 쿨타임은 지금까지처럼 누른 순간부터 돈다.
+			attacker.server_start_swing(weapon["special_windup"], weapon["special_swing"])
+			_sword_swings[peer_id] = {
+				"at": _now() + float(weapon["special_windup"]) + float(weapon["special_swing"]),
+				"hp_ratio": weapon["special_hp_ratio"],
+				"knockback": weapon["knockback"],
+			}
 			return true
 		"망치":
 			return _melee_special(attacker, target, weapon["special_damage"],

@@ -15,6 +15,11 @@ extends RefCounted
 ##   special_cooldown 특수 공격 쿨타임(초)
 ##   knockback       넉백 단계 — Combat.Knockback
 ##   special_range   이 거리 안에 상대가 있을 때만 특수를 쓸 수 있다. 없으면 거리 제한 없음
+##   special_windup  특수를 누르고 나서 **판정이 들어가기까지** 무기를 들어 올리는 시간(초).
+##                   이 값이 있는 무기는 누른 프레임에 때리지 않는다 (검, #247)
+##   special_swing   들어 올린 무기를 내려베는 시간(초). 이 구간이 **끝나는 순간**에
+##                   데미지가 들어간다. 위의 special_windup 과 짝으로만 쓴다.
+##                   그림이 도는 것은 Player.server_start_swing() 이 맡는다
 ##   art_faces_left  원화가 **왼쪽**을 보고 그려져 있다. 기본은 오른쪽 보기다 (art_faces_left 참고)
 ##   reach_multiplier 이 무기를 들면 **상시로** 붙는 사거리 배율. 없으면 1.0.
 ##                   **막기 판정(is_blocked)이 사거리 비교라, 1.0을 넘기면 그 무기만
@@ -85,6 +90,11 @@ const LIST: Array[Dictionary] = [
 		"special_hp_ratio": 0.15,
 		# 이 거리 안에 상대가 있을 때만 쓸 수 있다 — 밖이면 발동도 쿨타임도 없다.
 		"special_range": 150.0,
+		# 검을 머리 위로 들어 올렸다 내려벤다 (#247). 누른 프레임에 때리지 않고
+		# **다 내려온 순간**에 데미지가 들어간다 — 그때까지가 이 둘의 합(0.38초)이다.
+		# 들어 올리는 쪽을 길게, 내려베는 쪽을 짧게 둔 것은 "멈칫하고 내려친다"가
+		# 보여야 해서다. 둘을 합쳐 0.5초를 넘기면 누른 것이 씹힌 것처럼 읽힌다.
+		"special_windup": 0.26, "special_swing": 0.12,
 	},
 	{
 		"name": "단검",
