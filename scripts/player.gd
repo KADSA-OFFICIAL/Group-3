@@ -62,6 +62,20 @@ const ART_STRETCH_SPEED := 4.0
 ## 0.5면 길이 1.6배일 때 굵기 1.3배다 — 장대가 6px → 8px 굵어진다.
 const ART_THICKEN_SHARE := 0.5
 
+## 검 특수의 내려베기 (#247). 세워 든 자세가 0도이고, 음수가 뒤로 젖힌 자세,
+## 양수가 앞으로 내려친 자세다 — 바라보는 쪽 부호는 `facing`이 곱해서 정한다.
+##
+## 젖히는 각도가 이보다 작으면 들어 올린 것이 안 보이고, 내려치는 각도가 수평(90도)에
+## 못 미치면 벤 것이 아니라 세우다 만 것으로 보인다. 그래서 수평을 조금 넘긴다.
+const SWING_RAISE_DEGREES := 52.0
+const SWING_DOWN_DEGREES := 104.0
+## 다 벤 자세에서 평소 자세로 돌아오는 데 걸리는 시간(초).
+## 판정은 이미 끝난 뒤라 이 값은 그림에만 영향을 준다.
+const SWING_RECOVER := 0.18
+## 들어 올리는 동안 검이 통째로 위로 뜨는 높이(px). 각도만 젖히면 "들었다"보다
+## "기울였다"로 읽혀서, 쥔 자리를 조금 올려 준다.
+const SWING_LIFT := 14.0
+
 ## 관통(광선검 특수) 중임을 알리는 빛. 광선검 날에 맞춘 민트빛이다.
 const PIERCE_COLOR := Color(0.55, 0.95, 0.85)
 ## 관통 중 무기에 곱하는 색. 1을 넘겨서 날이 타오르게 만든다.
@@ -173,6 +187,13 @@ var _weapon_art_growth := 1.0
 var _weapon_has_art := false
 ## 이 무기의 원화가 왼쪽을 보고 그려졌는가. 그렇다면 뒤집는 조건이 반대가 된다 (#109).
 var _weapon_faces_left := false
+
+## 내려베기를 시작한 시각 (#247). 음수면 휘두르는 중이 아니다.
+## 서버가 시작을 정해 `_receive_swing`으로 복제하고, 두 화면이 각자 그린다 —
+## **표시용이다.** 데미지가 언제 들어가는지는 main.gd 가 자기 시계로 따로 잰다.
+var _swing_started_at := -1.0
+var _swing_windup := 0.0
+var _swing_swing := 0.0
 
 ## 클라이언트가 서버로부터 받은 표시용 상태
 var _target_position := Vector2.ZERO
@@ -564,6 +585,78 @@ func _place_forward_weapon(sprite: Sprite2D) -> void:
 	sprite.position = Vector2(0.0, WEAPON_CENTER_Y)
 
 
+## 지금 검을 들어 올렸다 내려베는 중인가 (#247).
+##
+## 다 벤 뒤 평소 자세로 돌아오는 `SWING_RECOVER`까지 포함한다 — 돌아오는 도중에
+## false가 되면 검이 벤 자세에서 한 프레임 만에 제자리로 튄다.
+func is_swinging() -> bool:
+	if _swing_started_at < 0.0:
+		return false
+	return _now() - _swing_started_at < _swing_windup + _swing_swing + SWING_RECOVER
+
+
+## 휘두르는 동작의 지금 자세 — `angle`(라디안)과 `lift`(들린 높이 px).
+##
+## 세 구간으로 나뉜다. **들어 올리기**는 끝으로 갈수록 느려져 머리 위에서 멈칫하고,
+## **내려베기**는 반대로 갈수록 빨라져 데미지가 들어가는 순간에 가장 빠르다.
+## 남은 **되돌리기**는 부드럽게 평소 자세로 온다.
+##
+## 시간은 `_swing_started_at` 하나에서 나오고 그 값이 복제되므로 두 화면이 같은
+## 자세를 그린다. 판정 시각은 여기가 아니라 main.gd 가 재는 것이라, 몇 프레임
+## 어긋나도 맞는 시점은 흔들리지 않는다.
+func _swing_pose() -> Dictionary:
+	var raised := -deg_to_rad(SWING_RAISE_DEGREES)
+	var cut := deg_to_rad(SWING_DOWN_DEGREES)
+	var t := _now() - _swing_started_at
+
+	if t < _swing_windup:
+		var up := t / maxf(_swing_windup, 0.001)
+		up = 1.0 - (1.0 - up) * (1.0 - up)
+		return {"angle": raised * up, "lift": SWING_LIFT * up}
+
+	t -= _swing_windup
+	if t < _swing_swing:
+		var down := t / maxf(_swing_swing, 0.001)
+		return {
+			"angle": lerpf(raised, cut, down * down),
+			"lift": SWING_LIFT * (1.0 - down * down),
+		}
+
+	t -= _swing_swing
+	var back := clampf(t / maxf(SWING_RECOVER, 0.001), 0.0, 1.0)
+	return {"angle": lerpf(cut, 0.0, smoothstep(0.0, 1.0, back)), "lift": 0.0}
+
+
+## 휘두르는 동안 검을 **쥔 자리**를 축으로 돌린다 (#247).
+##
+## 평소에는 그림 한가운데를 몸 옆에 놓지만, 그 상태로 돌리면 검이 제 허리를 축으로
+## 헬리콥터처럼 돈다. 아래쪽 끝(손잡이)이 축이어야 들어 올렸다 내려치는 것으로 읽힌다.
+##
+## **여백 보정을 `position`이 아니라 `Sprite2D.offset`으로 한다** — offset은 회전이
+## 나중에 걸리는 값이라 돌아간 뒤에도 보정이 그림과 같이 돈다(`_place_forward_weapon`
+## 과 같은 이유). 뒤집힌 그림은 좌우 보정도 각도도 반대다: `flip_h`는 그림을 offset을
+## 기준으로 되접으므로, 통째로 거울에 비추려면 둘 다 부호를 뒤집어야 한다.
+##
+## 축을 놓는 자리는 **평소에 그리던 그림의 아래쪽 끝**이다 — 세워 든 자세(각도 0)가
+## 지금까지의 모습과 정확히 겹쳐야 휘두르기 시작할 때 검이 튀지 않는다.
+func _place_swinging_weapon(sprite: Sprite2D, flipped: bool, pose: Dictionary,
+		tall: float) -> void:
+	sprite.flip_h = flipped
+	sprite.rotation = float(pose["angle"]) * facing
+	var corrected_x := _weapon_content_offset.x
+	if flipped:
+		corrected_x = -corrected_x
+	# 그림을 제 길이의 절반만큼 올려 아래쪽 끝이 원점에 오게 한다.
+	sprite.offset = Vector2(
+		corrected_x,
+		_weapon_content_offset.y - _weapon_content_length * 0.5,
+	)
+	sprite.position = Vector2(
+		facing * WEAPON_OFFSET_X,
+		WEAPON_CENTER_Y + _weapon_art_length * tall * 0.5 - float(pose["lift"]),
+	)
+
+
 ## 사거리 버프를 그림 길이로 옮긴다 (장대 특수).
 ##
 ## **무기 표가 허락한 무기만 늘어난다**(`art_grows_with_reach`). 사거리 버프는 다른 무기도
@@ -633,13 +726,21 @@ func _update_weapon_shape(delta: float) -> void:
 			_weapon_art_factor * thicken * growth,
 			_weapon_art_factor * stretch * growth,
 		)
+		# 원화는 오른쪽 보기가 기본이라 왼쪽을 볼 때 뒤집는다. 다만 왼쪽을 보고 그려진
+		# 원화(전기톱)는 조건이 정반대다 — 안 그러면 톱날이 등 뒤로 간다 (#109).
+		# 뒤집으면 그림이 스프라이트 중심을 기준으로 반전되므로 여백 보정도 반대로 간다.
+		var flipped := (facing < 0) != _weapon_faces_left
+		# **세로로 걸린 배율 전체**(늘어난 정도 × 커진 정도). 세워 드는 쪽도 휘두르는
+		# 쪽도 이 값으로 그림의 아래쪽 끝을 제자리에 둔다 — 커진 쪽만 빼고 재면
+		# 방패가 커지는 동안 아래쪽 절반이 땅에 파묻힌다.
+		var tall := stretch * growth
 		if _weapon_art_forward:
 			_place_forward_weapon(sprite)
+		elif is_swinging():
+			# 검 특수 — 쥔 자리를 축으로 들어 올렸다 내려벤다 (#247).
+			# 각도가 0인 순간의 모습이 아래 세워 든 자세와 겹치므로 이어져 보인다.
+			_place_swinging_weapon(sprite, flipped, _swing_pose(), tall)
 		else:
-			# 원화는 오른쪽 보기가 기본이라 왼쪽을 볼 때 뒤집는다. 다만 왼쪽을 보고 그려진
-			# 원화(전기톱)는 조건이 정반대다 — 안 그러면 톱날이 등 뒤로 간다 (#109).
-			# 뒤집으면 그림이 스프라이트 중심을 기준으로 반전되므로 여백 보정도 반대로 간다.
-			var flipped := (facing < 0) != _weapon_faces_left
 			sprite.flip_h = flipped
 			sprite.rotation = 0.0
 			sprite.offset = Vector2.ZERO
@@ -648,9 +749,6 @@ func _update_weapon_shape(delta: float) -> void:
 			var offset_x := -corrected if flipped else corrected
 			# 늘어난 길이의 절반만큼 위로 올려 손에 쥔 아래쪽 끝을 제자리에 둔다.
 			# Sprite2D는 자기 위치를 가운데로 두고 커지므로, 안 올리면 아래로도 자란다.
-			# **세로로 걸린 배율 전체**(늘어난 정도 × 커진 정도)를 봐야 한다 — 커진 쪽만
-			# 빼고 재면 방패가 커지는 동안 아래쪽 절반이 땅에 파묻힌다.
-			var tall := stretch * growth
 			sprite.position = Vector2(
 				facing * WEAPON_OFFSET_X + offset_x,
 				WEAPON_CENTER_Y + _weapon_offset.y * tall
@@ -1030,6 +1128,18 @@ func server_set_special_ready(value: bool) -> void:
 	_receive_special_ready.rpc(value)
 
 
+## 검을 들어 올렸다 내려베는 동작을 시작한다 (#247).
+##
+## **그림만 움직인다.** 데미지는 main.gd 가 같은 시간을 재서 다 내려온 순간에 넣는다 —
+## 판정을 여기로 가져오면 무기 표를 읽고 상대를 고르는 일이 두 곳으로 갈라진다.
+## 강제 이동(`server_start_forced`)과 달리 조작을 막지 않는다: 벤 뒤 제자리로
+## 돌아오는 동안까지 멈춰 세우면 0.5초 넘게 굳어 버린다.
+func server_start_swing(windup: float, swing: float) -> void:
+	if not multiplayer.is_server():
+		return
+	_receive_swing.rpc(windup, swing)
+
+
 ## 강제 이동 시작.
 func server_start_forced(mode: String, duration: float) -> void:
 	if not multiplayer.is_server():
@@ -1079,6 +1189,9 @@ func _receive_weapon(new_weapon: String) -> void:
 	if weapon_id == new_weapon:
 		return
 	weapon_id = new_weapon
+	# 휘두르던 중에 무기가 바뀌면 그 동작은 버린다 (#247) — 새 무기가 남은 각도를
+	# 이어받아 혼자 내려치는 일이 없게 한다.
+	_swing_started_at = -1.0
 	_apply_weapon()
 	_update_weapon_shape(0.0)
 
@@ -1163,6 +1276,9 @@ func _receive_reset(spawn_position: Vector2, spawn_facing: int) -> void:
 	# 늘어난 채로 나타나서 0.15초 동안 줄어드는 것이 보인다. 커진 그림(방패)도 같다.
 	_weapon_art_stretch = 1.0
 	_weapon_art_growth = 1.0
+	# 휘두르던 검도 세워 든 자세로 돌려놓는다 (#247) — 안 되돌리면 다음 라운드가
+	# 벤 자세로 시작해서 0.18초 동안 검이 혼자 일어선다.
+	_swing_started_at = -1.0
 	_forced_deadline = 0.0
 	_knockback_until = 0.0
 
@@ -1197,6 +1313,15 @@ func _receive_forced(mode: String, duration: float) -> void:
 		velocity = Vector2.ZERO
 	else:
 		_skill_held_since = -1.0
+
+
+## 내려베기 시작 (#247). 시각을 받아 두면 두 화면이 각자 같은 자세를 그린다 —
+## 매 프레임 각도를 보내지 않는 것은 0.5초짜리 동작이라 시작 하나면 충분해서다.
+@rpc("authority", "call_local", "reliable")
+func _receive_swing(windup: float, swing: float) -> void:
+	_swing_started_at = _now()
+	_swing_windup = windup
+	_swing_swing = swing
 
 
 @rpc("authority", "call_local", "reliable")
