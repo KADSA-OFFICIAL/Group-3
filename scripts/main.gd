@@ -19,6 +19,7 @@ const SWAP_BURST_SCENE := preload("res://scenes/swap_burst.tscn")
 const LIGHTNING_STRIKE_SCENE := preload("res://scenes/lightning_strike.tscn")
 const SHOTGUN_BLAST_SCENE := preload("res://scenes/shotgun_blast.tscn")
 const SHOCKWAVE_SCENE := preload("res://scenes/shockwave.tscn")
+const HIT_SPARKS_SCENE := preload("res://scenes/hit_sparks.tscn")
 const HEAVY_PUNCH_SCENE := preload("res://scenes/heavy_punch.tscn")
 ## 위치 교환 연출을 띄울 높이 보정. 젤리의 `global_position`은 충돌 상자(48x56)의
 ## 가운데이고 몸(72px)은 발밑이 +`Player.BODY_BOTTOM`(28)이라, 몸 한가운데가 -8이다.
@@ -977,6 +978,9 @@ func _try_ranged_basic(attacker: Player) -> void:
 			"pickup_owner": peer_id,
 			# 던진 뒤에도 바닥에서 주워야 해서 손에 들었을 때와 같은 그림으로 그린다.
 			"art": weapon["name"],
+			# 맞은 자리에 빨간 알갱이가 튄다 (#250). 어떤 탄이 연출을 부르는지는
+			# 무기 표가 정한다 — 삼지창의 `hit_lightning` 과 같은 방식이다.
+			"hit_sparks": weapon.get("hit_sparks", false),
 		})
 		return
 
@@ -1407,6 +1411,7 @@ func _spawn_projectile(data: Dictionary) -> Node:
 		projectile.picked_up.connect(_on_dagger_picked_up)
 		projectile.swapped.connect(_on_positions_swapped)
 		projectile.struck.connect(_on_lightning_struck)
+		projectile.sparked.connect(_on_dagger_sparked)
 	return projectile
 
 
@@ -1726,6 +1731,11 @@ func _on_lightning_struck(at: Vector2) -> void:
 	_play_lightning_strike.rpc(at)
 
 
+## 단검이 맞혔다 (#250). 번개와 같은 짜임이다 — 탄은 신호만 내고 연출은 여기가 띄운다.
+func _on_dagger_sparked(at: Vector2) -> void:
+	_play_hit_sparks.rpc(at)
+
+
 ## 삼지창 특수의 번개. `at`은 맞은 젤리의 발밑이고, 줄기는 화면 위에서 거기까지 내려온다.
 @rpc("authority", "call_local", "reliable")
 func _play_lightning_strike(at: Vector2) -> void:
@@ -1733,6 +1743,17 @@ func _play_lightning_strike(at: Vector2) -> void:
 	# 위치를 붙이기 전에 넣는다 — `_ready()`가 이 값으로 줄기 모양의 씨앗을 잡는다.
 	bolt.position = at
 	effects_root.add_child(bolt)
+
+
+## 단검에 맞은 자리에 튀는 빨간 알갱이 (#250). `at`은 날이 닿은 자리다.
+##
+## 위치를 붙이기 전에 넣는 것은 번개와 같은 이유다 — `_ready()`가 이 값으로 알갱이가
+## 튀는 방향의 씨앗을 잡아서, 나중에 넣으면 모든 피격이 (0, 0)으로 같은 모양이 된다.
+@rpc("authority", "call_local", "reliable")
+func _play_hit_sparks(at: Vector2) -> void:
+	var sparks := HIT_SPARKS_SCENE.instantiate()
+	sparks.position = at
+	effects_root.add_child(sparks)
 
 
 ## 빨간 표창이 자리를 바꿨다 (서버 전용 — 투사체가 알려 온다).
