@@ -159,6 +159,20 @@ pushd "%PROJECT_DIR%"
 
 set "TARGET_BRANCH=main"
 if defined SERVER_BRANCH set "TARGET_BRANCH=%SERVER_BRANCH%"
+
+rem SERVER_BRANCH 의 앞뒤 공백을 떼어 낸다. `set SERVER_BRANCH=main & ...` 처럼
+rem 적으면 값에 뒤 공백이 붙는데, 그러면 origin/main+공백 을 찾다가 "그런 브랜치가
+rem 없다" 로 빠진다. 사람이 눈으로는 알아챌 수 없는 종류라 여기서 다듬는다.
+for /f "tokens=* delims= " %%B in ("!TARGET_BRANCH!") do set "TARGET_BRANCH=%%B"
+:TRIM_TARGET
+if not defined TARGET_BRANCH goto :TRIM_TARGET_DONE
+if "!TARGET_BRANCH:~-1!"==" " (
+	set "TARGET_BRANCH=!TARGET_BRANCH:~0,-1!"
+	goto :TRIM_TARGET
+)
+:TRIM_TARGET_DONE
+if not defined TARGET_BRANCH set "TARGET_BRANCH=main"
+
 set "TARGET=origin/!TARGET_BRANCH!"
 
 set "HEAD_BEFORE="
