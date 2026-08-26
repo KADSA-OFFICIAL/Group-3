@@ -100,6 +100,12 @@ const CHARGE_SPARK_COUNT := 6
 ## 무기 표에 `smoke_puffs`가 있는 무기에만 뜬다. 두 빨간 그림의 붉은색에 맞췄다 —
 ## 손에 든 것과 연기가 다른 색이면 무엇에서 나는지 안 읽힌다.
 const SPECIAL_SMOKE_COLOR := Color(0.82, 0.13, 0.11)
+
+## 날이 지나간 자리에 남는 잔상 색 (#253). 무기 표에 `trail_ghosts`가 있는 무기에만
+## 뜬다. **관통 빛과 같은 민트**다 — 광선검 날의 색이고, 날과 다른 색으로 남기면
+## 무엇의 잔상인지 읽히지 않는다.
+const TRAIL_COLOR := PIERCE_COLOR
+
 ## 넉백 직후 좌우 입력이 속도를 덮어쓰지 못하는 시간.
 ##
 ## 서버가 매 프레임 velocity.x를 입력값으로 덮어쓰기 때문에, 이 잠금이 없으면
@@ -561,6 +567,64 @@ func _update_weapon_smoke() -> void:
 	smoke.position = Vector2(facing * WEAPON_OFFSET_X, WEAPON_CENTER_Y)
 
 
+## 날이 지나간 자리에 남는 미세한 잔상 (광선검, #253).
+##
+## **켜는 조건은 무기 표의 `trail_ghosts` 하나다** — 연기(`smoke_puffs`)와 같은 짜임이라
+## 다른 무기가 쓰고 싶으면 표에 줄만 더하면 된다. 그림이 없는 무기(임시 막대)는 남길 날이
+## 없으므로 제외한다.
+##
+## 자리는 이미 복제되는 `position`·`facing`에서 나오므로 각 피어가 자기 화면 값으로
+## 알아서 그린다 — RPC를 더하지 않는다(버전 악수 #228에 영향이 없다).
+##
+## 문턱값(움직여야 하는 거리)은 여기가 아니라 `WeaponTrail.sample()`이 본다. 두 곳에
+## 나누면 "얼마나 움직여야 남는가"가 갈라진다.
+func _update_weapon_trail() -> void:
+	var trail: WeaponTrail = $Trail
+	var ghosts: int = Weapons.get_weapon(weapon_id).get("trail_ghosts", 0)
+	var wants := alive and ghosts > 0 and _weapon_has_art
+	if not wants:
+		# 비우고 나서 숨긴다 — 숨은 노드는 나이도 먹지 않아서, 안 비우면 다시 켜질 때
+		# 지난번 자리의 잔상이 그대로 되살아난다.
+		trail.clear()
+		trail.visible = false
+		return
+	trail.visible = true
+	trail.ghost_count = ghosts
+	trail.color = TRAIL_COLOR
+	var ends := _blade_ends()
+	trail.sample(ends[0], ends[1])
+
+
+## 지금 화면에 그려진 무기 날의 양끝 (전역 좌표, [날 끝, 손잡이]).
+##
+## `_update_weapon_shape()`가 이미 정해 놓은 스프라이트의 `position`·`scale`·`rotation`·
+## `offset`에서 **되짚어** 계산한다 — 자세를 잡는 곳이 한 곳이므로, 세워 든 것이든 눕혀 든
+## 것이든(장대) 휘두르는 중이든(검 #247) 늘어난 중이든 잔상이 저절로 따라간다. 자세를
+## 여기서 다시 계산하면 언젠가 두 곳이 갈라지고, 그때 잔상만 엉뚱한 자리에 남는다.
+##
+## `centered`가 켜져 있어 텍스처 가운데가 `offset` 자리에 그려지고, 여백을 뺀 실제 그림의
+## 가운데는 거기서 `_weapon_content_offset`만큼 되돌린 자리다(그 값이 "텍스처 가운데 →
+## 그림 가운데"의 반대 방향으로 잡혀 있다). `flip_h`는 그림을 offset 기준으로 되접으므로
+## 좌우 보정의 부호도 뒤집는다 — `_place_swinging_weapon()`이 같은 이유로 같은 일을 한다.
+func _blade_ends() -> Array[Vector2]:
+	var sprite: Sprite2D = $WeaponSprite
+	var corrected_x := _weapon_content_offset.x
+	if sprite.flip_h:
+		corrected_x = -corrected_x
+	var center := sprite.offset - Vector2(corrected_x, _weapon_content_offset.y)
+	# 날은 원화의 위쪽 끝이다 (README의 "날 끝이 위"). 화면 좌표는 y가 아래라 위가 음수다.
+	var half := _weapon_content_length * 0.5
+	return [
+		_sprite_to_global(sprite, center + Vector2(0.0, -half)),
+		_sprite_to_global(sprite, center + Vector2(0.0, half)),
+	]
+
+
+## 스프라이트 안의 점을 전역 좌표로. Sprite2D의 변환은 배율 → 회전 → 이동 순서다.
+func _sprite_to_global(sprite: Sprite2D, point: Vector2) -> Vector2:
+	return to_global(sprite.position + (point * sprite.scale).rotated(sprite.rotation))
+
+
 ## 원화를 눕혀 **바라보는 쪽으로 뻗어** 놓는다 (장대, `art_held_forward`).
 ##
 ## 사거리 판정은 가로 방향이고(`current_reach()`), 그림이 없던 동안 이 자리를 채웠던
@@ -809,6 +873,8 @@ func _physics_process(delta: float) -> void:
 	_update_pierce_aura()
 	_update_weapon_shape(delta)
 	_update_weapon_smoke()
+	# 잔상은 무기 자세가 정해진 **뒤에** 남긴다 — 앞에 두면 한 프레임 전 자리를 남긴다.
+	_update_weapon_trail()
 	# 바라보는 방향으로 그림을 뒤집는다. facing은 서버가 정해 양쪽에 복제된다.
 	# 여백 보정의 부호는 _place_body()가 flip_h를 보고 맞춘다.
 	$Body.flip_h = facing < 0
@@ -1065,6 +1131,9 @@ func server_teleport(to: Vector2) -> void:
 func _receive_teleport(to: Vector2) -> void:
 	global_position = to
 	_target_position = to
+	# 옛 자리의 잔상을 버린다 (#253) — 안 버리면 두 자리를 잇는 줄이 한 번 그려진다.
+	# `WeaponTrail`의 거리 문턱도 같은 것을 막지만, 자리가 바뀌는 것을 아는 곳이 여기다.
+	$Trail.clear()
 
 
 ## 사거리·크기·관통 버프.
@@ -1279,6 +1348,9 @@ func _receive_reset(spawn_position: Vector2, spawn_facing: int) -> void:
 	# 휘두르던 검도 세워 든 자세로 돌려놓는다 (#247) — 안 되돌리면 다음 라운드가
 	# 벤 자세로 시작해서 0.18초 동안 검이 혼자 일어선다.
 	_swing_started_at = -1.0
+	# 지난 라운드에 남긴 잔상도 버린다 (#253) — 스폰 지점으로 돌아가는 것이 곧 순간이동이라,
+	# 안 버리면 새 라운드 첫 프레임에 죽은 자리에서 스폰 지점까지 줄이 그려진다.
+	$Trail.clear()
 	_forced_deadline = 0.0
 	_knockback_until = 0.0
 

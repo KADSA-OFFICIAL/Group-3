@@ -3,6 +3,7 @@
 [ext_resource type="Script" path="res://scripts/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/weapon_smoke.gd" id="2_smoke"]
 [ext_resource type="Script" path="res://scripts/gauge_bar.gd" id="3_gauge"]
+[ext_resource type="Script" path="res://scripts/weapon_trail.gd" id="4_trail"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
 size = Vector2(48, 56)
@@ -50,6 +51,10 @@ shape = SubResource("RectangleShape2D_body")
 offset_right = 24.0
 offset_bottom = 10.0
 color = Color(0.9, 0.9, 0.95, 1)
+
+[node name="Trail" type="Node2D" parent="."]
+visible = false
+script = ExtResource("4_trail")
 
 [node name="WeaponSprite" type="Sprite2D" parent="."]
 visible = false
