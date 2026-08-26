@@ -119,14 +119,23 @@ echo.
 
 rem ---------- 2. 최신 게임 파일 받기 ----------
 rem 서버가 옛 파일로 떠 있으면 최신 클라이언트가 접속해도 입장이 안 된다.
-rem 그래서 띄우기 전에 원격과 강제로 맞춘다. 이 컴퓨터는 서버 전용이라
-rem 여기서 게임 파일을 고칠 일이 없다는 전제다 - 고쳐야 하면 다른 컴퓨터에서
-rem 고치고 push 한 뒤 이 스크립트를 다시 돌린다.
+rem 그래서 띄우기 전에 원격과 강제로 맞춘다.
 rem
-rem merge(=git pull) 가 아니라 fetch + reset --hard 를 쓴다. Godot 이 .import
-rem 파일을 LF 로 다시 쓰는데 저장소에는 CRLF 로 들어 있어서, 내용이 같아도
-rem git 은 "수정됨" 으로 보고 merge 를 거부한다. 이 컴퓨터에서는 그 상태가
-rem 상시라 merge 로는 거의 매번 막힌다.
+rem 대상은 항상 origin/main 이다 - 체크아웃이 다른 브랜치에 남아 있어도 서버는
+rem main 으로 뜬다. 예전에는 "지금 체크아웃된 브랜치" 로 맞췄는데, 서버컴이
+rem 기능 브랜치에 주차되면 그 브랜치가 더 이상 안 자라도 fetch + reset 이 매번
+rem 성공해서 "최신화 됨" 으로 보이면서 영원히 옛 코드로 돌았다 - 이슈 #234.
+rem 화면상 정상과 구별이 안 되는 것이 가장 나빴다. 일부러 다른 브랜치로 띄우려면
+rem SERVER_BRANCH 를 준다.
+rem   set SERVER_BRANCH=feat-231-punch-windup
+rem
+rem merge 가 아니라 강제로 맞추는 이유: Godot 이 .import 파일을 LF 로 다시 쓰는데
+rem 저장소에는 CRLF 로 들어 있어서, 내용이 같아도 git 은 "수정됨" 으로 보고
+rem merge 를 거부한다. 이 컴퓨터에서는 그 상태가 상시라 merge 로는 거의 매번 막힌다.
+rem
+rem 다만 사람이 만든 작업은 지우지 않는다. 대상에 없는 로컬 커밋이 있거나
+rem .import 가 아닌 파일에 커밋되지 않은 변경이 있으면 최신화를 건너뛰고 알린다.
+rem 이 폴더는 개발 체크아웃도 겸하기 때문이다.
 rem
 rem 인터넷이 안 되면 있는 파일로 그냥 띄운다 - 서버가 아예 안 뜨는 것보다 낫다.
 rem GIT_TERMINAL_PROMPT=0 은 git 이 아이디/비밀번호를 물으며 창을 붙잡고
@@ -148,19 +157,34 @@ rem git 에 경로를 넘기지 않고 폴더로 들어가서 부른다. 프로젝트 경로에 한글이
 rem 들어 있어도 cmd 가 알아서 처리하므로 인코딩 사고가 나지 않는다.
 pushd "%PROJECT_DIR%"
 
+set "TARGET_BRANCH=main"
+if defined SERVER_BRANCH set "TARGET_BRANCH=%SERVER_BRANCH%"
+
+rem SERVER_BRANCH 의 앞뒤 공백을 떼어 낸다. `set SERVER_BRANCH=main & ...` 처럼
+rem 적으면 값에 뒤 공백이 붙는데, 그러면 origin/main+공백 을 찾다가 "그런 브랜치가
+rem 없다" 로 빠진다. 사람이 눈으로는 알아챌 수 없는 종류라 여기서 다듬는다.
+for /f "tokens=* delims= " %%B in ("!TARGET_BRANCH!") do set "TARGET_BRANCH=%%B"
+:TRIM_TARGET
+if not defined TARGET_BRANCH goto :TRIM_TARGET_DONE
+if "!TARGET_BRANCH:~-1!"==" " (
+	set "TARGET_BRANCH=!TARGET_BRANCH:~0,-1!"
+	goto :TRIM_TARGET
+)
+:TRIM_TARGET_DONE
+if not defined TARGET_BRANCH set "TARGET_BRANCH=main"
+
+set "TARGET=origin/!TARGET_BRANCH!"
+
 set "HEAD_BEFORE="
 for /f "delims=" %%H in ('git rev-parse HEAD 2^>nul') do set "HEAD_BEFORE=%%H"
 set "BRANCH="
 for /f "delims=" %%B in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set "BRANCH=%%B"
+if not defined BRANCH set "BRANCH=이름 없음"
 
-if not defined BRANCH (
-	echo  [경고] 현재 브랜치를 알 수 없어 최신 파일 받기를 건너뜁니다.
-	echo.
-	popd
-	goto :SYNC_DONE
+if defined SERVER_BRANCH (
+	echo  [알림] SERVER_BRANCH 가 지정되어 main 이 아닌 !TARGET_BRANCH! 로 띄웁니다.
 )
-
-echo  최신 게임 파일을 받는 중... [브랜치 !BRANCH!]
+echo  최신 게임 파일을 받는 중... [!BRANCH! 에서 !TARGET! 으로]
 git fetch --prune origin
 if errorlevel 1 (
 	echo.
@@ -168,42 +192,80 @@ if errorlevel 1 (
 	echo         지금 있는 파일로 띄웁니다 - 클라이언트와 버전이 다르면
 	echo         입장이 안 될 수 있습니다.
 	echo.
-	popd
-	goto :SYNC_DONE
+	goto :SYNC_END
 )
 
-git rev-parse --verify "origin/!BRANCH!" >nul 2>&1
+git rev-parse --verify "!TARGET!" >nul 2>&1
 if errorlevel 1 (
-	echo  [경고] origin/!BRANCH! 가 없어 최신화를 건너뜁니다.
 	echo.
-	popd
-	goto :SYNC_DONE
+	echo  [경고] !TARGET! 이 없어 최신화를 건너뜁니다.
+	echo         SERVER_BRANCH 를 잘못 적었는지 확인하세요.
+	echo.
+	goto :SYNC_END
 )
 
-rem 여기서 이 폴더의 로컬 변경은 버려진다. 위에 적은 전제가 그래서 중요하다.
-git reset --hard "origin/!BRANCH!"
+rem 잃을 것이 있는지 먼저 본다. .import 는 Godot 이 LF 로 다시 써서 상시
+rem 어긋나는 잡음이라 세지 않는다 - 그것까지 세면 늘 건너뛰게 된다.
+rem
+rem 제외는 findstr 이 아니라 git 의 pathspec 으로 한다. cmd 의 파이프는 줄 끝에
+rem CR 을 남기므로 findstr 의 끝 앵커가 절대 맞지 않는다 - `/r "\.import$"` 도
+rem `/e ".import"` 도 한 줄도 못 걸러내고, 그러면 .import 잡음 때문에 항상
+rem "커밋되지 않은 변경이 있다" 로 빠져 최신화가 영영 안 된다.
+set "DIRTY="
+for /f "delims=" %%S in ('git status --porcelain -- . ":(exclude)*.import" 2^>nul') do set "DIRTY=1"
+if defined DIRTY (
+	echo.
+	echo  [경고] 커밋되지 않은 변경이 있어 최신화를 건너뜁니다.
+	echo         지우고 띄우지는 않습니다 - 작업이 사라지면 안 되기 때문입니다.
+	echo         이 컴퓨터에서 고친 것을 push 하거나 되돌린 뒤 다시 실행하세요.
+	echo         서버는 옛 코드로 뜨므로 클라이언트가 입장하지 못할 수 있습니다.
+	echo.
+	goto :SYNC_END
+)
+
+set "AHEAD=0"
+for /f "delims=" %%A in ('git rev-list --count "!TARGET!..HEAD" 2^>nul') do set "AHEAD=%%A"
+if not "!AHEAD!"=="0" (
+	echo.
+	echo  [경고] !TARGET! 에 없는 로컬 커밋이 !AHEAD!개 있어 최신화를 건너뜁니다.
+	echo         지금 브랜치는 !BRANCH! 입니다.
+	echo         push 해서 main 에 머지한 뒤 다시 실행하세요.
+	echo         서버는 옛 코드로 뜨므로 클라이언트가 입장하지 못할 수 있습니다.
+	echo.
+	goto :SYNC_END
+)
+
+rem -f 로 .import 잡음을 버리고 -B 로 대상 브랜치를 원격 자리에 맞춰 옮겨 붙는다.
+rem 위에서 잃을 것이 없다고 확인했으므로 안전하다. reset --hard 를 쓰면 지금
+rem 브랜치의 이름 그대로 main 내용을 덮어써서 기능 브랜치가 망가진다.
+git checkout -f -B "!TARGET_BRANCH!" "!TARGET!"
 if errorlevel 1 (
 	echo.
 	echo  [경고] 최신화에 실패했습니다. 지금 있는 파일로 띄웁니다.
 	echo.
-	popd
-	goto :SYNC_DONE
+	goto :SYNC_END
 )
 
+:SYNC_END
 set "HEAD_AFTER="
 for /f "delims=" %%H in ('git rev-parse HEAD 2^>nul') do set "HEAD_AFTER=%%H"
+set "NOW_BRANCH="
+for /f "delims=" %%B in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set "NOW_BRANCH=%%B"
+set "NOW_SHORT="
+for /f "delims=" %%H in ('git rev-parse --short HEAD 2^>nul') do set "NOW_SHORT=%%H"
 popd
 
-if "!HEAD_BEFORE!"=="!HEAD_AFTER!" (
-	echo  이미 최신입니다.
-	echo.
-	goto :SYNC_DONE
-)
+rem 커밋 제목은 찍지 않는다 - git 출력은 UTF-8 인데 이 창은 CP949 라서 한글
+rem 제목이 깨진다. 방 이름을 읽지 않는 것과 같은 이유다. 브랜치와 해시는 ASCII 다.
+echo  지금 도는 코드: !NOW_BRANCH! !NOW_SHORT!
+echo.
+
+if "!HEAD_BEFORE!"=="!HEAD_AFTER!" goto :SYNC_DONE
 
 rem class_name 이 붙은 스크립트가 새로 들어오면 .godot 의 클래스 캐시가 낡아서
 rem "Could not find type ..." 파스 에러가 쏟아지고 서버가 제구실을 못 한다.
 rem --import 는 캐시만 다시 만들고 추적 파일은 건드리지 않는다.
-rem (--editor 로 열면 .tscn 의 uid 까지 다시 써서 저장소가 더러워진다.)
+rem --editor 로 열면 .tscn 의 uid 까지 다시 써서 저장소가 더러워진다.
 echo  게임 파일이 바뀌었습니다. Godot 캐시를 다시 만드는 중...
 "%GODOT_EXE%" --headless --import --path "%PROJECT_DIR%" >nul 2>&1
 echo  준비가 끝났습니다.
