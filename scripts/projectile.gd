@@ -294,7 +294,12 @@ func _process(delta: float) -> void:
 	# 같이 뜬다. **아래 일찍 돌아가는 조건보다 앞에 둔다** — 그 조건은 그림이 있는
 	# 탄만 통과시키는데, 오라는 그림과 상관없이 켜지고 꺼져야 한다.
 	drop_aura.active = landed and pickup_owner != 0
-	if not _has_art and not missile:
+	# **`arrow`를 빠뜨리지 말 것** (#257). 화살은 그림 파일 없이 `_draw()`로만 그려서
+	# `_has_art`도 `missile`도 아니라, 여기서 돌아가면 아래의 `_draw_dir` 갱신과
+	# `queue_redraw()`를 한 번도 지나지 않는다 — 발사 각도(위로 15도)로 굳은 채 날아가
+	# 내려가는 구간에서 그림과 진행 방향이 어긋난다. `_draw()`도 아래 갱신 블록도
+	# 미사일과 화살을 나란히 다루는데 이 줄에만 빠져 있었다.
+	if not _has_art and not missile and not arrow:
 		return
 	var moved := position - _last_position
 	_last_position = position
