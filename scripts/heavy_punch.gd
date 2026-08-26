@@ -49,9 +49,16 @@ const CHARGED_MID := Color(0.98, 0.45, 0.95)
 const CHARGED_EDGE := Color(0.55, 0.30, 0.95)
 const CHARGED_SHARD := Color(0.55, 0.95, 1.0)
 
+## 예고가 다 찬 뒤 **잔상**으로 남는 시간(초) (#244).
+##
+## 전에는 다 차는 순간 사라져서, 주먹 연출이 뜨는 프레임에 범위가 이미 없었다 —
+## "어디까지가 범위였는지"를 결과와 겹쳐 볼 틈이 없었다. 이만큼 옅어지며 남는다.
+## **연출뿐이고 판정과 무관하다** — 판정은 예고가 다 찬 그 순간 한 번이다.
+const PREVIEW_AFTERGLOW := 0.18
+
 ## 부모가 **add_child 전에** 넣어 준다. 기본값은 무기 표가 없을 때의 대비값이다.
 var aim := 1.0
-var reach := 150.0
+var reach := 180.0
 ## 부채꼴 **전체** 각도(도). 절반씩 위아래로 벌어진다.
 var spread := 80.0
 ## 게이지 75% 이상에서 나간 강펀치인가.
@@ -132,32 +139,43 @@ func _draw() -> void:
 
 
 func _duration() -> float:
-	# 예고는 주먹이 들어오는 순간 사라져야 한다 — 남아 있으면 이미 끝난 범위를 보여준다.
+	# 예고는 다 찬 뒤 잔상으로 조금 더 남는다 (#244) — 주먹 연출과 겹쳐 보여야
+	# "여기까지였다"가 읽힌다.
 	if preview:
-		return preview_time
+		return preview_time + PREVIEW_AFTERGLOW
 	return DURATION_CHARGED if charged else DURATION
 
 
 ## 곧 맞을 범위 (#231). **테두리는 실제로 맞는 부채꼴 그대로**이고, 안쪽이 시간에 맞춰
 ## 차오른다 — 어디에 맞는지와 언제 맞는지를 한 그림으로 보여주는 것이 목적이다.
 ##
-## 사그라들지 않는다. 끝까지 또렷하게 있다가 주먹이 들어오는 순간 사라져야
-## "차올랐다 → 터졌다"로 읽힌다.
+## 차오르는 동안은 또렷하고, 다 찬 뒤 `PREVIEW_AFTERGLOW` 동안 **잔상으로 옅어진다** (#244).
+## 그 순간이 주먹이 들어가는 순간이라, 터지는 연출 위로 "여기까지였다"가 겹쳐 보인다.
 func _draw_preview() -> void:
 	var t := clampf(_elapsed / maxf(preview_time, 0.001), 0.0, 1.0)
+	var fade := _preview_fade()
+	if fade <= 0.0:
+		return
 	var tint := CHARGED_MID if charged else PLAIN_MID
 	# 차오르는 안쪽. 가산 혼합이라 옅게 깔아도 잔디 위에서 읽힌다.
-	draw_colored_polygon(_wedge(reach * t), Color(tint, 0.16))
+	draw_colored_polygon(_wedge(reach * t), Color(tint, 0.16 * fade))
 	# 테두리. 부채 끝을 지나 원점으로 닫아야 "이 안"이 어디인지 분명해진다.
 	var outline := _wedge(reach)
 	outline.append(Vector2.ZERO)
-	draw_polyline(outline, Color(tint, 0.6), 2.0, true)
+	draw_polyline(outline, Color(tint, 0.6 * fade), 2.0, true)
 	# 차오른 앞선만 진하게 덧그려 어디까지 왔는지 눈에 걸리게 한다.
 	if t > 0.02:
 		var half := deg_to_rad(spread) * 0.5
 		var facing := 0.0 if aim > 0.0 else PI
 		draw_arc(Vector2.ZERO, reach * t, facing - half, facing + half, 28,
-			Color(CORE, 0.75), 2.5, true)
+			Color(CORE, 0.75 * fade), 2.5, true)
+
+
+## 예고 밝기 (#244). 차오르는 동안은 1이고, 다 찬 뒤 잔상 시간에 걸쳐 0으로 간다.
+func _preview_fade() -> float:
+	if _elapsed <= preview_time:
+		return 1.0
+	return clampf(1.0 - (_elapsed - preview_time) / PREVIEW_AFTERGLOW, 0.0, 1.0)
 
 
 ## 원점 → 부채 끝을 두른 다각형. 판정과 같은 사거리·각도를 쓴다.
