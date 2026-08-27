@@ -29,7 +29,7 @@ title(방을 고르고 `StartButton`으로 접속 — 주소는 코드가 정하
 
 ### 구조 요약
 
-- `scripts/network.gd` = 오토로드 싱글턴 `Network`: 연결 수립과 피어 알림만 담당(게임 로직 없음). `ROOMS`(1번 방 7777·2번 방 7778 — 서버컴 방화벽 UDP 규칙과 일치), **방 하나당** `MAX_PLAYERS = 2` + `MAX_OBSERVERS = 4`이고 ENet에 넘기는 정원은 그 합인 `MAX_CLIENTS`(6)다, `DEFAULT_ADDRESS`(팀 서버 주소 — 이슈 #198), 붙을 주소를 정하는 `configured_address()`(우선순위: `--address=` 인자 → `user://client.cfg` → `DEFAULT_ADDRESS`). `should_run_as_server()`가 헤드리스 또는 `--server` 인자를 감지해 `_ready()`에서 자동으로 서버를 열고, 포트는 `port_from_cmdline()`이 `--port=7778` 인자에서 읽는다(없으면 첫 방). 시그널 `server_started`·`join_succeeded`·`join_failed`·`peer_joined`·`peer_left`.
+- `scripts/network.gd` = 오토로드 싱글턴 `Network`: 연결 수립과 피어 알림만 담당(게임 로직 없음). `ROOMS`(1번 방 7777·2번 방 7778·3번 방 7779 — 서버컴 방화벽 UDP 규칙과 일치), **방 하나당** `MAX_PLAYERS = 2` + `MAX_OBSERVERS = 4`이고 ENet에 넘기는 정원은 그 합인 `MAX_CLIENTS`(6)다, `DEFAULT_ADDRESS`(팀 서버 주소 — 이슈 #198), 붙을 주소를 정하는 `configured_address()`(우선순위: `--address=` 인자 → `user://client.cfg` → `DEFAULT_ADDRESS`). `should_run_as_server()`가 헤드리스 또는 `--server` 인자를 감지해 `_ready()`에서 자동으로 서버를 열고, 포트는 `port_from_cmdline()`이 `--port=7778` 인자에서 읽는다(없으면 첫 방). 시그널 `server_started`·`join_succeeded`·`join_failed`·`peer_joined`·`peer_left`.
   - **방 구성은 `ROOMS`가 유일한 출처다** — 포트도 방 이름도 여기 말고 다른 곳에 적지 않는다. 줄을 추가하면 접속 화면 버튼도 따라 늘어나므로 씬은 손대지 않아도 된다(이슈 #90).
   - **정원 상수를 늘리는 것만으로는 관전이 되지 않는다** — `MAX_CLIENTS`는 ENet에 넘기는 숫자일 뿐이고, 누구를 플레이어로 앉히고 누구를 관전으로 둘지는 `Lobby`가 정한다.
   - **포트를 못 열면 `get_tree().quit(1)`로 프로세스를 끝낸다**(이슈 #90). 안 끝내면 `is_server`가 false인 채로 살아남아 클라이언트 취급을 받는데, 헤드리스라 화면도 없어서 "서버 떠 있음"으로 착각하게 된다. 같은 방을 두 번 띄우거나 2번 방을 `--port=` 없이 띄웠을 때 실제로 걸린다.
@@ -40,6 +40,7 @@ title(방을 고르고 `StartButton`으로 접속 — 주소는 코드가 정하
   - **CP949(ANSI 한국어) + CRLF 로 저장한다. UTF-8 로 저장하면 조용히 망가진다.** cmd 의 배치 파서는 파일 안 위치를 바이트로 세는데 UTF-8 한글은 한 자가 3바이트라 줄 위치가 어긋나고, 그러면 **줄 중간부터를 명령으로 실행한다** — 한글 줄이 네다섯 줄만 이어져도 재현되고 오류는 `'닙니다.'는 명령이 아니다` 같은 조각으로 나와 원인이 안 보인다. LF 줄바꿈도 같은 증상이라 `.gitattributes` 가 `*.bat` 을 CRLF 로 고정한다. 인코딩은 git 이 지켜 주지 않으니 편집 도구가 UTF-8 로 바꾸지 않게 사람이 봐야 한다.
   - **방 이름은 읽지 않고 포트와 순번만 쓴다** — `network.gd` 는 UTF-8 이고 이 창은 CP949 라서 한글 방 이름을 가져오면 창 제목이 `1踰?諛?` 처럼 깨진다. 창은 `젤리 워즈 서버 - 1번째 방 [UDP 7777]` 로 구분한다. 포트가 곧 방이므로 이것으로 충분하다.
 - `scenes/room_switcher.tscn` + `scripts/room_switcher.gd` = **관전자용 방 전환 줄**(이슈 #184). 대기실(`select`)과 전투 화면(`main`의 `UI/HUD`) **양쪽에 같은 것을 붙여** 아무 때나 방을 옮길 수 있게 한다. 지금 있는 방은 이름표에 적고 나머지 방은 버튼으로 내며, 버튼은 `Network.ROOMS` 개수만큼 복제한다(접속 화면과 같은 방식). 누르면 `Network.switch_room()`으로 끊고 다른 포트에 붙은 뒤 대기실로 들어간다.
+  - **씬에 적힌 줄 폭은 `ROOMS` 개수 - 1 만큼의 버튼이 들어갈 만해야 한다**(이슈 #278) — `select.tscn`·`main.tscn` 양쪽에 offset 으로 박혀 있고, 내용이 그보다 크면 `PanelContainer` 가 최소 크기까지 부풀어 오른쪽으로만 자라 가운데(x 576)에서 어긋난다. 방을 늘릴 때 같이 본다.
   - **플레이어에게는 통째로 숨는다**(`visible = ... my_role == ROLE_OBSERVER`) — 경기 중에 방을 옮기면 하던 판을 버리는 셈이다.
   - **먼저 끊고 붙는다** — ENet은 피어를 하나만 들 수 있어서 실패하면 원래 방으로 못 돌아간다. 그래서 실패는 `Network.last_failure`에 사유를 남기고 타이틀로 보낸다. 정원이 찬 방은 ENet이 조용히 무시하므로 `Network.JOIN_TIMEOUT_SEC` 타이머로 직접 실패 처리한다(접속 화면과 같은 이유).
   - **`is_switching()`을 두 화면이 본다** — `select.gd`·`main.gd`도 `Network.join_failed`를 듣고 타이틀로 나가므로, 전환 중에는 그쪽이 비켜 줘야 한다. 두 곳에서 씬을 갈아치우면 어느 쪽이 이길지 알 수 없다.
