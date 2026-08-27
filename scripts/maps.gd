@@ -30,10 +30,7 @@ const DIR := "res://scenes/maps/"
 const RANDOM := "랜덤"
 
 const LIST: Array[Dictionary] = [
-	{"name": "평지", "file": "flat.tscn"},
 	{"name": "바다", "file": "ocean.tscn"},
-	{"name": "용암", "file": "lava.tscn"},
-	{"name": "벽돌", "file": "brick.tscn"},
 	{"name": "화산", "file": "volcano.tscn"},
 	{"name": "협곡", "file": "canyon.tscn"},
 	{"name": "오두막", "file": "cottage.tscn"},

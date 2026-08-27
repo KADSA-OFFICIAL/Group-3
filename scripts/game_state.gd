@@ -19,7 +19,7 @@ var MAPS: Array[String] = _selectable_maps()
 
 var p1_config := {"character": Characters.id_at(0)}
 var p2_config := {"character": Characters.id_at(1)}
-var map_name := "평지"
+var map_name := Maps.default_name()
 
 
 func get_config(prefix: String) -> Dictionary:
