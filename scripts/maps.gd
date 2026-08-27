@@ -26,15 +26,22 @@ extends RefCounted
 
 const DIR := "res://scenes/maps/"
 
+## 대기실 미리보기가 쓰는 배경 원화 폴더. 전투 화면이 `Background`로 깔는 것과 같은 그림이다.
+const ART_DIR := "res://assets/maps/"
+
+## 원화가 없는 맵·`랜덤`·빈 자리에 쓰는 색. 카드 테두리보다 한 톤 밝게 둔다 —
+## 테두리와 같은 색이면 그 절반이 있는지조차 안 보이고 가운데 `?` 배지도 묻힌다.
+const UNKNOWN_COLOR := Color(0.35, 0.3, 0.41)
+
 ## 실제 맵이 아닌 특수값. 서버가 실제 맵 하나로 확정한다 (resolve 참고).
 const RANDOM := "랜덤"
 
 const LIST: Array[Dictionary] = [
-	{"name": "바다", "file": "ocean.tscn"},
-	{"name": "화산", "file": "volcano.tscn"},
-	{"name": "협곡", "file": "canyon.tscn"},
-	{"name": "오두막", "file": "cottage.tscn"},
-	{"name": "투기장", "file": "arena.tscn"},
+	{"name": "바다", "file": "ocean.tscn", "color": Color(0.72, 0.82, 0.98)},
+	{"name": "화산", "file": "volcano.tscn", "art": "volcano.png"},
+	{"name": "협곡", "file": "canyon.tscn", "art": "canyon.png"},
+	{"name": "오두막", "file": "cottage.tscn", "art": "cottage.png"},
+	{"name": "투기장", "file": "arena.tscn", "art": "arena.png"},
 ]
 
 
@@ -81,3 +88,26 @@ static func scene(map_name: String) -> PackedScene:
 	if not ResourceLoader.exists(path):
 		return null
 	return load(path)
+
+
+## 대기실 맵 카드가 배경으로 깔 배경 원화 (#289). 없으면 null이고
+## 부르는 쪽이 `art_color()`의 단색으로 대신한다 — 무기 그림이 없을 때와 같은 방식이다.
+##
+## 표에서 꺼낸 값은 Variant라서 **반드시 명시 타입으로 받는다** (이슈 #66).
+static func art_texture(map_name: String) -> Texture2D:
+	var art: String = get_map(map_name).get("art", "")
+	if art.is_empty():
+		return null
+	var path: String = ART_DIR + art
+	if not ResourceLoader.exists(path):
+		return null
+	return load(path)
+
+
+## 원화가 없을 때 그 자리를 채울 색. 맵마다 `color`로 적어 두고,
+## 목록에 없는 이름(`랜덤`·빈 자리)이면 "모른다"는 뜻의 카드 바탕색을 준다.
+static func art_color(map_name: String) -> Color:
+	var color: Variant = get_map(map_name).get("color")
+	if color is Color:
+		return color
+	return UNKNOWN_COLOR
