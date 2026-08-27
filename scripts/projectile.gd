@@ -32,8 +32,10 @@ const DropAuraNode := preload("res://scripts/drop_aura.gd")
 
 ## 허공을 나는 것은 공유 무적을 타지 않는다. 항상 "projectile" 이다.
 const SOURCE := "projectile"
-## 단검을 주울 수 있는 거리. 젤리 몸통(48px)에 닿으면 줍는 셈이다.
-const PICKUP_RANGE := 48.0
+## 단검을 주울 수 있는 거리. 젤리 몸통(48px)보다 좁아서 몸통이 단검에 겹칠 만큼
+## 다가가야 줍는다 (#256). **떨어진 단검의 오라가 이 값을 테두리로 그린다** —
+## 반지름의 출처는 여기 하나뿐이니 이 숫자만 고치면 원이 따라온다.
+const PICKUP_RANGE := 36.0
 ## 중력을 받는 것(표창·폭탄·떨어진 단검)에 적용할 가속도.
 const GRAVITY := 980.0
 
@@ -216,6 +218,9 @@ func _ready() -> void:
 	# 나머지는 0이라 아무것도 그리지 않는다. **미사일·화살보다 먼저** 넘긴다 —
 	# 그쪽은 바로 아래에서 함수를 빠져나간다.
 	blast_radius.radius = explosion_radius
+	# 떨어진 단검의 오라도 같은 자리에서 반지름을 받는다 (#256) — 표시와 판정이
+	# 같은 값을 쓰게 하려고 오라가 자기 상수를 두지 않는다. 켜고 끄는 것은 `_process`.
+	drop_aura.radius = PICKUP_RANGE
 	if missile or arrow:
 		_setup_drawn()
 		return
