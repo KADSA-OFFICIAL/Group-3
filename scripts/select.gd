@@ -16,7 +16,9 @@ const SYNC_RETRY_SEC := 1.0
 @onready var panels := [$P1Panel, $P2Panel]
 @onready var status_label: Label = $StatusLabel
 @onready var go_button: Button = $GoButton
-@onready var map_name_label: Label = $MapBox/MapName
+## 맵 카드 좌우 절반의 배경 그림과 그 아래 이름표. 순서가 슬롯(1P·2P)이다 (#289).
+@onready var map_previews := [$MapBox/ScreenRect/Map1, $MapBox/ScreenRect/Map2]
+@onready var map_labels: Array[Label] = [$MapBox/Map1Name, $MapBox/Map2Name]
 
 var _my_panel: Control = null
 var _sync_timer: Timer = null
@@ -137,14 +139,23 @@ func _refresh() -> void:
 
 
 ## 양쪽이 고른 맵을 나란히 보여준다. 실제로 쓸 맵은 시작할 때 서버가 둘 중 하나를 뽑는다.
+##
+## 이름만 적으면 맵을 외우지 못한 사람은 무엇을 고르고 있는지 알 수 없어서(#289)
+## 카드 배경에 그 맵의 배경 원화를 깐다 — **왼쪽 절반이 1P, 오른쪽 절반이 2P**다.
+## 이름표도 각 절반 아래에 하나씩 두어 어느 그림이 누구 것인지 위치로 읽힌다.
+##
+## `map_previews`에는 타입을 붙이지 않는다 — `map_preview.gd`에 class_name이 없어
+## `Control`로 받으면 `map_name` 대입이 파싱되지 않는다(`panels`와 같은 방식).
 func _refresh_maps() -> void:
-	var picks: Array[String] = []
 	for slot in panels.size():
+		var picked := ""
 		if slot < Lobby.order.size():
-			picks.append("%dP  %s" % [slot + 1, Lobby.map_of(Lobby.order[slot])])
+			picked = Lobby.map_of(Lobby.order[slot])
+			map_labels[slot].text = "%dP  %s" % [slot + 1, picked]
 		else:
-			picks.append("%dP  —" % (slot + 1))
-	map_name_label.text = "\n".join(picks)
+			# 아직 안 들어온 자리. 그림도 단색으로 남아 "모른다"로 읽힌다.
+			map_labels[slot].text = "%dP  —" % (slot + 1)
+		map_previews[slot].map_name = picked
 
 
 func _update_status() -> void:
