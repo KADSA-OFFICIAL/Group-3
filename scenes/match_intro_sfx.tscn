@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://jellymatchintrosfx"]
+
+[ext_resource type="Script" path="res://scripts/sfx_oneshot.gd" id="1_sfx"]
+[ext_resource type="AudioStream" path="res://assets/audio/match_intro.ogg" id="2_intro"]
+
+[node name="MatchIntroSfx" type="AudioStreamPlayer"]
+stream = ExtResource("2_intro")
+volume_db = -12.0
+script = ExtResource("1_sfx")

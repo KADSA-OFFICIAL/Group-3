@@ -12,9 +12,14 @@ extends Area2D
 signal finished(projectile: Node)
 ## 바닥에 남은 것(단검)을 주인이 주웠다.
 signal picked_up(peer_id: int, projectile: Node)
-## 빨간 표창이 자리를 바꿨다. 두 값은 **바꾸기 전의** 위치다 — 연출을 두 자리에 띄우는
+## 빨간 표창이 자리를 바꾼다. 두 값은 **바꾸기 전의** 위치다 — 연출을 두 자리에 띄우는
 ## 쪽(`main.gd`)이 쓴다. 여기서 직접 RPC를 부르지 않는 것은 연출이 `Effects` 아래에
 ## 붙어야 하고 그 노드를 아는 것이 main.gd이기 때문이다 (검 특수의 빛기둥과 같다).
+##
+## **바꾸기 전, 그리고 때리기 전에 낸다** — 받는 쪽이 공용 피격음을 삼키고 자기 소리로
+## 그 자리를 대신하는데, 그 공용 피격음을 내는 것이 `server_apply_hit` 이다. 아래
+## `impacted` 와 같은 순서이고 이유도 같다. 그래서 "바꿨다"가 아니라 "바꾼다"이다:
+## 맞은 젤리가 쓰러지면 이 신호가 나간 뒤에도 실제 교환은 일어나지 않는다.
 signal swapped(from_position: Vector2, to_position: Vector2)
 ## 번개를 부르는 탄(삼지창 특수)이 맞혔다. 값은 **맞은 젤리의 발밑**이다 —
 ## 번개가 거기로 내려온다. 연출을 띄우는 쪽이 `main.gd`인 이유는 위 `swapped`와 같다.
@@ -680,15 +685,24 @@ func _find_jelly(peer_id: int) -> Node:
 ##
 ## 두 위치를 **옮기기 전에 먼저 읽어 둔다** — 하나를 옮긴 뒤에 다른 쪽을 읽으면
 ## 둘 다 같은 자리로 겹친다.
-func _swap_with_shooter(target: Node) -> void:
-	var shooter := _find_jelly(shooter_peer)
-	if shooter == null or not shooter.alive:
-		return
+##
+## **`swapped` 를 여기서 내지 않는다.** 그 신호는 때리기보다 먼저 나가야 해서
+## 부르는 쪽(`_on_body_entered`)이 낸다 — 아래 `_swap_shooter()` 와 짝인 주석 참고.
+func _swap_with_shooter(shooter: Node, target: Node) -> void:
 	var shooter_at: Vector2 = shooter.global_position
 	var target_at: Vector2 = target.global_position
 	shooter.server_teleport(target_at)
 	target.server_teleport(shooter_at)
-	swapped.emit(shooter_at, target_at)
+
+
+## 빨간 표창이 자리를 바꿀 상대(쏜 사람)를 찾는다. 없으면 `null` 이다 —
+## 이미 죽었거나(낙사 등) 나가 버린 경우다. 살아 있지 않은 젤리를 옮기면
+## 사망 연출이 엉뚱한 자리에서 끝난다.
+func _swap_shooter() -> Node:
+	var shooter := _find_jelly(shooter_peer)
+	if shooter == null or not shooter.alive:
+		return null
+	return shooter
 
 
 ## 폭탄 — 반경 안의 상대를 때리고 사라진다.
@@ -729,17 +743,30 @@ func _on_body_entered(body: Node) -> void:
 			return
 		_hit_peers[peer_id] = true
 		# 빨간 표창은 때린 **뒤에** 자리를 바꾼다. 예전에는 데미지가 0이라 때리기를
-		# 통째로 건너뛰었는데, 지금은 일반 표창과 같은 데미지가 들어간다 (요청).
+		# 통째로 건너뛰었는데, 지금은 일반 표창과 같은 데미지가 들어간다.
 		#
 		# **때리는 것이 먼저다** — 넉백 기준이 `_origin.x`(던진 자리)라, 자리를 먼저
 		# 바꾸면 맞은 젤리가 이미 그 자리에 서 있어 밀리는 방향이 뒤집힌다.
 		# (지금 넉백은 0이지만, 수치를 바꿔도 순서 때문에 어긋나지는 않게 둔다.)
 		if swap_positions:
+			# 바꿀 상대(쏜 사람)가 아직 있는지를 **때리기 전에** 본다. 없으면 이 표창은
+			# 평범한 표창처럼 때리기만 하고 끝난다 — 소리도 연출도 없다.
+			var shooter := _swap_shooter()
+			if shooter != null:
+				# **때리기보다 먼저 낸다** — 받는 쪽(`main.gd`)이 공용 피격음을 삼키고
+				# 자기 소리(`shuriken_swap`)로 그 자리를 대신하는데, 그 공용 피격음을
+				# 내는 것이 바로 아래 `server_apply_hit` 이기 때문이다. 소총 탄의
+				# `impacted` 와 **완전히 같은 순서**이고, 이유도 같다.
+				#
+				# 싣는 두 위치는 **바꾸기 전의** 것이라 지금 재는 것이 맞다 —
+				# 아래 `_swap_with_shooter()` 가 옮긴 뒤에는 둘 다 어긋난다.
+				swapped.emit(shooter.global_position, body.global_position)
 			body.server_apply_hit(_damage_at(position), knockback, _origin.x, stun, SOURCE, knockback_speed)
-			# **쓰러졌으면 바꾸지 않는다** — 그 표창이 끝낸 판에서 시체를 옮기는 꼴이 되고,
-			# 라운드 정리와 순간이동이 같은 순간에 겹친다.
-			if body.alive:
-				_swap_with_shooter(body)
+			# **쓰러졌으면 옮기지 않는다** — 그 표창이 끝낸 판에서 시체를 옮기는 꼴이 되고,
+			# 라운드 정리와 순간이동이 같은 순간에 겹친다. 소리와 연출은 위에서 이미
+			# 나갔으므로, 맞는 순간에 무슨 표창이었는지는 화면에 남는다.
+			if shooter != null and body.alive:
+				_swap_with_shooter(shooter, body)
 			_finish()
 			return
 		# 이 무기만의 피격음 (소총 기본). **때리기보다 먼저 낸다** — 받는 쪽(`main.gd`)이

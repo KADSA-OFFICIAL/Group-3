@@ -9,7 +9,10 @@ extends Control
 ## 방 목록은 Network.ROOMS 가 유일한 출처다. 버튼 글자도 거기서 가져온다.
 
 ## 관전 빌드 표시 색 (ui_theme.tres 의 진한 라벤더). 크림 배경 위에서 4.2:1 이다.
-const OBSERVER_COLOR := Color(0.42, 0.45, 0.82)
+## 관전 빌드 표시 글자색. **밝은 라벤더다** — 화면 배경이 표지 원화로 바뀌면서(요청)
+## 이 글자가 어두운 꽃밭 위에 놓였고, 예전의 진한 라벤더 `(0.42, 0.45, 0.82)` 는
+## 글자에 걸린 진한 테두리와 뭉쳐 읽히지 않았다.
+const OBSERVER_COLOR := Color(0.74, 0.78, 1.0)
 
 ## 붙을 서버 주소를 보여주는 라벨. **입력칸이 아니다** — 주소는 코드가 정한다(이슈 #198).
 @onready var address_value: Label = $AddressValue

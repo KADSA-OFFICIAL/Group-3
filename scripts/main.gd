@@ -60,9 +60,41 @@ const SKILL_CAST_SFX_SCENE := preload("res://scenes/skill_cast_sfx.tscn")
 ## 샷건 특수(부채꼴 산탄)의 소리. **총성과 장전이 한 파일에 들어 있다** — 받은 소리가
 ## 그렇게 녹음되어 있고, 무기 설명("+장전 쿨타임")이 말하는 것도 그 둘이다.
 const SHOTGUN_SKILL_SFX_SCENE := preload("res://scenes/shotgun_skill_sfx.tscn")
+## 경기 표지 그림과 함께 나는 소리 (요청). 그림은 `scenes/match_intro.tscn` 이 그리고
+## 이쪽은 소리만 낸다 — 소리 하나가 씬 하나인 짜임 그대로다.
+const MATCH_INTRO_SFX_SCENE := preload("res://scenes/match_intro_sfx.tscn")
 ## 무기 선택 창이 뜨는 소리. **무기가 내는 소리가 아니라 화면이 내는 소리다** — 위의
 ## 무기 소리들과 달리 판정과 아무 상관이 없고, 라운드마다 창이 뜨는 그 한 번만 울린다.
 const WEAPON_PICK_SFX_SCENE := preload("res://scenes/weapon_pick_sfx.tscn")
+## 포인트 획득 소리 (이슈 #273). **몇 점째인가에 따라 다른 소리다** — 참고 영상의 소리가
+## 포인트가 쌓일수록 높아지고 마지막 3점째는 아예 크게 터지므로, 셋을 따로 뽑았다.
+## 자리는 채워지는 칸 번호(0부터)이고 `point_gain.burst_started` 가 그것을 실어 온다.
+##
+## **`POINTS_TO_WIN` 과 개수가 같아야 한다.** 승리 점수를 늘리면 소리가 모자라는데,
+## 그때는 마지막 소리를 되쓰지 말고(3점째 소리는 경기가 끝나는 소리다) 새로 뽑는다.
+const POINT_GAIN_SFX_SCENES := [
+	preload("res://scenes/point_gain_1_sfx.tscn"),
+	preload("res://scenes/point_gain_2_sfx.tscn"),
+	preload("res://scenes/point_gain_3_sfx.tscn"),
+]
+## 결과 화면 팡파레 (요청). 승리는 다장조 상행, 패배는 가단조 하행이고 **한 쌍으로 만들었다** —
+## 참고 영상에는 승리 화면의 배경 음악이 문장 중간에서 끊긴 채로만 있고 패배 소리는 없었다.
+## 길이는 결과 화면 연출에 맞췄다: 승리 화음이 `승리!` 팝업이 끝나는 0.6초쯤에 가장 두껍고,
+## 패배 화음은 젤리가 0.9초에 걸쳐 주저앉는 동안 음이 처지며 내려간다.
+const RESULT_WIN_SFX_SCENE := preload("res://scenes/result_win_sfx.tscn")
+const RESULT_LOSE_SFX_SCENE := preload("res://scenes/result_lose_sfx.tscn")
+## `3 · 2 · 1 · START!` 의 칸마다 나는 소리 (요청). 자리는 칸 번호(0=3 … 3=START!)이고
+## `countdown.gd` 의 `step_started` 가 그것을 실어 온다.
+##
+## **숫자 셋은 음이 올라가는 같은 삑이고 마지막만 다른 소리다** — 올라가는 음이 "곧
+## 시작한다"를 말하고, 색이 바뀌는 `START!` 와 함께 소리도 바뀌어 출발선이 또렷해진다.
+## 개수는 `countdown.gd` 의 `LABELS` 와 같아야 한다.
+const COUNTDOWN_SFX_SCENES := [
+	preload("res://scenes/countdown_3_sfx.tscn"),
+	preload("res://scenes/countdown_2_sfx.tscn"),
+	preload("res://scenes/countdown_1_sfx.tscn"),
+	preload("res://scenes/countdown_start_sfx.tscn"),
+]
 
 # ─────────────────────────── 피격음 박자 ───────────────────────────
 ## 피격음을 다시 울리기까지의 최소 간격(초).
@@ -104,6 +136,11 @@ const WEAPON_CHOICES := 3
 ## 한 사람이 자리를 비웠다고 경기가 그 자리에서 영영 멈추면 안 된다.
 const WEAPON_PICK_TIME := 20.0
 
+## 경기 표지 그림이 떠 있는 시간(초). **`match_intro.gd`의 `TOTAL`과 같아야 한다** —
+## 그쪽은 이 시간에 맞춰 커졌다 사라지고, 서버는 이만큼 무기 선택을 미룬다.
+## 어긋나면 그림이 덜 사라진 채로 카드가 뜨거나(서버가 짧을 때) 빈 화면을 본다(길 때).
+const MATCH_INTRO_TIME := 2.0
+
 ## 싸울 사람이 부족한 채로 이만큼 지나면 판을 접는다.
 ##
 ## **경기가 시작된 직후에는 아무도 스폰되어 있지 않다** — 클라이언트가 전투 화면을
@@ -138,6 +175,11 @@ var _dagger_held := {}
 var _next_projectile_id := 1
 ## 다음 라운드를 시작할 시각. 0이면 예약 없음 (진행 중이거나 경기가 끝났다).
 var _round_restart_at := 0.0
+## 표지 그림이 끝나 무기 선택을 열 시각. 0이면 기다리는 중이 아니다.
+var _pick_opens_at := 0.0
+## 이번 경기에서 표지 그림을 이미 띄웠는가. **경기마다 한 번**이라 라운드가 아니라
+## 경기 단위로 기억한다 — `_server_reset_match()`가 다음 경기를 위해 되돌린다.
+var _intro_shown := false
 ## 경기가 끝났으면 더 이상 라운드를 시작하지 않는다.
 var _match_over := false
 
@@ -155,6 +197,18 @@ var _pick_is_mine := false
 var _pick_sent := false
 ## 대기실로 돌려보낼 시각. 0이면 예약 없음.
 var _return_at := 0.0
+## 카운트다운이 끝나 판이 실제로 열릴 시각. 0이면 예약 없음 (요청).
+##
+## 무기 선택이 끝나는 순간부터 `Combat.COUNTDOWN_TIME` 동안 두 젤리는 얼어 있고,
+## 이 시각이 되면 얼음을 풀면서 무적을 새로 준다.
+var _round_opens_at := 0.0
+## 결과 화면을 띄울 시각. 0이면 예약 없음 (이슈 #273).
+##
+## 마지막 포인트에서는 획득 장면과 결과 화면이 이어서 떠야 한다 — 예전처럼 점수가 나는
+## 자리에서 바로 결과를 알리면 두 화면이 겹쳐서, 축하 장면 위에 승패 글자가 덮인다.
+var _result_at := 0.0
+## 그때 알려 줄 승자 peer. `_result_at` 이 0이면 뜻이 없다.
+var _result_winner := 0
 ## 싸울 사람이 부족해진 시각. 0이면 부족하지 않다 (`ABANDON_GRACE_SEC` 참고).
 var _short_handed_since := 0.0
 
@@ -191,6 +245,12 @@ const LOSE_COLOR := Color(0.72, 0.70, 0.80)
 @onready var result_overlay: Control = $UI/HUD/ResultOverlay
 ## weapon_pick.gd는 class_name이 없어 타입을 붙이지 않는다 (jelly_preview.gd와 같은 방식).
 @onready var weapon_pick = $UI/HUD/WeaponPick
+## match_intro.gd도 class_name이 없어 타입을 붙이지 않는다 (위와 같은 방식).
+@onready var match_intro = $UI/HUD/MatchIntro
+## point_gain.gd도 class_name이 없어 타입을 붙이지 않는다 (위와 같은 방식).
+@onready var point_gain = $UI/HUD/PointGain
+## countdown.gd도 class_name이 없어 타입을 붙이지 않는다 (위와 같은 방식).
+@onready var countdown = $UI/HUD/Countdown
 ## jelly_preview.gd는 class_name이 없어 타입을 붙이지 않는다 (player_panel.gd와 같은 방식).
 @onready var result_jelly = $UI/HUD/ResultOverlay/Jelly
 @onready var result_label: Label = $UI/HUD/ResultOverlay/ResultLabel
@@ -198,9 +258,14 @@ const LOSE_COLOR := Color(0.72, 0.70, 0.80)
 
 
 func _ready() -> void:
-	# 지형은 모든 피어에서 똑같이 깔려야 한다 — 스폰보다 먼저 붙인다.
-	# 서버가 대기실에서 "랜덤"을 확정해 두므로 양쪽이 같은 맵을 받는다.
-	_load_map(Lobby.map_name)
+	# **여기서 까는 것은 임시 지형이다.** 진짜 맵은 라운드가 열릴 때 서버가 뽑아
+	# `_receive_round_map`으로 모두에게 보낸다 (`_start_round`) — 대기실에서 고르던 것을
+	# 없애면서 이 시점에는 아직 무엇이 깔릴지 정해져 있지 않다.
+	#
+	# 그래도 하나는 깔아 둔다. 씬이 열리고 그 신호가 오기까지의 몇 프레임 동안 빈 화면을
+	# 보이지 않기 위해서다. 경기 도중에 들어온 관전자는 `_notify_ready`의 답으로 지금
+	# 깔린 맵을 따로 받으므로, 이 임시 지형이 화면에 남는 일은 없다.
+	_load_map(Maps.default_name())
 	# 스폰 함수는 모든 피어에서 등록되어야 한다 — 서버 판정보다 먼저 설정한다.
 	player_spawner.spawn_function = _spawn_player
 	projectile_spawner.spawn_function = _spawn_projectile
@@ -213,12 +278,13 @@ func _ready() -> void:
 	# 라운드마다 뜨는 무기 선택 카드 (#205). 전용 서버는 화면이 없어 열 일이 없지만
 	# 연결은 양쪽에서 해 둔다 — 서버도 이 씬을 그대로 쓴다.
 	weapon_pick.weapon_chosen.connect(_on_weapon_chosen)
+	# 포인트 획득 장면이 "지금 빛이 터졌다"고 알려 주면 그때 소리를 낸다 (#273).
+	point_gain.burst_started.connect(_on_point_gain_burst)
+	# 카운트다운이 칸을 넘길 때마다 그 칸의 소리를 낸다 (요청).
+	countdown.step_started.connect(_on_countdown_step)
 
 	if multiplayer.is_server():
 		Network.peer_left.connect(_on_peer_left)
-		# 전용 서버는 이 씬을 벗어나지 않으므로 _ready()에서 깐 맵이 계속 남는다 —
-		# 경기가 시작될 때 확정된 맵으로 갈아 주는 곳이 필요하다.
-		Lobby.lobby_changed.connect(_on_lobby_changed)
 	else:
 		# 씬이 준비된 뒤에 서버에 알린다. 접속 직후 바로 스폰하면
 		# 클라이언트가 아직 이 씬을 로드하기 전이라 스폰을 놓칠 수 있다.
@@ -226,24 +292,20 @@ func _ready() -> void:
 		_setup_observer_view()
 
 
-## 대기실 상태가 바뀌었다 (**서버 전용**). 확정된 맵이 지금 깔린 것과 다르면 갈아 준다.
+## 이번 라운드의 지형. 뽑는 것은 서버(`_start_round`)이고 모두가 같은 이름을 받는다.
 ##
-## **전용 서버는 전투 화면을 벗어나지 않는다.** `_ready()`는 서버가 켜질 때 딱 한 번 돌고,
-## 그때 `Lobby.map_name`은 아직 대기실 기본값인 `"랜덤"`이다 — `Maps.scene()`은 목록에
-## 없는 이름을 받으면 폴백으로 첫 맵(평지)을 주므로 **서버에는 평지가 깔린다.**
-## 클라이언트는 경기마다 씬을 새로 열어 확정된 맵을 받지만 서버는 그러지 않으므로,
-## 여기서 갈아 주지 않으면 어떤 맵을 골라도 **서버의 충돌 지형은 영원히 평지**다.
+## **`call_local` 이라 서버 자신도 이 함수를 지난다.** 그것이 이 신호의 핵심이다 —
+## 이동·접지·낙사 판정이 전부 서버에서 나므로(`player.gd`의 `apply_movement()`·
+## `main.gd`의 `_check_falls()`) 서버에 깔린 지형이 곧 게임 지형이다. 클라이언트는
+## 서버가 보낸 위치로 보간만 하니, 바다의 발판도 용암의 `Hazard`도 서버에 없으면 없다.
+## 전용 서버는 전투 화면을 벗어나지 않아 씬을 다시 열지 않으므로, 지형을 갈아 주는
+## 자리는 이 신호뿐이다.
 ##
-## 그게 곧 게임 지형이다 — 이동·접지·낙사 판정이 전부 서버에서 난다(`player.gd`의
-## `apply_movement()`·`main.gd`의 `_check_falls()`). 클라이언트는 서버가 보낸 위치로
-## 보간만 하므로, 바다의 발판도 용암의 `Hazard`도 서버에 없으면 없는 것이 된다.
-##
-## `map_name`은 서버의 `Lobby._check_start()`에서만 바뀌고 그 직후 `_broadcast()`가
-## 이 신호를 낸다 — 경기 시작 때 한 번 갈리고 경기 중에는 갈리지 않는다.
-func _on_lobby_changed() -> void:
-	if not multiplayer.is_server() or Lobby.map_name == _loaded_map:
-		return
-	_load_map(Lobby.map_name)
+## **이름만 싣는다.** 같은 이름이면 양쪽이 같은 씬 파일을 열고, 그 안의 스폰 마커까지
+## 같다 — 좌표를 따로 보낼 필요가 없다.
+@rpc("authority", "call_local", "reliable")
+func _receive_round_map(map_name: String) -> void:
+	_load_map(map_name)
 
 
 ## 관전자 화면. 이 기기가 보기만 한다는 것을 알려 준다 (이슈 #167).
@@ -267,6 +329,12 @@ func _notify_ready() -> void:
 	# 이 씬에 들어온 피어만 전투 노드의 RPC·스폰 대상이 된다 — 관전자도 여기에 들어간다.
 	# 등록되는 순간 `Sync` 가시성 필터가 통과로 바뀌어 **이미 스폰된 젤리가 그 피어에게 간다**.
 	Lobby.server_add_viewer(sender)
+	# 지금 깔린 지형을 그 피어에게만 보낸다. 맵이 **라운드마다 갈리므로** 경기 도중에
+	# 들어온 관전자의 `_ready()`가 깐 임시 지형은 십중팔구 틀린 지형이다 — 안 보내면
+	# 다음 라운드까지 남의 맵 위에서 젤리가 허공을 딛고 다니는 화면을 보게 된다.
+	# 점수·배너를 따로 보내는 것(아래, 이슈 #182)과 같은 이유이고, **지형이 먼저다**:
+	# 곧 이어질 스폰이 이 지형 위에 서야 한다.
+	_receive_round_map.rpc_id(sender, _loaded_map)
 	# 진행 중인 점수와 배너를 그 피어에게만 보낸다 (이슈 #182) — 경기 도중에 들어온 관전자는
 	# 지난 방송을 못 받았으므로, 안 보내면 다음 득점까지 0 : 0 을 보게 된다.
 	_receive_round.rpc_id(sender, scores, banner)
@@ -397,23 +465,42 @@ func _on_player_died(peer_id: int) -> void:
 
 	var id := scorer.owner_peer_id
 	scores[id] = int(scores.get(id, 0)) + 1
+	var total := int(scores[id])
+	var final_point := total >= Combat.POINTS_TO_WIN
 
-	if int(scores[id]) >= Combat.POINTS_TO_WIN:
+	if final_point:
 		_match_over = true
-		_return_at = _now() + Combat.MATCH_END_DELAY
+		# 결과 화면은 획득 장면이 끝난 뒤에 뜬다 (#273) — 그래서 대기실 복귀도 그만큼
+		# 뒤로 밀린다. `MATCH_END_DELAY` 는 결과 화면이 떠 있는 시간이라야 한다.
+		_return_at = _now() + Combat.POINT_GAIN_TIME + Combat.MATCH_END_DELAY
+		_result_at = _now() + Combat.POINT_GAIN_TIME
+		_result_winner = id
 		_broadcast_round("%s 승리!  %d포인트 달성" % [scorer.player_name, Combat.POINTS_TO_WIN])
-		# 점수를 먼저 보내고 결과를 알린다 — 결과 화면이 최종 점수를 읽는다.
-		_receive_match_result.rpc(id)
-		return
+	else:
+		_round_restart_at = _now() + Combat.ROUND_RESTART_DELAY
+		_broadcast_round("%s +1 포인트" % scorer.player_name)
 
-	_round_restart_at = _now() + Combat.ROUND_RESTART_DELAY
-	_broadcast_round("%s +1 포인트" % scorer.player_name)
+	# 장면은 점수 복제보다 나중에 띄운다 — 장면이 걷힌 뒤에 드러나는 HUD 카드의 동그라미가
+	# 이미 새 점수여야 한다. 반대 순서면 장면이 3점을 축하한 직후에 카드가 2점을 적고 있다.
+	_play_point_gain.rpc(id, total, final_point)
 
 
 ## 양쪽을 되살리고 판을 깨끗이 만든다. 여기서 안 지운 값은 다음 라운드로 새어 나간다.
 func _start_round() -> void:
 	_round_restart_at = 0.0
 	_hide_result()
+
+	# 맵은 **라운드마다 새로 뽑는다** (요청). 대기실에서 고르던 것을 없애면서 맵을 정하는
+	# 자리가 여기 하나만 남았다 — 경기 내내 한 지형이 아니라 판마다 지형이 갈린다.
+	#
+	# **스폰보다 먼저다.** 바로 아래 `server_reset`이 쓰는 `_spawn_position()`은 지금
+	# 깔린 맵의 `Spawns` 마커를 읽는다. 순서를 바꾸면 지난 라운드 맵의 자리에 세워 놓고
+	# 지형만 갈아 버려, 젤리가 허공이나 벽 속에서 판을 시작한다.
+	#
+	# **같은 맵이 연달아 나올 수 있다** (8종이라 8번에 한 번쯤). 직전 것을 빼고 뽑으면
+	# 그것은 무작위가 아니라 "안 겹치게 돌리기"가 되고, 판마다 지형이 반드시 바뀐다는
+	# 다른 규칙이 하나 더 생긴다.
+	_receive_round_map.rpc(Maps.resolve(Maps.RANDOM))
 
 	for projectile in projectiles_root.get_children():
 		projectile.queue_free()
@@ -436,6 +523,20 @@ func _start_round() -> void:
 	# 판을 치웠으면 곧바로 싸우는 것이 아니라 **무기부터 고른다** (#205).
 	# 강화 뽑기(#134)가 여기서 빠진 것은 그래서다 — 무기가 정해진 뒤에 뽑아야
 	# 이번 라운드에 들 무기로 뽑는다.
+	#
+	# **경기의 첫 판에서는 그 앞에 표지 그림이 한 번 낀다** (요청). 시작을 누르고
+	# 카드가 뜨기까지 2초를 이 그림에 준다. 라운드마다가 아니라 경기마다 한 번이다 —
+	# 매 판 끼면 3점 경기에서 열 번 넘게 보게 된다.
+	if not _intro_shown:
+		_intro_shown = true
+		_play_match_intro.rpc()
+		# **그동안 움직이지 못하게 얼린다.** 젤리는 바로 위에서 이미 스폰됐고, 카드를
+		# 여는 `_begin_pick_phase()`가 얼리는 일까지 하는데 그것이 2초 뒤로 밀렸다 —
+		# 안 얼리면 그림 뒤에서 빈손으로 2초 동안 서로 밀치고 있게 된다.
+		for player: Player in players_root.get_children():
+			player.server_set_frozen(true)
+		_pick_opens_at = _now() + MATCH_INTRO_TIME
+		return
 	_begin_pick_phase()
 
 
@@ -519,9 +620,9 @@ func _finish_pick_phase() -> void:
 		# 뽑기는 무기를 바꾼 **뒤에** 한다 (#134) — 지난 무기로 뽑으면 폭탄·표창이
 		# 아닌 무기에서는 늘 false가 되어 강화가 영영 안 나온다.
 		player.server_set_empowered(_roll_empowered(chosen))
-		player.server_set_frozen(false)
-		# 자리와 무적을 여기서 한 번 더 준다. 고르는 데 쓴 시간만큼
-		# `Combat.ROUND_START_GRACE`가 이미 흘렀으므로, 판이 실제로 열리는 지금부터 새로 잰다.
+		# **여기서 풀지 않는다** (요청) — 고른 뒤에 `3 · 2 · 1 · START!` 를 세는 동안
+		# 두 젤리는 자기 자리에 선 채로 얼어 있고, 다 세면 `_tick_round()` 가 풀어 준다.
+		# 자리는 지금 잡아 둔다: 세는 동안 서로가 어디에 섰는지 보고 첫 움직임을 정한다.
 		var index := maxi(Lobby.slot_of(peer_id), 0)
 		player.server_reset(_spawn_position(index), _spawn_facing(index))
 		_dagger_held[peer_id] = true
@@ -530,6 +631,48 @@ func _finish_pick_phase() -> void:
 	_pick_choices.clear()
 	for peer in Lobby.viewers:
 		_receive_pick_end.rpc_id(peer)
+
+	_round_opens_at = _now() + Combat.COUNTDOWN_TIME
+	_play_countdown.rpc()
+
+
+## 다 세었다 — 얼음을 풀어 판을 연다 (**서버 전용**, 요청).
+##
+## **무적을 여기서 새로 준다.** `server_reset()` 은 `Combat.ROUND_START_GRACE` 를 그 순간
+## 부터 재는데, 무기 선택이 끝날 때 한 번 주고 그대로 두면 세는 데 쓴 1.7초가 그 안에서
+## 흘러가 버려 실제로 싸움이 시작될 때 남는 무적이 0.3초뿐이다. 젤리는 얼어 있어 자리가
+## 그대로이므로 다시 불러도 순간이동으로 보이지 않는다 — 값만 새로 잡힌다.
+func _open_round() -> void:
+	if not multiplayer.is_server():
+		return
+	for player: Player in players_root.get_children():
+		var index := maxi(Lobby.slot_of(player.owner_peer_id), 0)
+		player.server_reset(_spawn_position(index), _spawn_facing(index))
+		player.server_set_frozen(false)
+
+
+## 판이 열리기 전 카운트다운을 모든 피어에 띄운다 (요청).
+##
+## 세는 것은 화면이고 **판을 여는 것은 서버다** — 여기서 얼음을 풀지 않는 것이 그 뜻이다.
+## 클라이언트마다 프레임이 조금씩 달라도 실제 시작 시각은 서버의 `_round_opens_at`
+## 하나로 정해진다. 화면이 조금 먼저 `START!` 를 지웠다고 먼저 움직여지지는 않는다.
+##
+## 헤드리스 서버도 `call_local` 이라 이 함수를 지나가지만 그쪽 `countdown` 은 화면이
+## 없어 그리지 않는다 — 표지 그림·포인트 장면과 같다.
+@rpc("authority", "call_local", "reliable")
+func _play_countdown() -> void:
+	countdown.play()
+
+
+## 카운트다운의 칸이 넘어갔다 — 그 칸의 소리를 낸다 (요청).
+##
+## **여기는 `@rpc` 가 아니다.** 부르는 자리(`countdown._process`)가 이미 각자의 화면에서
+## 도는 중이다 — `_on_point_gain_burst` 와 같은 이유다.
+func _on_countdown_step(step: int) -> void:
+	if step < 0 or step >= COUNTDOWN_SFX_SCENES.size():
+		return
+	var scene: PackedScene = COUNTDOWN_SFX_SCENES[step]
+	effects_root.add_child(scene.instantiate())
 
 
 # ─────────────────────── 무기 선택 (클라이언트 화면, #205) ───────────────────────
@@ -598,9 +741,21 @@ func _tick_round() -> void:
 	var now := _now()
 	if _round_restart_at > 0.0 and now >= _round_restart_at:
 		_start_round()
+	# 표지 그림이 끝났다 — 미뤄 둔 무기 선택을 이제 연다 (요청).
+	if _pick_opens_at > 0.0 and now >= _pick_opens_at:
+		_pick_opens_at = 0.0
+		_begin_pick_phase()
 	# 제한 시간이 다 됐다 — 안 고른 사람 몫은 서버가 뽑고 라운드를 연다 (#205).
 	if _picking and _pick_deadline > 0.0 and now >= _pick_deadline:
 		_finish_pick_phase()
+	# 다 셌다 — 얼음을 풀어 판을 연다 (요청).
+	if _round_opens_at > 0.0 and now >= _round_opens_at:
+		_round_opens_at = 0.0
+		_open_round()
+	# 마지막 포인트 장면이 끝났다 — 미뤄 둔 결과 화면을 이제 띄운다 (#273).
+	if _result_at > 0.0 and now >= _result_at:
+		_result_at = 0.0
+		_receive_match_result.rpc(_result_winner)
 	if _return_at > 0.0 and now >= _return_at:
 		_return_at = 0.0
 		Lobby.server_end_match()
@@ -647,6 +802,12 @@ func _abandon_match() -> void:
 	_match_over = true
 	_round_restart_at = 0.0
 	_short_handed_since = 0.0
+	# 마지막 포인트 장면이 도는 사이에 상대가 나가면 예약만 남는다 — 그대로 두면
+	# 접힌 경기 위에 승리 화면이 뒤늦게 뜬다 (#273).
+	_result_at = 0.0
+	# 세는 도중에 상대가 나갔을 때도 같다 (요청). 아래에서 얼음을 풀어 주므로 이 예약이
+	# 남아 있으면 접힌 경기에서 젤리를 다시 자리로 되돌려 놓는다.
+	_round_opens_at = 0.0
 	# 선택을 열어 둔 채로 두면 제한 시간이 되어 `_finish_pick_phase()`가 판을 다시 연다 (#205).
 	# 남은 사람의 카드도 닫아 준다 — 접힌 경기 위에 카드가 떠 있으면 고르라는 화면이 된다.
 	if _picking:
@@ -678,6 +839,14 @@ func _server_reset_match() -> void:
 	_hide_result()
 	_match_over = false
 	_round_restart_at = 0.0
+	_result_at = 0.0
+	_result_winner = 0
+	_round_opens_at = 0.0
+	# 다음 경기의 첫 판에서 표지 그림이 다시 뜨도록 되돌린다. 기다리던 예약도 버린다 —
+	# 그림이 떠 있는 사이에 상대가 나가 판이 접히면 그 예약만 남아, 다음 경기가
+	# 열리자마자 지난 경기의 시각으로 무기 선택이 두 번 열린다.
+	_intro_shown = false
+	_pick_opens_at = 0.0
 	_short_handed_since = 0.0
 	# 선택 도중에 경기가 끝나는 일은 없지만, 다음 경기는 깨끗한 표로 시작해야 한다 (#205).
 	_picking = false
@@ -712,6 +881,9 @@ func _receive_round(new_scores: Dictionary, new_banner: String) -> void:
 ## 진 쪽은 패배 화면을 본다. 판정은 서버가 하고 여기서는 보여주기만 한다.
 
 ## 경기 결과를 모든 피어에 알린다. 승자 peer만 넘기면 각자 자기 화면을 만들 수 있다.
+##
+## **점수가 난 자리에서 바로 부르지 않는다** (이슈 #273) — 마지막 포인트의 획득 장면이
+## 끝난 뒤에 `_tick_round`가 부른다. 여기서 읽는 최종 점수는 그 전에 이미 복제되어 있다.
 @rpc("authority", "call_local", "reliable")
 func _receive_match_result(winner_peer: int) -> void:
 	var me := multiplayer.get_unique_id()
@@ -752,6 +924,16 @@ func _play_result(is_winner: bool, character_id: String, title_override := "") -
 		_play_win()
 	else:
 		_play_lose()
+
+	# 팡파레는 그림과 같은 갈래에서 낸다 (요청) — 화면이 승리면 승리 소리, 패배면 패배 소리다.
+	# **여기는 이미 자기 화면이다.** `_receive_match_result`가 피어마다 자기 기준으로 부르므로
+	# 같은 순간에 이긴 쪽 기기에서는 상행이, 진 쪽에서는 하행이 울린다. 관전자는 이긴 쪽
+	# 기준(`is_winner = true`)이라 승리 팡파레를 듣는다 — 글자와 젤리 포즈와 같은 기준이다.
+	#
+	# 전용 서버는 이 함수까지 오지 않는다(`_receive_match_result`가 자기 Player를 못 찾고
+	# 관전자도 아니라서 먼저 돌아간다) — 소리 장치가 없는 쪽에 노드가 쌓이지 않는다.
+	var fanfare: PackedScene = RESULT_WIN_SFX_SCENE if is_winner else RESULT_LOSE_SFX_SCENE
+	effects_root.add_child(fanfare.instantiate())
 
 	# 연출이 정한 글자를 덮어쓴다. 크기·색·트윈은 그대로 두고 문구만 바꾼다.
 	if title_override != "":
@@ -868,11 +1050,11 @@ func _final_score_text() -> String:
 # ─────────────────────────── 맵 ───────────────────────────
 
 ## 맵 지형을 MapRoot 아래에 붙인다. 모든 피어에서 호출된다.
-## **서버에서는 경기마다 다시 불린다**(`_on_lobby_changed`) — 클라이언트는 씬을 새로 열어
-## `_ready()`에서 한 번만 부른다. 그래서 두 번째 호출이 깨끗해야 한다.
+## **라운드마다 다시 불린다**(`_receive_round_map`) — 두 번째 호출이 깨끗해야 한다.
 func _load_map(map_name: String) -> void:
-	# 갈아 줄 때 무엇이 깔렸는지 기억한다. 폴백으로 다른 맵이 깔려도 **요청한 이름**을
-	# 적어 둔다 — 판단 기준이 `Lobby.map_name`과의 비교이므로 같은 값이어야 한다.
+	# 지금 무엇이 깔렸는지 기억한다. 폴백으로 다른 맵이 깔려도 **요청한 이름**을 적어
+	# 둔다 — 경기 도중에 들어온 피어에게 그대로 다시 보내는 값이라(`_notify_ready`),
+	# 받은 쪽이 같은 폴백을 거쳐 같은 지형에 닿아야 한다.
 	_loaded_map = map_name
 	for child in map_root.get_children():
 		# queue_free()는 프레임 끝에야 노드를 뗀다. 그때까지 옛 지형의 충돌 몸체가
@@ -2420,6 +2602,60 @@ func _play_shotgun_skill_sfx() -> void:
 	effects_root.add_child(SHOTGUN_SKILL_SFX_SCENE.instantiate())
 
 
+## 경기 표지 그림을 띄운다 (요청). 띄울 조건은 `_start_round()` 가 정한다 —
+## **경기의 첫 판, 무기 선택이 열리기 전** 딱 한 번이다.
+##
+## **그림과 소리를 한 자리에서 낸다.** 둘이 같은 순간에 시작해야 "둥" 하고 치는 것으로
+## 들리고, 어느 한쪽만 늦으면 소리가 그림에 안 붙은 것으로 들린다.
+##
+## `call_local` 이라 서버 자신도 지난다 — 전용 서버에는 화면도 소리 장치도 없지만,
+## `match_intro`는 그냥 안 보이는 노드를 켰다 끄는 것이고 소리 쪽은
+## `sfx_oneshot.gd` 가 시간으로도 스스로 사라져 노드가 쌓이지 않는다.
+##
+## 서버는 이 신호를 보낸 뒤 `MATCH_INTRO_TIME` 만큼 무기 선택을 미룬다 — 그동안
+## 두 젤리는 얼려 둔다. 미루는 것도 얼리는 것도 부르는 쪽(`_start_round`)의 몫이다.
+@rpc("authority", "call_local", "reliable")
+func _play_match_intro() -> void:
+	match_intro.play()
+	effects_root.add_child(MATCH_INTRO_SFX_SCENE.instantiate())
+
+
+## 포인트를 딴 순간의 장면 (이슈 #273). 서버가 점수를 정한 뒤 모두에게 알린다.
+##
+## **색은 여기서 갈린다.** 서버가 보내는 것은 "누가 몇 점이 되었다" 하나뿐이고, 그것을
+## 자기 편으로 읽는지 남의 편으로 읽는지는 받는 쪽이 정한다 — 그래서 같은 순간에 한
+## 기기에는 파란 띠가, 다른 기기에는 빨간 띠가 뜬다.
+##
+## **관전자는 어느 쪽도 아니다.** 딴 사람 기준(파랑)으로 보여준다 — 결과 화면이
+## 관전자에게 이긴 쪽 기준을 보여주는 것과 같은 방식이다(`_receive_match_result`).
+##
+## 헤드리스 서버도 `call_local` 이라 이 함수를 지나가지만, 그쪽 `point_gain` 은 화면이
+## 없어 그리지 않는다 — 표지 그림(`_play_match_intro`)과 같다.
+@rpc("authority", "call_local", "reliable")
+func _play_point_gain(scorer_peer: int, score_after: int, is_final: bool) -> void:
+	var scorer := get_player(scorer_peer)
+	if scorer == null:
+		return
+	var me := multiplayer.get_unique_id()
+	var as_gain := scorer_peer == me or Lobby.is_observer(me)
+	point_gain.play(scorer.player_name, scorer.character_id, score_after, as_gain, is_final)
+
+
+## 포인트 획득 장면에서 빛이 터졌다 — 그 순간의 소리를 낸다 (이슈 #273).
+##
+## **여기만 `@rpc` 가 아니다.** 부르는 자리(`point_gain._process`)는 이미 각자의 화면에서
+## 도는 중이므로 원격 호출이 필요 없다 — `_play_weapon_pick_sfx` 와 같은 이유다.
+##
+## 소리는 편에 따라 갈리지 않는다. 상대가 딴 포인트도 같은 소리를 내고, 그것이 내 것인지
+## 남의 것인지는 **빨간 띠가 말한다** — 소리를 둘로 갈라 놓으면 소리를 네 벌 뽑아야 하고
+## (편 × 점수), 알아채는 데 이미 색이 있는데 소리까지 다르면 무엇을 들어야 할지 흐려진다.
+func _on_point_gain_burst(pip_index: int) -> void:
+	if pip_index < 0 or pip_index >= POINT_GAIN_SFX_SCENES.size():
+		return
+	var scene: PackedScene = POINT_GAIN_SFX_SCENES[pip_index]
+	effects_root.add_child(scene.instantiate())
+
+
 ## 무기 선택 창이 떴다. 울릴 조건은 `_receive_pick_start()` 가 정한다 — 라운드마다 한 번,
 ## 창이 열리는 그 순간이다.
 ##
@@ -2466,6 +2702,8 @@ func _play_shuriken_throw_sfx() -> void:
 ##
 ## **던지는 소리와 겹치지 않는다** (#261): 던지는 순간과 맞는 순간 사이에 표창이
 ## 날아가는 시간이 있고, 던지는 소리는 0.44초, 이쪽은 0.50초다.
+##
+## **공용 피격음과도 겹치지 않는다** — 부르는 쪽이 그것을 삼키고 이 소리로 대신한다.
 @rpc("authority", "call_local", "reliable")
 func _play_shuriken_swap_sfx() -> void:
 	effects_root.add_child(SHURIKEN_SWAP_SFX_SCENE.instantiate())
@@ -2522,13 +2760,16 @@ func _play_knuckle_punch_sfx() -> void:
 ## 빨간 표창이 자리를 바꿨다 (서버 전용 — 투사체가 알려 온다).
 func _on_positions_swapped(from_position: Vector2, to_position: Vector2) -> void:
 	_play_swap_burst.rpc(from_position, to_position)
-	# 소리도 같은 자리에서 낸다 — 강화(빨간) 표창이 맞은 순간이 곧 이 신호다.
+	# **공용 피격음을 대신한다** (요청). 이 표창도 데미지가 들어가게 되면서 한때 둘이
+	# 겹쳐 났는데, 자리가 바뀌는 이 큰 소리 밑에 몸통 타격음이 깔리면 두 소리가 한 음색으로
+	# 뭉쳐 무엇이 일어났는지가 흐려진다 — 소총 탄(`_on_projectile_impacted`)에서 겪은
+	# 그대로다. 그래서 문틈을 미리 채워 두고, 바로 뒤의 `server_apply_hit` 이 내는
+	# `damaged` 는 조용히 지나가게 한다.
 	#
-	# **공용 피격음과 겹친다.** 이 표창도 데미지가 들어가게 되면서
-	# (`Projectile._on_body_entered`가 자리를 바꾸기 전에 `server_apply_hit`을 지난다)
-	# 맞은 소리와 바뀐 소리가 함께 난다. 소총 탄처럼 한쪽을 막지 않는 것은 폭탄과 같은
-	# 이유다 — 맞았다는 것과 자리가 바뀌었다는 것은 서로 다른 소식이고, 둘 다 들려야
-	# 무슨 일이 일어났는지가 소리만으로 갈린다.
+	# **이 신호가 때리기보다 먼저 와야 이것이 성립한다** — 그 순서는 신호를 내는 쪽
+	# (`Projectile._on_body_entered`)이 지킨다. 데미지는 그대로 들어가고 소리만 하나로 준다.
+	_mute_hit_sfx(_now(), HIT_SFX_INTERVAL)
+	# 소리는 같은 자리에서 낸다 — 강화(빨간) 표창이 맞은 순간이 곧 이 신호다.
 	_play_shuriken_swap_sfx.rpc()
 
 
