@@ -1,0 +1,114 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" path="res://assets/maps/canyon.png" id="1_bg"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_cliff_l_top"]
+size = Vector2(328, 113)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_cliff_l_mid"]
+size = Vector2(282, 208)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_cliff_l_low"]
+size = Vector2(258, 260)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_cliff_r_top"]
+size = Vector2(304, 104)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_cliff_r_mid"]
+size = Vector2(289, 208)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_cliff_r_low"]
+size = Vector2(272, 260)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_plat_center"]
+size = Vector2(427, 42)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_plat_small_l"]
+size = Vector2(85, 30)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_plat_small_r"]
+size = Vector2(109, 32)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_wall"]
+size = Vector2(40, 648)
+
+[node name="Canyon" type="Node2D"]
+
+[node name="Background" type="Sprite2D" parent="."]
+position = Vector2(576, 324)
+scale = Vector2(0.6, 0.6)
+texture = ExtResource("1_bg")
+
+[node name="CliffLeftTop" type="StaticBody2D" parent="."]
+position = Vector2(124, 175.5)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="CliffLeftTop"]
+shape = SubResource("RectangleShape2D_cliff_l_top")
+
+[node name="CliffLeftMid" type="StaticBody2D" parent="."]
+position = Vector2(101, 336)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="CliffLeftMid"]
+shape = SubResource("RectangleShape2D_cliff_l_mid")
+
+[node name="CliffLeftLow" type="StaticBody2D" parent="."]
+position = Vector2(89, 570)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="CliffLeftLow"]
+shape = SubResource("RectangleShape2D_cliff_l_low")
+
+[node name="CliffRightTop" type="StaticBody2D" parent="."]
+position = Vector2(1040, 180)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="CliffRightTop"]
+shape = SubResource("RectangleShape2D_cliff_r_top")
+
+[node name="CliffRightMid" type="StaticBody2D" parent="."]
+position = Vector2(1047.5, 336)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="CliffRightMid"]
+shape = SubResource("RectangleShape2D_cliff_r_mid")
+
+[node name="CliffRightLow" type="StaticBody2D" parent="."]
+position = Vector2(1056, 570)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="CliffRightLow"]
+shape = SubResource("RectangleShape2D_cliff_r_low")
+
+[node name="PlatformCenter" type="StaticBody2D" parent="."]
+position = Vector2(574.5, 359)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="PlatformCenter"]
+shape = SubResource("RectangleShape2D_plat_center")
+
+[node name="PlatformSmallLeft" type="StaticBody2D" parent="."]
+position = Vector2(459.5, 211)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="PlatformSmallLeft"]
+shape = SubResource("RectangleShape2D_plat_small_l")
+
+[node name="PlatformSmallRight" type="StaticBody2D" parent="."]
+position = Vector2(703.5, 212)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="PlatformSmallRight"]
+shape = SubResource("RectangleShape2D_plat_small_r")
+
+[node name="WallLeft" type="StaticBody2D" parent="."]
+position = Vector2(-20, 324)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="WallLeft"]
+shape = SubResource("RectangleShape2D_wall")
+
+[node name="WallRight" type="StaticBody2D" parent="."]
+position = Vector2(1172, 324)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="WallRight"]
+shape = SubResource("RectangleShape2D_wall")
+
+[node name="Spawns" type="Node2D" parent="."]
+
+[node name="Spawn1" type="Marker2D" parent="Spawns"]
+position = Vector2(140, 66)
+
+[node name="Spawn2" type="Marker2D" parent="Spawns"]
+position = Vector2(1020, 75)

@@ -1,0 +1,105 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" path="res://assets/maps/volcano.png" id="1_bg"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_ground_l"]
+size = Vector2(248, 136)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_ground_r"]
+size = Vector2(266, 136)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_beam_mid_l"]
+size = Vector2(217, 49)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_beam_mid_r"]
+size = Vector2(191, 39)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_beam_center"]
+size = Vector2(340, 56)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_beam_up_l"]
+size = Vector2(220, 34)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_beam_up_r"]
+size = Vector2(247, 39)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_wall"]
+size = Vector2(40, 648)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_lava"]
+size = Vector2(637, 106)
+
+[node name="Volcano" type="Node2D"]
+
+[node name="Background" type="Sprite2D" parent="."]
+position = Vector2(576, 324)
+scale = Vector2(0.6, 0.6)
+texture = ExtResource("1_bg")
+
+[node name="GroundLeft" type="StaticBody2D" parent="."]
+position = Vector2(124, 612)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="GroundLeft"]
+shape = SubResource("RectangleShape2D_ground_l")
+
+[node name="GroundRight" type="StaticBody2D" parent="."]
+position = Vector2(1019, 612)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="GroundRight"]
+shape = SubResource("RectangleShape2D_ground_r")
+
+[node name="BeamMidLeft" type="StaticBody2D" parent="."]
+position = Vector2(352.5, 445.5)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="BeamMidLeft"]
+shape = SubResource("RectangleShape2D_beam_mid_l")
+
+[node name="BeamMidRight" type="StaticBody2D" parent="."]
+position = Vector2(799.5, 440.5)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="BeamMidRight"]
+shape = SubResource("RectangleShape2D_beam_mid_r")
+
+[node name="BeamCenter" type="StaticBody2D" parent="."]
+position = Vector2(574, 336)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="BeamCenter"]
+shape = SubResource("RectangleShape2D_beam_center")
+
+[node name="BeamUpperLeft" type="StaticBody2D" parent="."]
+position = Vector2(189, 205)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="BeamUpperLeft"]
+shape = SubResource("RectangleShape2D_beam_up_l")
+
+[node name="BeamUpperRight" type="StaticBody2D" parent="."]
+position = Vector2(950.5, 212.5)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="BeamUpperRight"]
+shape = SubResource("RectangleShape2D_beam_up_r")
+
+[node name="WallLeft" type="StaticBody2D" parent="."]
+position = Vector2(-20, 324)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="WallLeft"]
+shape = SubResource("RectangleShape2D_wall")
+
+[node name="WallRight" type="StaticBody2D" parent="."]
+position = Vector2(1172, 324)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="WallRight"]
+shape = SubResource("RectangleShape2D_wall")
+
+[node name="Hazard" type="Area2D" parent="."]
+position = Vector2(566.5, 620)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hazard"]
+shape = SubResource("RectangleShape2D_lava")
+
+[node name="Spawns" type="Node2D" parent="."]
+
+[node name="Spawn1" type="Marker2D" parent="Spawns"]
+position = Vector2(130, 490)
+
+[node name="Spawn2" type="Marker2D" parent="Spawns"]
+position = Vector2(1015, 490)

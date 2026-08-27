@@ -13,6 +13,15 @@ extends RefCounted
 ## - 즉사 구역(물·용암)이 있으면 `Hazard`(Area2D). 닿으면 서버가 죽인다.
 ## - 배경까지 맵이 그린다. 맵마다 하늘색이 다르다.
 ##
+## ## 배경 원화를 쓰는 맵
+##
+## 화산·협곡·오두막·투기장은 `ColorRect` 대신 `assets/maps/`의 원화 한 장을
+## `Background`(Sprite2D)로 깐다. 원화는 1920x1080이고 게임 좌표는 1152x648이라
+## **`position = (576, 324)` + `scale = 0.6`**이면 화면에 정확히 들어맞는다 —
+## 원화 픽셀에 0.6을 곱한 값이 곧 충돌 상자 좌표다.
+## 발판 사이 높이차는 **160px을 넘기지 않는다**(점프 높이 = 560²/(2*980)).
+## 넘기면 올라갈 수 없는 발판이나 빠져나올 수 없는 구덩이가 생긴다.
+##
 ## 좌우 벽이 없는 맵은 화면 밖으로 나가면 `Combat.is_out_of_bounds()`로 낙사한다.
 
 const DIR := "res://scenes/maps/"
@@ -25,6 +34,10 @@ const LIST: Array[Dictionary] = [
 	{"name": "바다", "file": "ocean.tscn"},
 	{"name": "용암", "file": "lava.tscn"},
 	{"name": "벽돌", "file": "brick.tscn"},
+	{"name": "화산", "file": "volcano.tscn"},
+	{"name": "협곡", "file": "canyon.tscn"},
+	{"name": "오두막", "file": "cottage.tscn"},
+	{"name": "투기장", "file": "arena.tscn"},
 ]
 
 
