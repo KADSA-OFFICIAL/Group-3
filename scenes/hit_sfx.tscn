@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://jellyhitsfx01"]
+
+[ext_resource type="Script" path="res://scripts/sfx_oneshot.gd" id="1_sfx"]
+[ext_resource type="AudioStream" path="res://assets/audio/hit.ogg" id="2_hit"]
+
+[node name="HitSfx" type="AudioStreamPlayer"]
+stream = ExtResource("2_hit")
+volume_db = -20.0
+script = ExtResource("1_sfx")

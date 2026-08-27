@@ -19,6 +19,43 @@ signal special_requested(peer_id: int, long_press: bool)
 ## 서버에서만 발생한다. 강제 낙하(양날 도끼)가 땅에 닿았다 — 인자는 떨어진 자리 (#167).
 ## 그 주변을 때리는 판정은 main.gd 가 한다.
 signal landed_forced(peer_id: int, at: Vector2)
+## 서버에서만 발생한다. 제자리 회전이 끝나 **지금 막 내지르기 시작했다** (전기톱, #260).
+##
+## 소리를 여기서 직접 내지 않는 것은 `landed_forced`와 같은 이유다 — 연출·소리는
+## `Effects` 아래에 붙어야 하고 그 노드를 아는 것이 main.gd 다. 이 노드가 아는 것은
+## "지금 넘어갔다"는 시점뿐이고, 그것으로 무엇을 할지는 저쪽이 정한다.
+signal dash_launched(peer_id: int)
+## 서버에서만 발생한다. 이 플레이어가 **실제로 데미지를 받았다** — 무적·사망으로
+## 걸러진 것과 데미지 0인 것은 내지 않는다. 인자는 맞은 플레이어의 peer id 와,
+## 그것이 지속 데미지(출혈·전기톱)의 한 틱인지.
+##
+## 무엇으로 맞았는지는 싣지 않는다. 무기·투사체마다 따로 알리는 대신 데미지가 지나가는
+## 두 문(`server_apply_hit`·`server_apply_dot`)에서만 내보내므로, **모든 피해가 빠짐없이
+## 한 자리로 모인다** — 소리를 "기본적으로" 울리려면 새 무기가 늘어도 여기가 안 변해야 한다.
+##
+## 소리를 여기서 직접 내지 않는 이유는 `sparked`·`burst` 와 같다: 연출은 `Effects` 아래에
+## 붙어야 하고 그 노드를 아는 것이 main.gd 다.
+signal damaged(peer_id: int, continuous: bool)
+
+## 이 젤리가 **기절하며** 맞았다 (망치 특수가 얹은 기절, 삼지창 특수의 삼지창).
+##
+## 위의 `damaged` 와 같은 자리(`server_apply_hit`)에서 나가지만 신호를 따로 둔 것은
+## 뜻이 다르기 때문이다 — 그쪽은 "피해를 입었다", 이쪽은 "굳었다"다. 데미지가 0이어도
+## 기절이 얹혀 있으면 굳는 것이므로 조건도 서로 다르다.
+##
+## **무엇으로 굳었는지는 싣지 않는다.** 기절을 거는 무기가 둘(망치·삼지창)인데 소리는
+## 하나다 — 걸리는 길이 다를 뿐 화면에서 일어나는 일은 같다.
+signal stunned(peer_id: int)
+
+## 이 젤리의 게이지가 **방금 75%를 넘어섰다** (너클, #225). 서버에서만 발생한다.
+##
+## **넘어서는 순간 한 번만 낸다** — 75% 위에서 또 맞아도 다시 나지 않는다.
+## 게이지가 얼마나 찼는지가 아니라 "이제 강펀치가 달라진다"가 이 신호의 뜻이라,
+## 오라가 켜지는 그 한 순간과 짝이 맞아야 한다(둘 다 `is_charged()`가 정한다).
+##
+## 데미지가 지나가는 두 문(`server_apply_hit`·`server_apply_dot`)에서 함께 나간다 —
+## 출혈로 차서 넘는 것도 맞아서 넘는 것과 같은 일이기 때문이다.
+signal gauge_charged(peer_id: int)
 
 ## 이 플레이어를 조작하는 클라이언트의 peer id. 스폰할 때 서버가 정한다.
 @export var owner_peer_id := 0
@@ -76,6 +113,11 @@ const SWING_RECOVER := 0.18
 ## "기울였다"로 읽혀서, 쥔 자리를 조금 올려 준다.
 const SWING_LIFT := 14.0
 
+## 전기톱 특수의 회전 속도(초당 바퀴 수, #260). 제자리 회전 0.45초 동안 약 2바퀴 반이다.
+## 이보다 느리면 도는 것이 아니라 무기를 휘휘 젓는 것으로 보이고, 빠르면 원호가 원으로
+## 이어져 도는 것이 안 보인다.
+const SPIN_TURNS_PER_SECOND := 5.5
+
 ## 관통(광선검 특수) 중임을 알리는 빛. 광선검 날에 맞춘 민트빛이다.
 const PIERCE_COLOR := Color(0.55, 0.95, 0.85)
 ## 관통 중 무기에 곱하는 색. 1을 넘겨서 날이 타오르게 만든다.
@@ -100,6 +142,13 @@ const CHARGE_SPARK_COUNT := 6
 ## 무기 표에 `smoke_puffs`가 있는 무기에만 뜬다. 두 빨간 그림의 붉은색에 맞췄다 —
 ## 손에 든 것과 연기가 다른 색이면 무엇에서 나는지 안 읽힌다.
 const SPECIAL_SMOKE_COLOR := Color(0.82, 0.13, 0.11)
+
+## 도화선에서 늘 피어오르는 연기 색 (폭탄). 무기 표에 `smoke_fuse`가 있는 무기에만 뜬다.
+##
+## **순검정이 아니라 짙은 회색이다** — 연기는 배경을 덮는 그림이라(`weapon_smoke.gd`)
+## 완전한 검정으로 두면 어두운 지형 위에서 구멍처럼 보이고, 밝은 하늘 위에서는
+## 연기가 아니라 검은 덩어리로 읽힌다.
+const FUSE_SMOKE_COLOR := Color(0.16, 0.15, 0.15)
 
 ## 날이 지나간 자리에 남는 잔상 색 (#253). 무기 표에 `trail_ghosts`가 있는 무기에만
 ## 뜬다. **관통 빛과 같은 민트**다 — 광선검 날의 색이고, 날과 다른 색으로 남기면
@@ -126,7 +175,7 @@ var pose := Characters.POSE_IDLE
 var gauge := 0.0
 ## 특수 공격을 쓸 수 있는가. 서버가 쿨타임을 재고 이 값만 내려준다 (무기 도형 색에 쓴다).
 var special_ready := true
-## 강제 이동 상태. ""이면 평소, "dash"(전기톱) / "rise"·"hover"·"fall"(양날 도끼).
+## 강제 이동 상태. ""이면 평소, "spin"·"dash"(전기톱) / "rise"·"hover"·"fall"(양날 도끼).
 var forced_mode := ""
 ## 다음에 던질 것이 **강화**인가 (#134). 폭탄(데미지·넉백 증가)과 표창(빨간 표창,
 ## 위치 교환)이 이 값을 쓴다 — 무엇으로 바뀌는지는 무기 표의 `empowered_*`가 정한다.
@@ -150,6 +199,13 @@ var _invuln_until := {"basic": 0.0, "special": 0.0}
 var _stun_until := 0.0
 ## 광선검 특수 — 상대 무기의 막기를 무시한다. 지형은 통과하지 못한다.
 var _pierce_until := 0.0
+## 망치 특수 — 이 시각까지 **내 기본 공격에 기절이 얹힌다**.
+##
+## **위의 `_stun_until` 과 반대 방향이다.** 그쪽은 "내가 굳어 있는" 시간이고 이쪽은
+## "내가 굳히는" 능력이다 — 이름이 비슷해 헷갈리기 쉬우니 여기 적어 둔다.
+var _stun_grant_until := 0.0
+## 그때 얹히는 기절의 길이(초). 무기 표의 `stun_duration` 이 `_receive_buff` 로 실려 온다.
+var _stun_grant := 0.0
 ## 지난 프레임에 관통 빛을 그렸는가. 꺼진 프레임에 한 번 더 다시 그려 지우려고 들고 있다.
 var _aura_shown := false
 var _reach_multiplier := 1.0
@@ -182,6 +238,8 @@ var _weapon_art_length := 0.0
 ## offset은 배율·회전이 나중에 걸리므로 곱하기 전 값이어야 한다.
 var _weapon_content_offset := Vector2.ZERO
 var _weapon_content_length := 0.0
+## 배율을 곱하기 **전**의 원화 가로 길이. 도는 무기(전기톱, #260)가 원의 반지름을 잰다.
+var _weapon_content_width := 0.0
 ## 원화를 눕혀 바라보는 쪽으로 뻗어 드는가 (장대). 기본은 세워 드는 것이다.
 var _weapon_art_forward := false
 ## 지금 그림이 늘어난 정도(1.0이면 평소). 목표값으로 부드럽게 따라간다.
@@ -200,6 +258,16 @@ var _weapon_faces_left := false
 var _swing_started_at := -1.0
 var _swing_windup := 0.0
 var _swing_swing := 0.0
+
+## 톱을 돌리기 시작한 시각 (#260). 음수면 돌고 있지 않다.
+##
+## **제자리 회전에서 돌진으로 넘어갈 때 다시 잡지 않는다** — 강제 이동 상태는 바뀌지만
+## 톱은 계속 같은 속도로 돌고 있으므로, 넘어가는 프레임에 각도가 0으로 튀면 톱이 한 번
+## 되감긴 것으로 보인다. `_receive_forced()`가 그 규칙을 지킨다.
+##
+## 시각 하나만 들고 각도는 각 피어가 자기 시계로 계산한다 — 내려베기(`_swing_started_at`)와
+## 같은 방식이라 매 프레임 각도를 보내지 않는다.
+var _spin_started_at := -1.0
 
 ## 클라이언트가 서버로부터 받은 표시용 상태
 var _target_position := Vector2.ZERO
@@ -289,6 +357,21 @@ func apply_movement(input: Dictionary, delta: float) -> void:
 ## 다른 기술이 된다. 그래서 조종은 무기 표가 허락한 무기에만 붙는다.
 func _apply_forced(input: Dictionary, delta: float) -> void:
 	match forced_mode:
+		"spin":
+			# 제자리 회전 (#260). **가로 속도를 0으로 덮는다** — 누르기 직전에 달리던
+			# 속도가 남아 있으면 도는 동안 스르르 미끄러져서 "제자리"로 안 보인다
+			# (도끼의 `"hover"`가 같은 이유로 속도를 덮는다). 중력은 그대로 받으므로
+			# 공중에서 눌러도 발이 땅에 닿는다.
+			velocity.x = 0.0
+			if not is_on_floor():
+				velocity += get_gravity() * delta
+			move_and_slide()
+			# 다 돌면 지금까지와 똑같은 돌진으로 이어진다. 데미지는 돌진 구간에서만
+			# 들어가므로(`_special_pending`의 `modes`) 여기까지는 아무도 안 맞는다.
+			if _now() >= _forced_deadline:
+				if multiplayer.is_server():
+					dash_launched.emit(owner_peer_id)
+				_receive_forced.rpc("dash", dash_time())
 		"dash":
 			velocity.x = facing * FORCED_SPEED
 			if not is_on_floor():
@@ -345,6 +428,16 @@ func _steer(input: Dictionary) -> void:
 		return
 	facing = 1 if direction > 0.0 else -1
 	velocity.x = direction * SPEED
+
+
+## 돌진이 벽 없는 맵에서 무한히 이어지지 않게 하는 안전장치 시간(초).
+## 화면 폭을 돌진 속도로 지나가는 시간이면 충분하다.
+##
+## **여기 있는 것은 돌진을 거는 자리가 둘이기 때문이다** (#260) — 특수를 누른 순간
+## (`main.gd._execute_special()`)과 제자리 회전이 끝나는 순간(`_apply_forced()`)이다.
+## 두 곳이 각자 재면 언젠가 값이 갈라지고, 그때 회전을 거친 돌진만 사거리가 달라진다.
+func dash_time() -> float:
+	return get_viewport_rect().size.x / FORCED_SPEED
 
 
 ## 캐릭터 그림을 붙이고 크기·위치를 맞춘다.
@@ -474,6 +567,10 @@ func _apply_weapon() -> void:
 		texture_size.y * 0.5 - content.position.y - content.size.y * 0.5,
 	)
 	_weapon_content_length = content.size.y
+	# 가로도 들고 있는다 (#260) — 도는 톱이 그리는 원의 반지름이 **화면에 그려진 그림의
+	# 반쪽 길이**다. 전기톱은 가로로 긴 원화(2.69:1)라 세로(`_weapon_content_length`)로
+	# 재면 원이 그림보다 훨씬 작게 잡힌다.
+	_weapon_content_width = content.size.x
 	_weapon_offset = _weapon_content_offset * factor
 
 
@@ -544,11 +641,17 @@ func _draw_charge_aura() -> void:
 			(1.0 - phase) * 0.75)
 
 
-## 평소와 다른 그림을 든 동안 무기에서 피어오르는 연기 (빨간 표창·빨간 도끼).
+## 무기에서 피어오르는 연기. 두 가지가 있다.
 ##
+## 하나는 **평소와 다른 그림을 든 동안**의 붉은 경고다 (빨간 표창·빨간 도끼).
 ## **켜는 조건은 `_highlight_file()` 하나로 맞춘다** — 그림이 바뀌는 순간에 연기도 같이
-## 나야 하고, 조건을 두 곳에 따로 쓰면 어긋난다. 덩어리 수는 무기 표의 `smoke_puffs`다
-## (표창 5, 양날 도끼 9 — 센 무기일수록 크게 경고한다).
+## 나야 하고, 조건을 두 곳에 따로 쓰면 어긋난다.
+##
+## 다른 하나는 **늘 타고 있는 도화선**의 검은 연기다 (폭탄, 무기 표의 `smoke_fuse`).
+## 이쪽은 상태를 알리는 것이 아니라 무기의 생김새라 그림과 무관하게 계속 난다.
+##
+## 덩어리 수는 두 경우 다 무기 표의 `smoke_puffs`다
+## (표창 5, 양날 도끼 9 — 센 무기일수록 크게 경고한다. 폭탄 4는 도화선 굵기다).
 ##
 ## 계기가 되는 `empowered_ready`·`special_ready` 둘 다 RPC로 복제되므로 두 화면에 똑같이
 ## 뜬다 — 젤리 찌그러짐처럼 각 피어가 복제된 값으로 알아서 그린다.
@@ -557,13 +660,19 @@ func _draw_charge_aura() -> void:
 ## 그림이 없는 무기에도 붙을 수 있어야 하고, 몇 px 차이는 연기에서 보이지 않는다.
 func _update_weapon_smoke() -> void:
 	var smoke: WeaponSmoke = $Smoke
-	var puffs: int = Weapons.get_weapon(weapon_id).get("smoke_puffs", 0)
-	var wants := alive and puffs > 0 and not _highlight_file().is_empty()
+	var data := Weapons.get_weapon(weapon_id)
+	var puffs: int = data.get("smoke_puffs", 0)
+	# **도화선 연기는 상태를 알리는 연기가 아니다** (폭탄). 무기 표의 `smoke_fuse`가
+	# 켜져 있으면 그림이 바뀌는 것과 무관하게 **늘** 난다 — 도화선은 계속 타고 있고,
+	# 손에 든 것이 강화 폭탄인지는 그림(`empowered_file`)이 이미 말한다.
+	# 색도 그래서 갈린다: 붉은 연기는 "평소와 다르다"는 경고고, 검은 연기는 폭탄 그 자체다.
+	var fuse: bool = data.get("smoke_fuse", false)
+	var wants := alive and puffs > 0 and (fuse or not _highlight_file().is_empty())
 	smoke.visible = wants
 	if not wants:
 		return
 	smoke.puff_count = puffs
-	smoke.color = SPECIAL_SMOKE_COLOR
+	smoke.color = FUSE_SMOKE_COLOR if fuse else SPECIAL_SMOKE_COLOR
 	smoke.position = Vector2(facing * WEAPON_OFFSET_X, WEAPON_CENTER_Y)
 
 
@@ -593,6 +702,22 @@ func _update_weapon_trail() -> void:
 	trail.color = TRAIL_COLOR
 	var ends := _blade_ends()
 	trail.sample(ends[0], ends[1])
+
+
+## 능력을 켜는 특수가 켜져 있는 동안 몸을 감싸고 튀는 전격 (망치·광선검).
+##
+## **켜는 조건은 "능력이 걸려 있는가" 하나다** — 무기 이름을 보지 않는다. 그래서 능력을
+## 거는 특수가 늘면(장대의 사거리 배율 같은 것) 그 버프를 이 줄에 더하면 되고, 무기 표에
+## 새 필드를 만들 필요가 없다. 잔상(`trail_ghosts`)이 무기 표에서 켜지는 것과 다른 판단인
+## 이유: 잔상은 **무기의 생김새**라 무기마다 다르지만, 전격은 **"스킬이 켜졌다"는 표시**라
+## 어느 무기든 같은 뜻이다.
+##
+## 자리는 이미 복제되는 `position`·버프 시각에서 나오므로 각 피어가 자기 화면 값으로
+## 알아서 그린다 — RPC를 더하지 않는다(잔상·연기와 같은 방식, 버전 악수 #228에 영향 없음).
+func _update_skill_arcs() -> void:
+	var arcs: SkillArcs = $Arcs
+	# 죽은 젤리에는 켜지 않는다 — 버프가 남은 채로 죽으면 시체에서 번개가 튄다.
+	arcs.active = alive and (is_piercing() or stun_bonus() > 0.0)
 
 
 ## 지금 화면에 그려진 무기 날의 양끝 (전역 좌표, [날 끝, 손잡이]).
@@ -647,6 +772,68 @@ func _place_forward_weapon(sprite: Sprite2D) -> void:
 		_weapon_content_offset.y - _weapon_content_length * 0.5,
 	)
 	sprite.position = Vector2(0.0, WEAPON_CENTER_Y)
+
+
+## 지금 톱이 돌고 있는가 (#260) — 제자리 회전이든 그대로 이어진 돌진이든.
+##
+## **무기 이름을 보지 않는다.** 강제 이동의 `"spin"`·`"dash"`는 전기톱만 쓰는 단계라
+## 상태 하나로 갈린다(도끼는 `rise`·`hover`·`fall`이다) — 켜는 조건을 상태에서 읽는 것은
+## 전격(`_update_skill_arcs()`)과 같은 판단이다. 그림이 없는 무기는 돌릴 것이 없으므로 뺀다.
+func is_spinning() -> bool:
+	return _weapon_has_art and (forced_mode == "spin" or forced_mode == "dash")
+
+
+## 톱이 지금 돌아간 각(라디안). 바라보는 쪽으로 굴러가는 바퀴처럼 돈다 —
+## 오른쪽을 보면 시계방향(화면 좌표는 y가 아래라 양수가 시계방향)이다.
+##
+## 시작 시각 하나에서 나오고 그 값이 복제되므로 두 화면이 같은 자세를 그린다.
+func _spin_angle() -> float:
+	if _spin_started_at < 0.0:
+		return 0.0
+	return (_now() - _spin_started_at) * TAU * SPIN_TURNS_PER_SECOND * facing
+
+
+## 도는 톱을 **그림 한가운데를 축으로** 놓는다 (#260).
+##
+## 내려베기(`_place_swinging_weapon()`)가 쥔 자리를 축으로 삼는 것과 다르다 — 저쪽은
+## 들어 올렸다 내려치는 동작이라 손이 축이어야 하고, 이쪽은 톱이 통째로 도는 동작이라
+## 가운데가 축이어야 톱날 끝이 고른 원을 그린다.
+##
+## **여백 보정을 `position`이 아니라 `Sprite2D.offset`으로 한다** — offset은 회전·배율이
+## 나중에 걸리는 값이라 돌아간 뒤에도 보정이 그림과 같이 돈다(`_place_forward_weapon`·
+## `_place_swinging_weapon`과 같은 이유). 뒤집힌 그림은 좌우 보정의 부호가 반대다.
+func _place_spinning_weapon(sprite: Sprite2D, flipped: bool) -> void:
+	sprite.flip_h = flipped
+	sprite.rotation = _spin_angle()
+	var corrected_x := _weapon_content_offset.x
+	if flipped:
+		corrected_x = -corrected_x
+	sprite.offset = Vector2(corrected_x, _weapon_content_offset.y)
+	sprite.position = Vector2(facing * WEAPON_OFFSET_X, WEAPON_CENTER_Y)
+
+
+## 도는 톱이 그리는 원과, 돌진하며 가르는 바람 (#260).
+##
+## 자리·반지름·각도는 이미 정해진 스프라이트 자세에서 **되짚어** 넘긴다 — 잔상
+## (`_update_weapon_trail()`)이 `_blade_ends()`로 하는 것과 같은 이유다. 여기서 다시
+## 계산하면 언젠가 두 곳이 갈라지고, 그때 원만 톱과 어긋난 자리에 남는다.
+func _update_chainsaw_whirl() -> void:
+	var whirl: ChainsawWhirl = $Whirl
+	var spinning := alive and is_spinning()
+	whirl.active = spinning
+	if not spinning:
+		return
+	var sprite: Sprite2D = $WeaponSprite
+	whirl.dashing = forced_mode == "dash"
+	whirl.pivot = sprite.position
+	# 톱날 끝까지의 거리 — 화면에 그려진 가로 길이의 절반이다.
+	whirl.radius = _weapon_content_width * 0.5 * absf(sprite.scale.x)
+	# 각도 0일 때 톱날은 **바라보는 쪽**을 향한다(`flip_h`가 그렇게 맞춰 놓는다).
+	# 화면 좌표에서 왼쪽은 PI 방향이다.
+	whirl.tip_angle = sprite.rotation + (0.0 if facing > 0 else PI)
+	whirl.spin_sign = signf(facing)
+	# 바람은 가는 쪽의 반대로 흐른다.
+	whirl.wind_sign = -signf(facing)
 
 
 ## 지금 검을 들어 올렸다 내려베는 중인가 (#247).
@@ -800,6 +987,11 @@ func _update_weapon_shape(delta: float) -> void:
 		var tall := stretch * growth
 		if _weapon_art_forward:
 			_place_forward_weapon(sprite)
+		elif is_spinning():
+			# 전기톱 특수 — 제자리 회전부터 돌진이 끝날 때까지 톱이 계속 돈다 (#260).
+			# 내려베기보다 먼저 본다: 둘이 겹칠 일은 없지만, 겹친다면 강제 이동 쪽이
+			# 조작을 잠근 상태라 그쪽이 지금 무엇을 하고 있는지에 더 가깝다.
+			_place_spinning_weapon(sprite, flipped)
 		elif is_swinging():
 			# 검 특수 — 쥔 자리를 축으로 들어 올렸다 내려벤다 (#247).
 			# 각도가 0인 순간의 모습이 아래 세워 든 자세와 겹치므로 이어져 보인다.
@@ -820,6 +1012,11 @@ func _update_weapon_shape(delta: float) -> void:
 			)
 		if is_piercing():
 			sprite.modulate = PIERCE_TINT              # 관통 중 — 날이 타오른다
+		elif is_spinning():
+			# 도는 동안은 **밝게 둔다** (#260). 아래 회색은 "지금 못 움직인다"는 표시인데,
+			# 전기톱 특수는 못 움직이는 것이 기절이 아니라 제 기술이라 회색이면
+			# 톱을 돌리는 중인지 굳어 있는지가 뒤집혀 읽힌다.
+			sprite.modulate = Color.WHITE
 		elif not can_act():
 			sprite.modulate = Color(0.45, 0.45, 0.5)   # 기절·사망·강제 이동
 		elif special_ready:
@@ -875,6 +1072,9 @@ func _physics_process(delta: float) -> void:
 	_update_weapon_smoke()
 	# 잔상은 무기 자세가 정해진 **뒤에** 남긴다 — 앞에 두면 한 프레임 전 자리를 남긴다.
 	_update_weapon_trail()
+	# 도는 톱의 원도 무기 자세가 정해진 **뒤에** 잰다 — 잔상과 같은 이유다.
+	_update_chainsaw_whirl()
+	_update_skill_arcs()
 	# 바라보는 방향으로 그림을 뒤집는다. facing은 서버가 정해 양쪽에 복제된다.
 	# 여백 보정의 부호는 _place_body()가 flip_h를 보고 맞춘다.
 	$Body.flip_h = facing < 0
@@ -988,6 +1188,14 @@ func is_piercing() -> bool:
 	return _now() < _pierce_until
 
 
+## 지금 내 기본 공격에 얹히는 기절 길이(초). 망치 특수가 켜져 있지 않으면 0 이다.
+##
+## **켜졌는지 묻는 함수와 값을 주는 함수를 나누지 않았다** — 0 이 곧 "안 켜졌다"이고,
+## `server_apply_hit` 에 그대로 넘길 수 있어서 부르는 쪽에 조건문이 필요 없다.
+func stun_bonus() -> float:
+	return _stun_grant if _now() < _stun_grant_until else 0.0
+
+
 ## 방패를 크게 들어 올린 동안인가 (방패 특수, 무기 표의 `size_buff_guards`).
 ##
 ## 그동안 **날아오는 탄이 막히고**(`Projectile._on_body_entered`) 그 대신 **기본 근접
@@ -1068,8 +1276,20 @@ func server_apply_hit(damage: float, knockback_level: int, from_x: float,
 	if direction == 0.0:
 		direction = 1.0
 	# 너클은 내가 맞을 때 게이지가 찬다. **받은 데미지에 비례한다** (#225).
+	var was_charged := is_charged()
 	var new_gauge := _gauge_after(damage)
 	_receive_hit.rpc(new_hp, knockback_level, direction, stun, source, new_gauge, knockback_speed)
+	# 이 한 방으로 75%를 넘었는지 본다 (#225). `_receive_hit`이 `call_local`이라
+	# 여기서는 이미 새 게이지가 들어가 있다.
+	_emit_gauge_charged(was_charged)
+	# **무적·사망 검사를 다 지난 뒤에 낸다** — 위에서 걸러진 것은 맞은 것이 아니다.
+	# 데미지 0(넉백만 주는 것)도 뺀다: "피해를 입었다"가 이 신호의 뜻이다.
+	if damage > 0.0:
+		damaged.emit(owner_peer_id, false)
+	# **데미지와 조건이 다르다** — 기절이 얹혀 있으면 데미지가 0이어도 굳는다.
+	# 무적·사망 검사를 다 지난 뒤인 것은 위와 같다.
+	if stun > 0.0:
+		stunned.emit(owner_peer_id)
 
 
 ## 출혈 같은 지속 데미지. 무적 시간을 무시하고 들어가고, 넉백도 없다.
@@ -1077,12 +1297,18 @@ func server_apply_dot(damage: float) -> void:
 	if not multiplayer.is_server() or not alive:
 		return
 	_receive_dot.rpc(maxf(hp - damage, 0.0))
+	# 지속 데미지도 피해다 — 다만 촘촘히 들어오므로 `continuous` 를 참으로 실어,
+	# 소리를 울릴 박자를 받는 쪽(main.gd)이 따로 잡게 한다.
+	if damage > 0.0:
+		damaged.emit(owner_peer_id, true)
 	# 출혈도 "받은 데미지"다 (#225) — 너클 게이지는 여기서도 찬다.
 	# `_receive_dot` 의 인자를 늘리지 않고 따로 보내는 것은, 게이지를 쓰지 않는 무기에는
 	# 보낼 것이 없어서다(아래 비교에서 걸러진다).
+	var was_charged := is_charged()
 	var filled := _gauge_after(damage)
 	if not is_equal_approx(filled, gauge):
 		server_set_gauge(filled)
+		_emit_gauge_charged(was_charged)
 
 
 ## 이만큼 데미지를 받은 뒤의 게이지 (#225).
@@ -1097,6 +1323,19 @@ func _gauge_after(damage: float) -> float:
 		return gauge
 	var top: float = data["gauge_max"]
 	return minf(gauge + damage * top / fill, top)
+
+
+## 게이지가 이번 피해로 **75%를 넘어섰으면** 한 번 알린다 (#225).
+##
+## `was_charged`는 게이지가 차기 **전에** 잰 `is_charged()`다. 이미 차 있었으면 아무 일도
+## 없다 — 문턱을 넘는 그 한 번만이 소리를 낼 자리다.
+##
+## 게이지를 쓰지 않는 무기는 `is_charged()`가 늘 거짓이라 여기서 저절로 걸러진다.
+## 쓰러진 젤리도 뺀다: 마지막 한 방에 죽으면서 게이지가 찬 것은 들려줄 것이 아니다.
+func _emit_gauge_charged(was_charged: bool) -> void:
+	if was_charged or not alive or not is_charged():
+		return
+	gauge_charged.emit(owner_peer_id)
 
 
 ## 데미지 없는 사망 (낙사 등).
@@ -1134,6 +1373,9 @@ func _receive_teleport(to: Vector2) -> void:
 	# 옛 자리의 잔상을 버린다 (#253) — 안 버리면 두 자리를 잇는 줄이 한 번 그려진다.
 	# `WeaponTrail`의 거리 문턱도 같은 것을 막지만, 자리가 바뀌는 것을 아는 곳이 여기다.
 	$Trail.clear()
+	# 돌진하며 남긴 바람도 같이 버린다 (#260) — 빨간 표창이 돌진 중인 상대를 옮기면
+	# 옛 자리의 줄무늬가 새 자리에서 한 번 더 그려진다.
+	$Whirl.clear()
 
 
 ## 사거리·크기·관통 버프.
@@ -1261,6 +1503,9 @@ func _receive_weapon(new_weapon: String) -> void:
 	# 휘두르던 중에 무기가 바뀌면 그 동작은 버린다 (#247) — 새 무기가 남은 각도를
 	# 이어받아 혼자 내려치는 일이 없게 한다.
 	_swing_started_at = -1.0
+	# 돌던 톱도 같은 이유로 버린다 (#260).
+	_spin_started_at = -1.0
+	$Whirl.clear()
 	_apply_weapon()
 	_update_weapon_shape(0.0)
 
@@ -1304,6 +1549,9 @@ func _check_death() -> void:
 	alive = false
 	velocity = Vector2.ZERO
 	forced_mode = ""
+	# 돌진하다 죽으면 톱도 멈춘다 (#260) — `is_spinning()`이 강제 이동 상태를 보므로
+	# 위 한 줄로 이미 꺼지지만, 각도를 지워야 다음 라운드가 0도에서 시작한다.
+	_spin_started_at = -1.0
 	# 반투명으로 죽음을 알리던 것을 포즈가 대신한다 (#176). 흐리게 두면 눕는 원화의
 	# 땀방울·효과선이 어두운 맵(용암) 배경에 묻혀 보이지 않는다.
 	modulate.a = 1.0
@@ -1337,6 +1585,9 @@ func _receive_reset(spawn_position: Vector2, spawn_facing: int) -> void:
 	_invuln_until = {"basic": grace, "special": grace}
 	_stun_until = 0.0
 	_pierce_until = 0.0
+	# 망치가 걸어 둔 "기절을 얹는" 능력도 라운드를 넘기지 않는다 — 관통과 같다.
+	_stun_grant_until = 0.0
+	_stun_grant = 0.0
 	_reach_multiplier = 1.0
 	_reach_until = 0.0
 	_size_multiplier = 1.0
@@ -1351,6 +1602,11 @@ func _receive_reset(spawn_position: Vector2, spawn_facing: int) -> void:
 	# 지난 라운드에 남긴 잔상도 버린다 (#253) — 스폰 지점으로 돌아가는 것이 곧 순간이동이라,
 	# 안 버리면 새 라운드 첫 프레임에 죽은 자리에서 스폰 지점까지 줄이 그려진다.
 	$Trail.clear()
+	# 돌던 톱도 멈춰 세우고 남은 바람을 버린다 (#260) — 강제 이동은 아래 `forced_mode`
+	# 초기화가 풀지만, 각도를 안 지우면 다음에 돌릴 때 지난 라운드에 돌던 만큼
+	# 앞선 자세에서 시작한다.
+	_spin_started_at = -1.0
+	$Whirl.clear()
 	_forced_deadline = 0.0
 	_knockback_until = 0.0
 
@@ -1381,6 +1637,13 @@ func _receive_gauge(value: float) -> void:
 func _receive_forced(mode: String, duration: float) -> void:
 	forced_mode = mode
 	_forced_deadline = _now() + duration
+	# 톱이 도는 시각 (#260). 회전에서 **시작**하고, 돌진으로 넘어갈 때는 건드리지 않는다 —
+	# 거기서 다시 잡으면 각도가 0으로 튀어 톱이 한 번 되감긴 것으로 보인다.
+	# 나머지 단계(도끼의 rise·hover·fall, 끝남)에서는 지운다.
+	if mode == "spin":
+		_spin_started_at = _now()
+	elif mode != "dash":
+		_spin_started_at = -1.0
 	if mode == "":
 		velocity = Vector2.ZERO
 	else:
@@ -1407,3 +1670,8 @@ func _receive_buff(kind: String, value: float, duration: float) -> void:
 			_size_until = _now() + duration
 		"pierce":
 			_pierce_until = _now() + duration
+		"stun":
+			# `value` 는 얹을 기절의 길이(초), `duration` 은 그 능력이 유지되는 시간이다.
+			# 다른 버프와 인자 뜻이 같다 — value 가 세기, duration 이 길이다.
+			_stun_grant = value
+			_stun_grant_until = _now() + duration

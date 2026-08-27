@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://jellydaggersfx"]
+
+[ext_resource type="Script" path="res://scripts/sfx_oneshot.gd" id="1_sfx"]
+[ext_resource type="AudioStream" path="res://assets/audio/dagger_return.ogg" id="2_dagger"]
+
+[node name="DaggerReturnSfx" type="AudioStreamPlayer"]
+stream = ExtResource("2_dagger")
+volume_db = -16.0
+script = ExtResource("1_sfx")
