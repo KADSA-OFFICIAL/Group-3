@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://jellyticksfx1"]
+
+[ext_resource type="Script" path="res://scripts/sfx_oneshot.gd" id="1_sfx"]
+[ext_resource type="AudioStream" path="res://assets/audio/damage_tick.ogg" id="2_tick"]
+
+[node name="DamageTickSfx" type="AudioStreamPlayer"]
+stream = ExtResource("2_tick")
+volume_db = -22.0
+script = ExtResource("1_sfx")

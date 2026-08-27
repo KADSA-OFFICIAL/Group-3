@@ -1,9 +1,14 @@
-[gd_scene load_steps=6 format=3 uid="uid://jellyplayer01"]
+[gd_scene load_steps=9 format=3 uid="uid://jellyplayer01"]
 
 [ext_resource type="Script" path="res://scripts/player.gd" id="1_player"]
 [ext_resource type="Script" path="res://scripts/weapon_smoke.gd" id="2_smoke"]
 [ext_resource type="Script" path="res://scripts/gauge_bar.gd" id="3_gauge"]
 [ext_resource type="Script" path="res://scripts/weapon_trail.gd" id="4_trail"]
+[ext_resource type="Script" path="res://scripts/skill_arcs.gd" id="5_arcs"]
+[ext_resource type="Script" path="res://scripts/chainsaw_whirl.gd" id="6_whirl"]
+
+[sub_resource type="CanvasItemMaterial" id="CanvasItemMaterial_arcs"]
+blend_mode = 1
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
 size = Vector2(48, 56)
@@ -56,12 +61,20 @@ color = Color(0.9, 0.9, 0.95, 1)
 visible = false
 script = ExtResource("4_trail")
 
+[node name="Whirl" type="Node2D" parent="."]
+script = ExtResource("6_whirl")
+
 [node name="WeaponSprite" type="Sprite2D" parent="."]
 visible = false
 
 [node name="Smoke" type="Node2D" parent="."]
 visible = false
 script = ExtResource("2_smoke")
+
+[node name="Arcs" type="Node2D" parent="."]
+material = SubResource("CanvasItemMaterial_arcs")
+visible = false
+script = ExtResource("5_arcs")
 
 [node name="Sync" type="MultiplayerSynchronizer" parent="."]
 replication_config = SubResource("SceneReplicationConfig_player")

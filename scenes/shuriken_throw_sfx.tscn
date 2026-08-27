@@ -1,0 +1,9 @@
+[gd_scene format=3 uid="uid://jellyshurikenthrowsfx"]
+
+[ext_resource type="Script" path="res://scripts/sfx_oneshot.gd" id="1_sfx"]
+[ext_resource type="AudioStream" path="res://assets/audio/shuriken_throw.ogg" id="2_shuriken"]
+
+[node name="ShurikenThrowSfx" type="AudioStreamPlayer"]
+stream = ExtResource("2_shuriken")
+volume_db = -17.0
+script = ExtResource("1_sfx")

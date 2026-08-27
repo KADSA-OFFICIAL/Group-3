@@ -1,7 +1,8 @@
-[gd_scene load_steps=8 format=3 uid="uid://jellypick0001"]
+[gd_scene load_steps=9 format=3 uid="uid://jellypick0001"]
 
 [ext_resource type="Script" path="res://scripts/weapon_pick.gd" id="1_pick"]
 [ext_resource type="Script" path="res://scripts/weapon_preview.gd" id="2_weapon"]
+[ext_resource type="Script" path="res://scripts/card_shine.gd" id="3_shine"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
 bg_color = Color(0.2, 0.17, 0.28, 1)
@@ -252,6 +253,12 @@ theme_override_font_sizes/font_size = 18
 text = "설명"
 autowrap_mode = 3
 horizontal_alignment = 1
+
+[node name="Shine" type="Control" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("3_shine")
 
 [node name="Status" type="Label" parent="."]
 anchor_right = 1.0

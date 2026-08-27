@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://jellyrifleshotsfx"]
+
+[ext_resource type="Script" path="res://scripts/sfx_oneshot.gd" id="1_sfx"]
+[ext_resource type="AudioStream" path="res://assets/audio/rifle_shot.ogg" id="2_rifle"]
+
+[node name="RifleShotSfx" type="AudioStreamPlayer"]
+stream = ExtResource("2_rifle")
+volume_db = -20.0
+script = ExtResource("1_sfx")
