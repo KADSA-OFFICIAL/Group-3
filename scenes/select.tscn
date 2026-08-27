@@ -170,12 +170,11 @@ anchor_right = 1.0
 offset_left = 16.0
 offset_top = 64.0
 offset_right = -16.0
-offset_bottom = 172.0
+offset_bottom = 180.0
 theme_override_colors/font_color = Color(0.44, 0.39, 0.48, 1)
-theme_override_font_sizes/font_size = 20
-text = "라운드가 시작될 때마다
-카드 3장 중에서
-하나를 고릅니다"
+theme_override_font_sizes/font_size = 18
+text = "라운드가 시작될 때마다 카드 3장 중에서 하나를 고릅니다"
+autowrap_mode = 3
 horizontal_alignment = 1
 vertical_alignment = 1
 
