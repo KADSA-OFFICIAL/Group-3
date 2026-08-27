@@ -39,6 +39,10 @@ const PICKUP_RANGE := 36.0
 ## 중력을 받는 것(표창·폭탄·떨어진 단검)에 적용할 가속도.
 const GRAVITY := 980.0
 
+## 옆면·밑면에 닿은 것이 물러나는 여유(px) — `on_solid = "stay"` (#270).
+## 프레임에 움직인 만큼 되돌린 뒤 이만큼 더 빼서 접촉면에 딱 붙어 남지 않게 한다.
+const SOLID_BACKOFF := 4.0
+
 ## 바닥에 닿은 뒤 굴러가기 시작하는 속도(px/s) — `on_solid = "roll"` (#131).
 const ROLL_SPEED := 300.0
 ## 구르면서 받는 감속(px/s^2). 굴러가는 거리는 이 둘이 정한다:
@@ -612,8 +616,14 @@ func _on_body_entered(body: Node) -> void:
 		"vanish", "return":
 			_finish()
 		"stay":
-			velocity = Vector2.ZERO
-			landed = true
+			# **위에서 내려앉은 것만 그 자리에 남는다** (#270). 옆면·밑면에 닿은 것은
+			# 붙지 않고 바닥으로 떨어진다 — 공중에 매달린 단검은 회수 거리
+			# (`PICKUP_RANGE`) 안에 들어갈 방법이 없어 그 라운드 내내 기본 공격이 막힌다.
+			if _came_from_above():
+				velocity = Vector2.ZERO
+				landed = true
+			else:
+				_fall_off_solid()
 		"roll":
 			# 세로 속도만 죽이고 가로로 조금 굴린다 (#131).
 			# **가지고 있던 속도를 넘겨받지 않고 ROLL_SPEED 로 깎는다** — 안 그러면
@@ -622,6 +632,38 @@ func _on_body_entered(body: Node) -> void:
 			var keep := minf(absf(velocity.x), ROLL_SPEED)
 			velocity = Vector2(signf(velocity.x) * keep, 0.0)
 			landed = true
+
+
+## 지형에 **위에서 내려앉았는가** (`on_solid = "stay"` 갈래에서만 쓴다, #270).
+##
+## 어느 면에 닿았는지는 알 수 없다 — `Area2D` 의 `body_entered` 는 물체만 주고
+## 접촉 법선을 주지 않는다. 그래서 **진행 방향으로 가린다**: 내려가는 중이고 그
+## 성분이 가로보다 크면 윗면에 내려앉은 것이고, 그 밖(가로로 들이받은 것·위로
+## 치받은 것)은 옆면이나 밑면이다.
+##
+## 안 움직이는 것은 이미 놓여 있는 것으로 본다 — 그런 것이 물체에 들어가는 일은
+## 지금 없지만(움직이는 발판이 없다), 들어와도 제자리에 남는 쪽이 안전하다.
+func _came_from_above() -> bool:
+	if velocity.is_zero_approx():
+		return true
+	return velocity.y > 0.0 and velocity.y >= absf(velocity.x)
+
+
+## 옆면·밑면에 닿았다 — 그 자리에 붙지 않고 바닥으로 떨어진다 (#270).
+##
+## **닿기 직전 자리로 한 발 물러난다.** 방금 들어왔으므로 그 자리는 물체 밖이다.
+## 물러나지 않으면 지형 **안에서** 떨어지기 시작하는데, 이미 겹쳐 있어서
+## `body_entered` 가 다시 오지 않아 그대로 통과해 낙사 경계까지 내려간다.
+## 물러나는 거리는 이번 프레임에 움직인 만큼(속도 × 물리 프레임 시간)에 여유를 더한 값이다.
+##
+## **유도를 끊는 것이 핵심이다** — 남겨 두면 다음 프레임에 속도가 상대 쪽으로 다시
+## 채워져(`_physics_process` 의 유도 갈래) 같은 면을 계속 들이받는다.
+func _fall_off_solid() -> void:
+	var step := velocity.length() * get_physics_process_delta_time() + SOLID_BACKOFF
+	position -= velocity.normalized() * step
+	homing_peer = 0
+	velocity = Vector2.ZERO
+	use_gravity = true
 
 
 ## 이 젤리가 방패를 들어 **이 탄을 막고 있는가** (방패 특수).
