@@ -1,7 +1,7 @@
 [gd_scene load_steps=10 format=3 uid="uid://jellytitle001"]
 
 [ext_resource type="Script" path="res://scripts/title.gd" id="1_title"]
-[ext_resource type="Script" path="res://scripts/jelly_preview.gd" id="2_preview"]
+[ext_resource type="Texture2D" path="res://assets/ui/cover.png" id="2_cover"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_start"]
 bg_color = Color(0.8, 0.29, 0.56, 1)
@@ -81,94 +81,77 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 color = Color(0.99, 0.95, 0.92, 1)
 
-[node name="JellyLeft" type="Control" parent="."]
-offset_left = 110.0
-offset_top = 220.0
-offset_right = 300.0
-offset_bottom = 480.0
-script = ExtResource("2_preview")
-character_id = "분홍"
-fill_ratio = 0.85
-
-[node name="JellyRight" type="Control" parent="."]
-offset_left = 852.0
-offset_top = 220.0
-offset_right = 1042.0
-offset_bottom = 480.0
-script = ExtResource("2_preview")
-character_id = "파랑"
-fill_ratio = 0.85
-
-[node name="TitleLabel" type="Label" parent="."]
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -450.0
-offset_top = 110.0
-offset_right = 450.0
-offset_bottom = 270.0
-theme_override_colors/font_color = Color(0.89, 0.35, 0.66, 1)
-theme_override_colors/font_outline_color = Color(1, 1, 1, 1)
-theme_override_constants/outline_size = 22
-theme_override_font_sizes/font_size = 110
-text = "젤리 워즈"
-horizontal_alignment = 1
+[node name="Cover" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -768.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+texture = ExtResource("2_cover")
+expand_mode = 1
+stretch_mode = 6
 
 [node name="SubLabel" type="Label" parent="."]
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -300.0
-offset_top = 272.0
-offset_right = 300.0
-offset_bottom = 310.0
-theme_override_colors/font_color = Color(0.44, 0.39, 0.48, 1)
-theme_override_font_sizes/font_size = 24
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -34.0
+offset_right = 416.0
+offset_bottom = -8.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.24, 0.14, 0.3, 1)
+theme_override_constants/outline_size = 8
+theme_override_font_sizes/font_size = 18
 text = "JELLY WARS  —  스틱매너"
-horizontal_alignment = 1
 
 [node name="AddressLabel" type="Label" parent="."]
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -300.0
-offset_top = 330.0
-offset_right = 300.0
-offset_bottom = 356.0
-theme_override_colors/font_color = Color(0.44, 0.39, 0.48, 1)
-theme_override_font_sizes/font_size = 20
+offset_left = 16.0
+offset_top = 10.0
+offset_right = 316.0
+offset_bottom = 34.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.24, 0.14, 0.3, 1)
+theme_override_constants/outline_size = 8
+theme_override_font_sizes/font_size = 18
 text = "서버 주소"
-horizontal_alignment = 1
 
 [node name="AddressValue" type="Label" parent="."]
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -240.0
-offset_top = 358.0
-offset_right = 240.0
-offset_bottom = 398.0
-theme_override_colors/font_color = Color(0.29, 0.23, 0.32, 1)
-theme_override_font_sizes/font_size = 26
+offset_left = 16.0
+offset_top = 34.0
+offset_right = 416.0
+offset_bottom = 64.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.24, 0.14, 0.3, 1)
+theme_override_constants/outline_size = 9
+theme_override_font_sizes/font_size = 22
 text = "100.102.216.35"
-horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="RoomLabel" type="Label" parent="."]
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -300.0
-offset_top = 408.0
-offset_right = 300.0
-offset_bottom = 432.0
-theme_override_colors/font_color = Color(0.44, 0.39, 0.48, 1)
-theme_override_font_sizes/font_size = 20
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -360.0
+offset_top = 10.0
+offset_right = -16.0
+offset_bottom = 34.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.24, 0.14, 0.3, 1)
+theme_override_constants/outline_size = 8
+theme_override_font_sizes/font_size = 18
 text = "방 선택"
-horizontal_alignment = 1
+horizontal_alignment = 2
 
 [node name="RoomBox" type="HBoxContainer" parent="."]
-anchor_left = 0.5
-anchor_right = 0.5
-offset_left = -180.0
-offset_top = 436.0
-offset_right = 180.0
-offset_bottom = 486.0
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -360.0
+offset_top = 36.0
+offset_right = -16.0
+offset_bottom = 76.0
 theme_override_constants/separation = 16
 
 [node name="RoomButton" type="Button" parent="RoomBox"]
@@ -190,10 +173,10 @@ text = "1번 방"
 [node name="StartButton" type="Button" parent="."]
 anchor_left = 0.5
 anchor_right = 0.5
-offset_left = -140.0
-offset_top = 496.0
-offset_right = 140.0
-offset_bottom = 556.0
+offset_left = -278.0
+offset_top = 550.0
+offset_right = 278.0
+offset_bottom = 606.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
 theme_override_colors/font_pressed_color = Color(1, 0.93, 0.97, 1)
@@ -206,10 +189,14 @@ text = "접속"
 [node name="StatusLabel" type="Label" parent="."]
 anchor_left = 0.5
 anchor_right = 0.5
+anchor_top = 1.0
+anchor_bottom = 1.0
 offset_left = -400.0
-offset_top = 564.0
+offset_top = -34.0
 offset_right = 400.0
-offset_bottom = 592.0
-theme_override_colors/font_color = Color(0.62, 0.26, 0.08, 1)
-theme_override_font_sizes/font_size = 20
+offset_bottom = -8.0
+theme_override_colors/font_color = Color(1, 0.93, 0.62, 1)
+theme_override_colors/font_outline_color = Color(0.26, 0.12, 0.2, 1)
+theme_override_constants/outline_size = 8
+theme_override_font_sizes/font_size = 19
 horizontal_alignment = 1

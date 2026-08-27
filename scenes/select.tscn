@@ -3,30 +3,7 @@
 [ext_resource type="Script" uid="uid://dvtwe10qitgbw" path="res://scripts/select.gd" id="1_select"]
 [ext_resource type="PackedScene" uid="uid://bnruslf487aii" path="res://scenes/player_panel.tscn" id="2_panel"]
 [ext_resource type="PackedScene" path="res://scenes/room_switcher.tscn" id="4_switcher"]
-[ext_resource type="Script" path="res://scripts/map_preview.gd" id="5_map_preview"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_screen"]
-bg_color = Color(0.27, 0.22, 0.32, 1)
-corner_radius_top_left = 18
-corner_radius_top_right = 18
-corner_radius_bottom_right = 18
-corner_radius_bottom_left = 18
-corner_detail = 12
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_qbadge"]
-bg_color = Color(0.27, 0.22, 0.32, 1)
-border_width_left = 3
-border_width_top = 3
-border_width_right = 3
-border_width_bottom = 3
-border_color = Color(0.99, 0.95, 0.92, 0.9)
-corner_radius_top_left = 33
-corner_radius_top_right = 33
-corner_radius_bottom_right = 33
-corner_radius_bottom_left = 33
-corner_detail = 12
-shadow_color = Color(0.18, 0.14, 0.22, 0.45)
-shadow_size = 8
+[ext_resource type="Script" path="res://scripts/select_decor.gd" id="5_decor"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_go"]
 bg_color = Color(0.8, 0.29, 0.56, 1)
@@ -77,6 +54,16 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 color = Color(0.99, 0.95, 0.92, 1)
 
+[node name="Decor" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("5_decor")
+
 [node name="HomeButton" type="Button" parent="." unique_id=1195090992]
 layout_mode = 0
 offset_left = 16.0
@@ -89,211 +76,46 @@ text = "홈"
 [node name="P1Panel" parent="." unique_id=2071895197 instance=ExtResource("2_panel")]
 anchors_preset = 0
 offset_left = 16.0
-offset_top = 60.0
+offset_top = 78.0
 offset_right = 436.0
-offset_bottom = 630.0
+offset_bottom = 572.0
+accent = Color(0.96, 0.55, 0.78, 1)
 
 [node name="P2Panel" parent="." unique_id=1015086149 instance=ExtResource("2_panel")]
 anchors_preset = 0
 offset_left = 716.0
-offset_top = 60.0
+offset_top = 78.0
 offset_right = 1136.0
-offset_bottom = 630.0
+offset_bottom = 572.0
 mirrored = true
 default_character = 1
-
-[node name="MapBox" type="Panel" parent="." unique_id=1516837797]
-layout_mode = 0
-offset_left = 436.0
-offset_top = 50.0
-offset_right = 716.0
-offset_bottom = 288.0
-
-[node name="ScreenRect" type="Panel" parent="MapBox" unique_id=2059349384]
-layout_mode = 0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 16.0
-offset_top = 16.0
-offset_right = -16.0
-offset_bottom = -84.0
-theme_override_styles/panel = SubResource("StyleBoxFlat_screen")
-
-[node name="Map1" type="Control" parent="MapBox/ScreenRect"]
-layout_mode = 0
-anchor_right = 0.5
-anchor_bottom = 1.0
-offset_left = 8.0
-offset_top = 8.0
-offset_bottom = -8.0
-mouse_filter = 2
-script = ExtResource("5_map_preview")
-
-[node name="Map2" type="Control" parent="MapBox/ScreenRect"]
-layout_mode = 0
-anchor_left = 0.5
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_top = 8.0
-offset_right = -8.0
-offset_bottom = -8.0
-mouse_filter = 2
-script = ExtResource("5_map_preview")
-
-[node name="Divider" type="ColorRect" parent="MapBox/ScreenRect"]
-layout_mode = 0
-anchor_left = 0.5
-anchor_right = 0.5
-anchor_bottom = 1.0
-offset_left = -1.5
-offset_top = 8.0
-offset_right = 1.5
-offset_bottom = -8.0
-mouse_filter = 2
-color = Color(0.99, 0.95, 0.92, 0.55)
-
-[node name="QBadge" type="Panel" parent="MapBox/ScreenRect"]
-layout_mode = 0
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -33.0
-offset_top = -33.0
-offset_right = 33.0
-offset_bottom = 33.0
-mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_qbadge")
-
-[node name="QLabel" type="Label" parent="MapBox/ScreenRect/QBadge" unique_id=671158077]
-layout_mode = 0
-anchor_right = 1.0
-anchor_bottom = 1.0
-theme_override_colors/font_color = Color(0.95, 0.95, 0.95, 1)
-theme_override_font_sizes/font_size = 36
-text = "?"
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="Map1Name" type="Label" parent="MapBox" unique_id=900217620]
-layout_mode = 0
-anchor_top = 1.0
-anchor_right = 0.5
-anchor_bottom = 1.0
-offset_left = 24.0
-offset_right = -14.0
-offset_top = -82.0
-offset_bottom = -50.0
-theme_override_colors/font_color = Color(0.29, 0.23, 0.32, 1)
-theme_override_font_sizes/font_size = 22
-text = "1P  랜덤"
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="Map2Name" type="Label" parent="MapBox"]
-layout_mode = 0
-anchor_left = 0.5
-offset_left = 14.0
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_right = -24.0
-offset_top = -82.0
-offset_bottom = -50.0
-theme_override_colors/font_color = Color(0.29, 0.23, 0.32, 1)
-theme_override_font_sizes/font_size = 22
-text = "2P  랜덤"
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="HintLabel" type="Label" parent="MapBox" unique_id=1935968632]
-layout_mode = 0
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-offset_left = 12.0
-offset_top = -46.0
-offset_right = -12.0
-offset_bottom = -16.0
-theme_override_colors/font_color = Color(0.44, 0.39, 0.48, 1)
-theme_override_font_sizes/font_size = 16
-text = "둘 중 하나를 무작위로"
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="WeaponBox" type="Panel" parent="."]
-layout_mode = 0
-offset_left = 436.0
-offset_top = 296.0
-offset_right = 716.0
-offset_bottom = 480.0
-
-[node name="Title" type="Label" parent="WeaponBox"]
-layout_mode = 0
-anchor_right = 1.0
-offset_top = 18.0
-offset_bottom = 58.0
-theme_override_colors/font_color = Color(0.29, 0.23, 0.32, 1)
-theme_override_font_sizes/font_size = 26
-text = "무기"
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="Hint" type="Label" parent="WeaponBox"]
-layout_mode = 0
-anchor_right = 1.0
-offset_left = 16.0
-offset_top = 64.0
-offset_right = -16.0
-offset_bottom = 180.0
-theme_override_colors/font_color = Color(0.44, 0.39, 0.48, 1)
-theme_override_font_sizes/font_size = 18
-text = "라운드가 시작될 때마다 카드 3장 중에서 하나를 고릅니다"
-autowrap_mode = 3
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="LeftArrow" type="Button" parent="." unique_id=896121566]
-layout_mode = 0
-offset_left = 390.0
-offset_top = 130.0
-offset_right = 430.0
-offset_bottom = 186.0
-theme_override_font_sizes/font_size = 24
-text = "◀"
-
-[node name="RightArrow" type="Button" parent="." unique_id=498700732]
-layout_mode = 0
-offset_left = 722.0
-offset_top = 130.0
-offset_right = 762.0
-offset_bottom = 186.0
-theme_override_font_sizes/font_size = 24
-text = "▶"
+accent = Color(0.56, 0.59, 0.91, 1)
 
 [node name="StatusLabel" type="Label" parent="." unique_id=658804455]
 layout_mode = 0
 offset_left = 356.0
-offset_top = 492.0
+offset_top = 400.0
 offset_right = 796.0
-offset_bottom = 528.0
-theme_override_colors/font_color = Color(0.29, 0.23, 0.32, 1)
+offset_bottom = 436.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.24, 0.14, 0.3, 1)
+theme_override_constants/outline_size = 8
 theme_override_font_sizes/font_size = 22
 text = "상대 대기 중..."
 horizontal_alignment = 1
 
 [node name="RoomSwitcher" parent="." instance=ExtResource("4_switcher")]
-offset_left = 416.0
-offset_top = 540.0
-offset_right = 736.0
-offset_bottom = 604.0
+offset_left = 436.0
+offset_top = 452.0
+offset_right = 716.0
+offset_bottom = 516.0
 
 [node name="GoButton" type="Button" parent="." unique_id=402992325]
 layout_mode = 0
 offset_left = 456.0
-offset_top = 540.0
+offset_top = 452.0
 offset_right = 696.0
-offset_bottom = 616.0
+offset_bottom = 528.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_pressed_color = Color(1, 0.93, 0.97, 1)
 theme_override_colors/font_hover_color = Color(1, 1, 1, 1)

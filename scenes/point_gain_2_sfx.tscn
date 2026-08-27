@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://jellypointgainsfx2"]
+
+[ext_resource type="Script" path="res://scripts/sfx_oneshot.gd" id="1_sfx"]
+[ext_resource type="AudioStream" path="res://assets/audio/point_gain_2.ogg" id="2_gain"]
+
+[node name="PointGain2Sfx" type="AudioStreamPlayer"]
+stream = ExtResource("2_gain")
+volume_db = -11.0
+script = ExtResource("1_sfx")

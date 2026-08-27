@@ -1,0 +1,8 @@
+[gd_resource type="FontVariation" load_steps=3 format=3 uid="uid://jellydisplayfont"]
+
+[ext_resource type="FontFile" path="res://assets/fonts/BlackHanSans-Regular.ttf" id="1_black"]
+[ext_resource type="SystemFont" path="res://resources/korean_font.tres" id="2_system"]
+
+[resource]
+base_font = ExtResource("1_black")
+fallbacks = Array[Font]([ExtResource("2_system")])

@@ -1,7 +1,8 @@
-[gd_scene load_steps=6 format=3 uid="uid://bnruslf487aii"]
+[gd_scene load_steps=7 format=3 uid="uid://bnruslf487aii"]
 
 [ext_resource type="Script" path="res://scripts/player_panel.gd" id="1_panel"]
 [ext_resource type="Script" path="res://scripts/jelly_preview.gd" id="2_preview"]
+[ext_resource type="Script" path="res://scripts/panel_star.gd" id="3_star"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_random"]
 bg_color = Color(0.42, 0.45, 0.82, 1)
@@ -72,12 +73,6 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 10
 
-[node name="PlayerDropdown" type="OptionButton" parent="HBox/Center"]
-custom_minimum_size = Vector2(230, 44)
-layout_mode = 2
-size_flags_horizontal = 4
-theme_override_font_sizes/font_size = 22
-
 [node name="Preview" type="Control" parent="HBox/Center"]
 layout_mode = 2
 size_flags_vertical = 3
@@ -95,3 +90,11 @@ theme_override_styles/normal = SubResource("StyleBoxFlat_random")
 theme_override_styles/hover = SubResource("StyleBoxFlat_random_hover")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_random_pressed")
 text = "랜덤 🎲"
+
+[node name="Star" type="Control" parent="."]
+offset_left = 4.0
+offset_top = -16.0
+offset_right = 76.0
+offset_bottom = 56.0
+mouse_filter = 2
+script = ExtResource("3_star")

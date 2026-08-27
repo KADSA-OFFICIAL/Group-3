@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://jellyresultlosesfx"]
+
+[ext_resource type="Script" path="res://scripts/sfx_oneshot.gd" id="1_sfx"]
+[ext_resource type="AudioStream" path="res://assets/audio/result_lose.ogg" id="2_fanfare"]
+
+[node name="ResultLoseSfx" type="AudioStreamPlayer"]
+stream = ExtResource("2_fanfare")
+volume_db = -10.0
+script = ExtResource("1_sfx")

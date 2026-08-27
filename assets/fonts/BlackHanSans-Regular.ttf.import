@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://beoj3b8nd38ov"
-path="res://.godot/imported/Jalnan2.ttf-2cbf520db4e173411a8da6bd59fd8b60.fontdata"
+uid="uid://hn58dd2gq1ry"
+path="res://.godot/imported/BlackHanSans-Regular.ttf-1aadef84ee9c9c93ebae8596f7a99b67.fontdata"
 
 [deps]
 
-source_file="res://assets/fonts/Jalnan2.ttf"
-dest_files=["res://.godot/imported/Jalnan2.ttf-2cbf520db4e173411a8da6bd59fd8b60.fontdata"]
+source_file="res://assets/fonts/BlackHanSans-Regular.ttf"
+dest_files=["res://.godot/imported/BlackHanSans-Regular.ttf-1aadef84ee9c9c93ebae8596f7a99b67.fontdata"]
 
 [params]
 

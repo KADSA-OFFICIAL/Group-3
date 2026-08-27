@@ -2,26 +2,8 @@
 
 [ext_resource type="Texture2D" path="res://assets/maps/arena.png" id="1_bg"]
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_pillar_l"]
-size = Vector2(124, 359)
-
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_pillar_2"]
-size = Vector2(121, 359)
-
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_pillar_3"]
-size = Vector2(121, 359)
-
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_pillar_r"]
-size = Vector2(123, 359)
-
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_crate_a"]
-size = Vector2(276, 251)
-
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_crate_b"]
-size = Vector2(197, 251)
-
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_crate_c"]
-size = Vector2(270, 251)
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_ground"]
+size = Vector2(1152, 140)
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_wall"]
 size = Vector2(40, 648)
@@ -33,47 +15,11 @@ position = Vector2(576, 324)
 scale = Vector2(0.6, 0.6)
 texture = ExtResource("1_bg")
 
-[node name="PillarLeft" type="StaticBody2D" parent="."]
-position = Vector2(22, 500.5)
+[node name="Ground" type="StaticBody2D" parent="."]
+position = Vector2(576, 667)
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="PillarLeft"]
-shape = SubResource("RectangleShape2D_pillar_l")
-
-[node name="CrateA" type="StaticBody2D" parent="."]
-position = Vector2(222, 554.5)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="CrateA"]
-shape = SubResource("RectangleShape2D_crate_a")
-
-[node name="PillarTwo" type="StaticBody2D" parent="."]
-position = Vector2(420.5, 500.5)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="PillarTwo"]
-shape = SubResource("RectangleShape2D_pillar_2")
-
-[node name="CrateB" type="StaticBody2D" parent="."]
-position = Vector2(579.5, 554.5)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="CrateB"]
-shape = SubResource("RectangleShape2D_crate_b")
-
-[node name="PillarThree" type="StaticBody2D" parent="."]
-position = Vector2(738.5, 500.5)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="PillarThree"]
-shape = SubResource("RectangleShape2D_pillar_3")
-
-[node name="CrateC" type="StaticBody2D" parent="."]
-position = Vector2(934, 554.5)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="CrateC"]
-shape = SubResource("RectangleShape2D_crate_c")
-
-[node name="PillarRight" type="StaticBody2D" parent="."]
-position = Vector2(1130.5, 500.5)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="PillarRight"]
-shape = SubResource("RectangleShape2D_pillar_r")
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Ground"]
+shape = SubResource("RectangleShape2D_ground")
 
 [node name="WallLeft" type="StaticBody2D" parent="."]
 position = Vector2(-20, 324)
@@ -90,7 +36,7 @@ shape = SubResource("RectangleShape2D_wall")
 [node name="Spawns" type="Node2D" parent="."]
 
 [node name="Spawn1" type="Marker2D" parent="Spawns"]
-position = Vector2(222, 376)
+position = Vector2(222, 545)
 
 [node name="Spawn2" type="Marker2D" parent="Spawns"]
-position = Vector2(934, 376)
+position = Vector2(930, 545)

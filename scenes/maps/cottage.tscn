@@ -20,6 +20,9 @@ size = Vector2(196, 32)
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_plank_up_r"]
 size = Vector2(197, 32)
 
+[sub_resource type="ConvexPolygonShape2D" id="ConvexPolygonShape2D_roof"]
+points = PackedVector2Array(-229.5, 85, -229.5, 53, 10.5, -85, 229.5, 53, 229.5, 85)
+
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_wall"]
 size = Vector2(40, 648)
 
@@ -41,30 +44,41 @@ position = Vector2(343.5, 482.5)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="PlankLowerLeft"]
 shape = SubResource("RectangleShape2D_plank_low_l")
+one_way_collision = true
 
 [node name="PlankLowerRight" type="StaticBody2D" parent="."]
 position = Vector2(812.5, 479.5)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="PlankLowerRight"]
 shape = SubResource("RectangleShape2D_plank_low_r")
+one_way_collision = true
 
 [node name="PlankCenter" type="StaticBody2D" parent="."]
 position = Vector2(578, 401.5)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="PlankCenter"]
 shape = SubResource("RectangleShape2D_plank_center")
+one_way_collision = true
 
 [node name="PlankUpperLeft" type="StaticBody2D" parent="."]
 position = Vector2(234, 326)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="PlankUpperLeft"]
 shape = SubResource("RectangleShape2D_plank_up_l")
+one_way_collision = true
 
 [node name="PlankUpperRight" type="StaticBody2D" parent="."]
 position = Vector2(909, 324)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="PlankUpperRight"]
 shape = SubResource("RectangleShape2D_plank_up_r")
+one_way_collision = true
+
+[node name="Roof" type="StaticBody2D" parent="."]
+position = Vector2(580.5, 130)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Roof"]
+shape = SubResource("ConvexPolygonShape2D_roof")
 
 [node name="WallLeft" type="StaticBody2D" parent="."]
 position = Vector2(-20, 324)

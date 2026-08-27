@@ -19,9 +19,6 @@ signal match_ended
 ## 원한 역할로 들어갈 수 없다는 서버의 답 (자리가 꽉 찼을 때).
 signal role_rejected(reason: String)
 
-## 대기실 기본 맵. 실제 맵 목록은 Maps 표가 들고 있다.
-const DEFAULT_MAP := Maps.RANDOM
-
 ## 역할. 접속 화면에서 고르고 접속 직후 서버에 알린다 (이슈 #167).
 const ROLE_PLAYER := "player"
 const ROLE_OBSERVER := "observer"
@@ -33,13 +30,14 @@ const ROLE_OBSERVER := "observer"
 var order: Array = []
 ## 관전자 peer 목록. 플레이어 자리를 차지하지 않고 대기실·경기를 보기만 한다.
 var observers: Array = []
-## peer_id -> {"character": String, "map": String}
+## peer_id -> {"character": String}
 ##
-## 맵은 **플레이어마다 하나씩** 고르고, 시작할 때 서버가 둘 중 하나를 뽑는다 (`_pick_map`).
+## **맵은 여기 없다** (요청). 대기실에서 사람마다 하나씩 고르던 것을 없앴고, 지금은
+## 라운드가 열릴 때마다 전투 화면의 서버가 새로 뽑는다 (`main.gd`의 `_start_round`).
+## 그래서 대기실은 맵에 대해 아무것도 알지 못하고, 알 필요도 없다.
 var configs: Dictionary = {}
 ## peer_id -> bool
 var ready_flags: Dictionary = {}
-var map_name := DEFAULT_MAP
 ## 지금 경기가 진행 중인가. 경기 중에 들어온 관전자는 이 값을 보고
 ## "다음 경기부터 볼 수 있다"고 안내받는다 (경기 도중 난입은 이슈 #167의 non-goal).
 var in_match := false
@@ -76,7 +74,6 @@ func is_observer_build() -> bool:
 func default_config(slot: int) -> Dictionary:
 	return {
 		"character": Characters.id_at(slot),
-		"map": Maps.RANDOM,
 	}
 
 
@@ -119,11 +116,6 @@ func submit_ready(flag: bool) -> void:
 	_receive_ready.rpc_id(1, flag)
 
 
-## 내 맵 선택을 서버에 알린다 (클라이언트에서 호출). 상대 선택은 건드리지 않는다.
-func submit_map(new_map: String) -> void:
-	_receive_map.rpc_id(1, new_map)
-
-
 ## 내 역할을 서버에 알리고 지금 상태를 받아온다 (클라이언트에서 호출).
 ##
 ## **자리 배정과 상태 요청을 한 RPC로 합쳐 둔 것이 중요하다.** 접속 순간 서버가 보내는
@@ -152,16 +144,8 @@ func reset() -> void:
 	observers = []
 	configs = {}
 	ready_flags = {}
-	map_name = DEFAULT_MAP
 	in_match = false
 	lobby_changed.emit()
-
-
-## 이 플레이어가 고른 맵. 아직 없으면 슬롯 기본값.
-## 표에서 꺼낸 값은 Variant라 명시 타입으로 받는다.
-func map_of(peer_id: int) -> String:
-	var picked: String = config_for(peer_id).get("map", DEFAULT_MAP)
-	return picked
 
 
 # ─────────────────────── 전투 화면에 있는 피어 (서버 전용) ───────────────────────
@@ -310,46 +294,16 @@ func _receive_ready(flag: bool) -> void:
 
 ## 그 피어에게만 지금 상태를 보낸다. 상태를 바꾸지 않으므로 몇 번이든 안전하다.
 func _send_state_to(peer_id: int) -> void:
-	_receive_lobby.rpc_id(peer_id, order, configs, ready_flags, map_name, observers, in_match)
-
-
-## 보낸 사람의 맵 선택만 바꾼다. 상대 것은 건드리지 않는다.
-@rpc("any_peer", "call_remote", "reliable")
-func _receive_map(new_map: String) -> void:
-	if not multiplayer.is_server():
-		return
-	var sender := multiplayer.get_remote_sender_id()
-	if not order.has(sender):
-		return
-	var config: Dictionary = configs.get(sender, default_config(order.find(sender)))
-	config["map"] = new_map
-	configs[sender] = _sanitize(config, order.find(sender))
-	_broadcast()
+	_receive_lobby.rpc_id(peer_id, order, configs, ready_flags, observers, in_match)
 
 
 ## 클라이언트가 보낸 값이 목록에 있는 값인지 확인한다.
 func _sanitize(config: Dictionary, slot: int) -> Dictionary:
 	var base := default_config(slot)
 	var character: String = config.get("character", base["character"])
-	var map: String = config.get("map", base["map"])
 	return {
 		"character": character if Characters.has(character) else base["character"],
-		# "랜덤"은 실제 맵이 아니지만 선택지로는 유효하다.
-		"map": map if GameState.MAPS.has(map) else base["map"],
 	}
-
-
-## 둘이 고른 맵 중 하나를 뽑는다. **서버에서만 호출한다.**
-##
-## 각자의 "랜덤"을 먼저 실제 맵으로 확정한 뒤에 뽑는다 — 순서를 바꾸면 "랜덤"이
-## 그대로 후보가 되어 한 번 더 뽑기가 일어난다.
-func _pick_map() -> String:
-	var picks: Array[String] = []
-	for peer_id in order:
-		picks.append(Maps.resolve(map_of(peer_id)))
-	if picks.is_empty():
-		return Maps.resolve(Maps.RANDOM)
-	return picks.pick_random()
 
 
 func _check_start() -> void:
@@ -362,9 +316,8 @@ func _check_start() -> void:
 	for peer_id in order:
 		if not ready_flags.get(peer_id, false):
 			return
-	# 맵은 여기서 확정해야 양쪽이 같은 지형을 깐다.
-	# 무기는 확정할 것이 없다 (#205) — 라운드마다 전투 화면에서 고른다.
-	map_name = _pick_map()
+	# **여기서 확정할 것이 없다.** 무기는 라운드마다 전투 화면에서 고르고 (#205),
+	# 맵도 라운드마다 전투 화면의 서버가 뽑는다 (요청) — 전에는 맵만 여기서 정했다.
 	# 경기 중임을 먼저 켜고 알린다 — 이 뒤에 들어온 관전자는 다음 경기를 기다려야 한다.
 	in_match = true
 	_broadcast()
@@ -385,7 +338,7 @@ func server_end_match() -> void:
 
 
 func _broadcast() -> void:
-	_receive_lobby.rpc(order, configs, ready_flags, map_name, observers, in_match)
+	_receive_lobby.rpc(order, configs, ready_flags, observers, in_match)
 	lobby_changed.emit()
 
 
@@ -396,14 +349,12 @@ func _receive_lobby(
 	new_order: Array,
 	new_configs: Dictionary,
 	new_ready: Dictionary,
-	new_map: String,
 	new_observers: Array,
 	new_in_match: bool,
 ) -> void:
 	order = new_order
 	configs = new_configs
 	ready_flags = new_ready
-	map_name = new_map
 	observers = new_observers
 	in_match = new_in_match
 	lobby_changed.emit()

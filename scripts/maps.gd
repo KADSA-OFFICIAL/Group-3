@@ -2,8 +2,18 @@ class_name Maps
 extends RefCounted
 ## 맵 표. 이름과 씬 경로의 유일한 출처.
 ##
-## **맵을 추가·변경하려면 이 LIST와 씬 파일만 고친다** — 대기실 선택지(`GameState.MAPS`),
-## 서버 검증·랜덤 확정(`Lobby`), 전투 화면의 지형 로드가 모두 여기서 나온다.
+## **맵을 추가·변경하려면 이 LIST와 씬 파일만 고친다** — 라운드마다 도는 뽑기와
+## 전투 화면의 지형 로드가 모두 여기서 나온다.
+##
+## ## 맵은 라운드마다 새로 뽑는다
+##
+## 고르는 자리가 없다 (요청). 대기실에서 사람마다 하나씩 골라 시작할 때 둘 중 하나를
+## 뽑던 것을 없앴고, 지금은 라운드가 열릴 때 서버가 `resolve(RANDOM)` 으로 직접 뽑아
+## 모두에게 보낸다 (`main.gd` 의 `_start_round` → `_receive_round_map`). 무기(#205)가
+## 간 길과 같다 — 판마다 정해지는 것은 판이 열릴 때 정한다.
+##
+## 그래서 **이 표에 맵을 하나 넣으면 그 순간부터 뽑기에 들어간다**. 선택 UI 를 손댈
+## 일도, 이름을 다른 목록에 옮겨 적을 일도 없다.
 ##
 ## ## 맵 씬이 지켜야 할 것
 ##
@@ -22,26 +32,36 @@ extends RefCounted
 ## 발판 사이 높이차는 **160px을 넘기지 않는다**(점프 높이 = 560²/(2*980)).
 ## 넘기면 올라갈 수 없는 발판이나 빠져나올 수 없는 구덩이가 생긴다.
 ##
+## ## 뚫고 올라가는 발판 (one-way)
+##
+## 오두막의 나무 판자들은 `CollisionShape2D` 에 `one_way_collision = true` 를 준다 —
+## **아래에서 뛰어 올라가면 통과하고, 위에서는 밟고 선다.** 판자가 촘촘한 맵에서
+## 이것이 없으면 바로 위 판자의 밑면에 머리를 박아, 옆으로 돌아가야만 올라갈 수 있는
+## 자리가 생긴다. 지붕처럼 **맨 위**에 있는 것에는 주지 않는다 — 위에 아무것도 없어서
+## 머리를 박을 일이 없고, 비스듬한 면은 one-way 의 방향 기준이 모호하다.
+##
+## **투사체는 이 규칙을 타지 않는다** (`projectile.gd` 가 `Area2D` 라서다) — 겹침 판정은
+## one-way 를 보지 않는다. 아래에서 던져 올린 폭탄은 판자 밑면에서 멎는다. 젤리와
+## 다르게 움직이지만, 판자가 통짜였던 때와 **같은** 움직임이라 달라진 것은 없다.
+##
+## ## 비스듬한 면
+##
+## 오두막 지붕은 `ConvexPolygonShape2D` 다. 기울기가 30도라 기본 `floor_max_angle`(45도)
+## 안에 들어와 걸어서 오르내릴 수 있다. 이보다 가파르면 미끄러지는 벽이 된다.
+##
 ## 좌우 벽이 없는 맵은 화면 밖으로 나가면 `Combat.is_out_of_bounds()`로 낙사한다.
 
 const DIR := "res://scenes/maps/"
-
-## 대기실 미리보기가 쓰는 배경 원화 폴더. 전투 화면이 `Background`로 깔는 것과 같은 그림이다.
-const ART_DIR := "res://assets/maps/"
-
-## 원화가 없는 맵·`랜덤`·빈 자리에 쓰는 색. 카드 테두리보다 한 톤 밝게 둔다 —
-## 테두리와 같은 색이면 그 절반이 있는지조차 안 보이고 가운데 `?` 배지도 묻힌다.
-const UNKNOWN_COLOR := Color(0.35, 0.3, 0.41)
 
 ## 실제 맵이 아닌 특수값. 서버가 실제 맵 하나로 확정한다 (resolve 참고).
 const RANDOM := "랜덤"
 
 const LIST: Array[Dictionary] = [
-	{"name": "바다", "file": "ocean.tscn", "color": Color(0.72, 0.82, 0.98)},
-	{"name": "화산", "file": "volcano.tscn", "art": "volcano.png"},
-	{"name": "협곡", "file": "canyon.tscn", "art": "canyon.png"},
-	{"name": "오두막", "file": "cottage.tscn", "art": "cottage.png"},
-	{"name": "투기장", "file": "arena.tscn", "art": "arena.png"},
+	{"name": "바다", "file": "ocean.tscn"},
+	{"name": "화산", "file": "volcano.tscn"},
+	{"name": "협곡", "file": "canyon.tscn"},
+	{"name": "오두막", "file": "cottage.tscn"},
+	{"name": "투기장", "file": "arena.tscn"},
 ]
 
 
@@ -88,26 +108,3 @@ static func scene(map_name: String) -> PackedScene:
 	if not ResourceLoader.exists(path):
 		return null
 	return load(path)
-
-
-## 대기실 맵 카드가 배경으로 깔 배경 원화 (#289). 없으면 null이고
-## 부르는 쪽이 `art_color()`의 단색으로 대신한다 — 무기 그림이 없을 때와 같은 방식이다.
-##
-## 표에서 꺼낸 값은 Variant라서 **반드시 명시 타입으로 받는다** (이슈 #66).
-static func art_texture(map_name: String) -> Texture2D:
-	var art: String = get_map(map_name).get("art", "")
-	if art.is_empty():
-		return null
-	var path: String = ART_DIR + art
-	if not ResourceLoader.exists(path):
-		return null
-	return load(path)
-
-
-## 원화가 없을 때 그 자리를 채울 색. 맵마다 `color`로 적어 두고,
-## 목록에 없는 이름(`랜덤`·빈 자리)이면 "모른다"는 뜻의 카드 바탕색을 준다.
-static func art_color(map_name: String) -> Color:
-	var color: Variant = get_map(map_name).get("color")
-	if color is Color:
-		return color
-	return UNKNOWN_COLOR

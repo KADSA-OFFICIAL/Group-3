@@ -1,9 +1,12 @@
-[gd_scene load_steps=6 format=3 uid="uid://jellymain0001"]
+[gd_scene load_steps=9 format=3 uid="uid://jellymain0001"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="2_mainscript"]
 [ext_resource type="Script" path="res://scripts/jelly_preview.gd" id="3_preview"]
 [ext_resource type="PackedScene" path="res://scenes/room_switcher.tscn" id="4_switcher"]
 [ext_resource type="PackedScene" path="res://scenes/weapon_pick.tscn" id="5_pick"]
+[ext_resource type="PackedScene" path="res://scenes/match_intro.tscn" id="6_intro"]
+[ext_resource type="PackedScene" path="res://scenes/point_gain.tscn" id="7_point"]
+[ext_resource type="PackedScene" path="res://scenes/countdown.tscn" id="8_count"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar_fill_p2"]
 bg_color = Color(0.42, 0.45, 0.82, 1)
@@ -154,6 +157,10 @@ visible = false
 horizontal_alignment = 1
 vertical_alignment = 1
 
+[node name="PointGain" parent="UI/HUD" instance=ExtResource("7_point")]
+
+[node name="Countdown" parent="UI/HUD" instance=ExtResource("8_count")]
+
 [node name="ResultOverlay" type="Control" parent="UI/HUD"]
 visible = false
 anchor_right = 1.0
@@ -212,3 +219,5 @@ horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="WeaponPick" parent="UI/HUD" instance=ExtResource("5_pick")]
+
+[node name="MatchIntro" parent="UI/HUD" instance=ExtResource("6_intro")]

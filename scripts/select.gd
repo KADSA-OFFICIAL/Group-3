@@ -16,9 +16,6 @@ const SYNC_RETRY_SEC := 1.0
 @onready var panels := [$P1Panel, $P2Panel]
 @onready var status_label: Label = $StatusLabel
 @onready var go_button: Button = $GoButton
-## 맵 카드 좌우 절반의 배경 그림과 그 아래 이름표. 순서가 슬롯(1P·2P)이다 (#289).
-@onready var map_previews := [$MapBox/ScreenRect/Map1, $MapBox/ScreenRect/Map2]
-@onready var map_labels: Array[Label] = [$MapBox/Map1Name, $MapBox/Map2Name]
 
 var _my_panel: Control = null
 var _sync_timer: Timer = null
@@ -31,11 +28,11 @@ func _ready() -> void:
 	$HomeButton.pressed.connect(_on_home_pressed)
 	go_button.pressed.connect(_on_ready_pressed)
 
-	# 맵은 둘이 공유하는 하나뿐이라 누가 바꾸든 양쪽에 적용된다.
-	# 값을 정하는 것은 서버이고 여기서는 "다음/이전" 요청만 보낸다.
-	$LeftArrow.pressed.connect(_cycle_map.bind(-1))
-	$RightArrow.pressed.connect(_cycle_map.bind(1))
-
+	# **가운데 두 칸(맵·무기)이 아예 없다** (요청). 맵도 무기도 라운드가 시작될 때 전투
+	# 화면에서 정해지므로(`main.gd`의 `_start_round`·`_begin_pick_phase`) 이 화면에서는
+	# 고를 것이 없었고, 남아 있던 것은 "라운드마다 정해집니다"라고만 적힌 안내판 둘이었다.
+	# 안내판을 치우고 그 자리에 `StatusLabel`·`GoButton`을 올려 1P | GO | 2P 로 만들었다.
+	# 되살리지 말 것 — 고를 수 없는 칸이 화면 가운데를 차지하고 있었다.
 	for panel in panels:
 		panel.config_changed.connect(_on_my_config_changed)
 
@@ -124,38 +121,10 @@ func _refresh() -> void:
 		if slot < Lobby.order.size():
 			panel.apply_config(Lobby.config_for(Lobby.order[slot]))
 
-	# 내 자리가 없으면(관전자·정보 대기 중) 맵 화살표도 잠근다 — 눌러도 서버가 버린다.
-	# 관전자는 영영 자리가 없으므로 잠그는 대신 아예 치운다.
-	var can_pick := my_slot >= 0
-	$LeftArrow.disabled = not can_pick
-	$RightArrow.disabled = not can_pick
-	$LeftArrow.visible = not observing
-	$RightArrow.visible = not observing
-	# 준비 버튼도 관전자에게는 누를 일이 없다. 문구는 상태 줄이 대신 알려준다.
+	# 준비 버튼은 관전자에게는 누를 일이 없다. 문구는 상태 줄이 대신 알려준다.
 	go_button.visible = not observing
 
-	_refresh_maps()
 	_update_status()
-
-
-## 양쪽이 고른 맵을 나란히 보여준다. 실제로 쓸 맵은 시작할 때 서버가 둘 중 하나를 뽑는다.
-##
-## 이름만 적으면 맵을 외우지 못한 사람은 무엇을 고르고 있는지 알 수 없어서(#289)
-## 카드 배경에 그 맵의 배경 원화를 깐다 — **왼쪽 절반이 1P, 오른쪽 절반이 2P**다.
-## 이름표도 각 절반 아래에 하나씩 두어 어느 그림이 누구 것인지 위치로 읽힌다.
-##
-## `map_previews`에는 타입을 붙이지 않는다 — `map_preview.gd`에 class_name이 없어
-## `Control`로 받으면 `map_name` 대입이 파싱되지 않는다(`panels`와 같은 방식).
-func _refresh_maps() -> void:
-	for slot in panels.size():
-		var picked := ""
-		if slot < Lobby.order.size():
-			picked = Lobby.map_of(Lobby.order[slot])
-			map_labels[slot].text = "%dP  %s" % [slot + 1, picked]
-		else:
-			# 아직 안 들어온 자리. 그림도 단색으로 남아 "모른다"로 읽힌다.
-			map_labels[slot].text = "%dP  —" % (slot + 1)
-		map_previews[slot].map_name = picked
 
 
 func _update_status() -> void:
@@ -241,17 +210,6 @@ func _observer_suffix() -> String:
 
 func _ready_text(flag: bool) -> String:
 	return "준비 완료" if flag else "선택 중"
-
-
-## 내 맵 선택을 한 칸 옮겨 서버에 알린다. 상대 선택은 바뀌지 않는다.
-## 표시는 서버가 보낸 값을 받아서 갱신된다.
-func _cycle_map(step: int) -> void:
-	var me := multiplayer.get_unique_id()
-	if Lobby.slot_of(me) < 0:
-		return
-	var maps := GameState.MAPS
-	var index := maxi(maps.find(Lobby.map_of(me)), 0)
-	Lobby.submit_map(maps[posmod(index + step, maps.size())])
 
 
 func _on_my_config_changed() -> void:
