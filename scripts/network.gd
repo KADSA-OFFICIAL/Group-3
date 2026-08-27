@@ -21,6 +21,7 @@ signal peer_left(peer_id: int)
 const ROOMS := [
 	{"name": "1번 방", "port": 7777},
 	{"name": "2번 방", "port": 7778},
+	{"name": "3번 방", "port": 7779},
 ]
 ## 전용 서버이므로 서버 자신은 플레이어가 아니다. **방 하나당** 1 VS 1 = 플레이어 2명.
 ## 이 값은 ENet 정원이 아니라 **싸우는 자리 수**다 — 자리 배정은 Lobby 가 한다.
