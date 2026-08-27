@@ -22,6 +22,25 @@ signal struck(at: Vector2)
 ## 알갱이를 튀기는 탄(단검)이 맞혔다. 값은 **날이 닿은 자리**다 — 발밑으로 내려오는
 ## 번개와 달리 맞은 그 점에서 튄다. 연출을 띄우는 쪽이 `main.gd`인 이유는 위와 같다.
 signal sparked(at: Vector2)
+## 푸른 충격을 터뜨리는 탄(대포 총)이 맞혔다. 값은 **탄이 닿은 자리**다 — 기준이
+## 알갱이(`sparked`)와 같다. 연출을 띄우는 쪽이 `main.gd`인 이유도 같다.
+signal burst(at: Vector2)
+## 틱 소리를 내는 탄(소총 연사)이 맞혔다. **자리를 싣지 않는다** — 위의 셋은 맞은 자리에
+## 그림을 띄우지만 이쪽은 소리뿐이라 좌표가 쓸 데가 없다.
+signal ticked
+## **자기만의 피격음**을 가진 탄(소총 기본)이 맞혔다. `ticked` 와 같이 자리를 싣지 않는다 —
+## 소리뿐이라 좌표가 쓸 데가 없다.
+##
+## **`server_apply_hit` 보다 먼저 낸다** (아래 `_on_body_entered` 참고). 받는 쪽이 공용
+## 피격음의 자리를 대신해야 하는데, 그 공용 피격음을 내는 것이 `server_apply_hit` 이다.
+signal impacted
+## 폭탄이 터졌다 (도화선이 다 타서든 닿아서든).
+##
+## **터진 자리와 반경을 싣는다** (#262). 전에는 소리뿐이라 좌표가 쓸 데가 없었지만,
+## 폭발 연출(`bomb_blast.tscn`)이 붙으면서 어디서 얼마만큼 터졌는지가 필요해졌다 —
+## 그 둘은 판정에 쓰는 값 그대로다(`_explode()` 참고). 연출을 `main.gd`가 띄우는 것은
+## 위와 같은 이유다: 연출은 `Effects` 아래에 붙어야 하고 그 노드를 아는 것이 저쪽이다.
+signal exploded(at: Vector2, blast_radius: float)
 
 ## 폭발 반경 표시 노드의 타입 (#140). `class_name` 대신 preload 로 받는다 —
 ## 전역 클래스 이름은 에디터가 만드는 `.godot` 캐시에 등록되어야 풀리므로,
@@ -32,8 +51,14 @@ const DropAuraNode := preload("res://scripts/drop_aura.gd")
 
 ## 허공을 나는 것은 공유 무적을 타지 않는다. 항상 "projectile" 이다.
 const SOURCE := "projectile"
-## 단검을 주울 수 있는 거리. 젤리 몸통(48px)에 닿으면 줍는 셈이다.
-const PICKUP_RANGE := 48.0
+## 단검을 주울 수 있는 거리. **떨어진 단검을 감싸는 붉은 오라의 반지름이 곧 이 값이다**
+## (`drop_aura.gd` — `_ready()`에서 넘긴다). 보이는 범위와 주워지는 범위가 같아야 한다.
+##
+## 48 → **36** (#256). 48은 젤리 몸통(48px)과 같은 값이라 지름 96px의 원이 젤리보다
+## 두 배 넓게 깔려서, 화면에서 단검보다 오라가 먼저 보였다. 줄인 것은 원이 아니라
+## **거리**다 — 원만 줄이면 테두리 밖에서도 주워져 표시가 거짓말이 된다.
+## 주우려면 12px(몸통의 4분의 1, 걸음 속도로 0.04초) 더 다가가야 한다.
+const PICKUP_RANGE := 36.0
 ## 중력을 받는 것(표창·폭탄·떨어진 단검)에 적용할 가속도.
 const GRAVITY := 980.0
 
@@ -81,6 +106,25 @@ const ARROW_SHARD_RATIO := 0.62
 ## 뒤에 남는 짧은 빛 자락의 길이(px). 미사일 꼬리보다 훨씬 짧다 — 화살이지 로켓이 아니다.
 const ARROW_TRAIL_LENGTH := 52.0
 
+# ─────────────────────── 파란 에너지 구슬 (대포 총 기본) ───────────────────────
+## 구슬의 알맹이 반지름(px). `size_scale`이 곱해진다 — 대포 총은 2.0 이라 지름 44px,
+## 젤리 몸통(48px)에 조금 못 미치는 크기로 날아간다.
+const ORB_RADIUS := 11.0
+## 알맹이를 감싸는 빛무리의 반지름 배수. 1.0 이면 빛무리가 없어 그냥 원판이 된다.
+const ORB_GLOW_RATIO := 2.1
+## 구슬이 커졌다 작아지며 뛰는 폭(반지름 대비). 크기가 고정이면 굴러가는 공처럼 보인다.
+const ORB_PULSE := 0.10
+## 구슬이 뛰는 속도(라디안/초). 불꽃이 떠는 속도(24)보다 느려야 "타오르는 것"이 아니라
+## "뭉쳐 있는 에너지"로 읽힌다.
+const ORB_PULSE_RATE := 11.0
+## 뒤에 남는 짧은 빛 자락의 길이(px). 화살 자락(52)보다도 짧다 — 구슬이지 로켓이 아니다.
+const ORB_TRAIL_LENGTH := 30.0
+
+## 구슬 색. 가운데가 희고 가장자리로 갈수록 파랗다 — 미사일 불꽃과 같은 결이다.
+const ORB_CORE := Color(1.0, 1.0, 1.0)
+const ORB_MID := Color(0.45, 0.78, 1.0)
+const ORB_EDGE := Color(0.12, 0.38, 1.0)
+
 ## 결정 색. 가운데가 희고 가장자리가 짙푸르다.
 const ARROW_CORE := Color(1.0, 1.0, 1.0)
 const ARROW_MID := Color(0.55, 0.88, 1.0)
@@ -118,6 +162,12 @@ var art_upright := false
 ## 원화의 앞이 **위가 아니라 오른쪽**이다 (로켓 글러브, #161).
 ## 기본값(false)은 지금까지처럼 날 끝이 위를 향하는 원화다 — `_face()` 참고.
 var art_points_right := false
+## 그림을 **날아가는 내내 돌린다**(초당 라디안). 0이면 안 돈다 — 지금까지의 탄이 그렇다.
+##
+## 던진 방패를 원반처럼 보이게 하는 값이다. 진행 방향으로 한 번 돌려 두는
+## `_face()`와 **함께 쓸 수 없다** — 돌리는 쪽이 이긴다.
+## 도는 쪽은 날아가는 쪽을 따른다(오른쪽으로 던지면 시계 방향).
+var art_spin := 0.0
 ## 맞으면 데미지 대신 쏜 쪽과 맞은 쪽의 위치를 맞바꾼다 (빨간 표창).
 var swap_positions := false
 ## 맞은 자리에 번개가 내려친다 (삼지창 특수). 데미지·기절은 그대로고 연출만 붙는다.
@@ -135,6 +185,18 @@ var art_scale := 1.0
 var missile := false
 ## 푸른 결정질 화살로 그린다 (활, #125).
 var arrow := false
+## 파란 에너지 구슬로 그린다 (대포 총 기본). `missile`이 켜져 있으면 그쪽이 이긴다 —
+## 특수는 불꽃 꼬리 미사일이고 이 값은 기본 공격 탄에만 보인다.
+var orb := false
+## 맞은 자리에 푸른 충격이 터진다 (대포 총). `hit_sparks`와 같이 연출만 붙는 값이다.
+var hit_burst := false
+## 맞을 때마다 짧은 틱 소리를 낸다 (소총 연사). 위와 같이 판정에 닿지 않는 값이다.
+var tick_sfx := false
+## 맞은 순간 **이 무기만의 피격음**을 낸다 (소총 기본). 위와 같이 판정에 닿지 않는다.
+##
+## 위의 `tick_sfx` 와 다른 값인 것은 켜지는 자리가 다르기 때문이다 — 틱은 소총 **연사**에,
+## 이쪽은 소총 **기본**에 붙는다. 하나로 묶으면 연사 한 발마다 두 소리가 겹친다.
+var impact_sfx := false
 ## 0보다 크면 넉백 단계 대신 이 속도로 민다 (대포 총 미사일, #121).
 var knockback_speed := 0.0
 
@@ -150,6 +212,18 @@ var velocity := Vector2.ZERO
 ## 그래서 이름에 밑줄이 없다 — 서버만 보는 값이 아니라 `position` 처럼 양쪽이 보는 값이다.
 var landed := false
 
+## 이번 **물리** 프레임에 움직이기 직전의 자리 (#270). 겹침은 움직인 뒤에 알려지므로,
+## 이 자리가 곧 **지형 밖인 것이 보장된 마지막 자리**다 — 옆·아래로 부딪힌 단검을
+## 여기로 되돌려 놓고 떨어뜨린다.
+##
+## 뒤로 물러날 거리를 상수로 잡지 않는 이유: 한 프레임에 나아가는 거리는 속도에 따라
+## 다르고(유도 단검은 1120px/s 라 한 프레임에 19px 다), 상수로 잡으면 빠른 탄은 덜
+## 물러나 지형 안에 남고 느린 탄은 너무 멀리 튄다.
+##
+## **아래의 `_last_position` 과 다른 값이다.** 그쪽은 그림이 바라볼 방향을 잡으려고
+## `_process`(렌더 프레임)에서 갱신하는 것이라 물리 한 걸음과 박자가 맞지 않는다.
+var _step_start := Vector2.ZERO
+
 var _spawn_time := 0.0
 var _origin := Vector2.ZERO
 var _hit_peers := {}
@@ -158,6 +232,8 @@ var _has_art := false
 var _last_position := Vector2.ZERO
 ## 불꽃을 그릴 진행 방향(단위 벡터). 꼬리는 이 반대쪽으로 뻗는다.
 var _draw_dir := Vector2.RIGHT
+## 그림이 도는 쪽 (`art_spin`). 날아가는 쪽을 따라 +1/-1 이다.
+var _spin_dir := 1.0
 var _flame_time := 0.0
 var _wisps: Array[Dictionary] = []
 
@@ -187,14 +263,23 @@ func setup(data: Dictionary) -> void:
 	art_file = data.get("art_file", "")
 	art_upright = data.get("art_upright", false)
 	art_points_right = data.get("art_points_right", false)
+	art_spin = data.get("art_spin", 0.0)
 	swap_positions = data.get("swap_positions", false)
 	hit_lightning = data.get("hit_lightning", false)
 	hit_sparks = data.get("hit_sparks", false)
+	hit_burst = data.get("hit_burst", false)
+	tick_sfx = data.get("tick_sfx", false)
+	impact_sfx = data.get("impact_sfx", false)
 	max_distance = data.get("max_distance", 0.0)
 	size_scale = data.get("size_scale", 1.0)
 	art_scale = data.get("art_scale", 1.0)
 	missile = data.get("missile", false)
 	arrow = data.get("arrow", false)
+	# **미사일이 구슬을 이긴다.** 대포 총은 무기 표에 `projectile_orb`(기본·특수 공통
+	# 자리)와 `special_missile`을 둘 다 두어서, 특수 탄에는 두 값이 함께 실려 온다.
+	# 여기서 갈라 두지 않으면 아래 `_draw()`가 두 모양을 겹쳐 그린다.
+	# **`missile` 을 읽은 뒤에 와야 한다** — 순서를 바꾸면 이 조건이 늘 참이 된다.
+	orb = data.get("orb", false) and not missile
 	knockback_speed = data.get("knockback_speed", 0.0)
 	velocity = data["velocity"]
 	position = data["position"]
@@ -210,15 +295,25 @@ func _ready() -> void:
 		$Sync.add_visibility_filter(Lobby.can_view)
 	_spawn_time = _now()
 	_last_position = position
+	_step_start = position
 	_apply_art()
 	_apply_size()
 	# 터질 때 때리는 범위를 그려 둔다 (#140). 반경이 있는 것은 폭탄뿐이고
 	# 나머지는 0이라 아무것도 그리지 않는다. **미사일·화살보다 먼저** 넘긴다 —
 	# 그쪽은 바로 아래에서 함수를 빠져나간다.
 	blast_radius.radius = explosion_radius
-	if missile or arrow:
+	# 떨어진 단검의 오라도 같은 방식으로 반경을 넘겨받는다 (#256). **오라가 자기 상수를
+	# 두지 않는다** — 테두리가 곧 주워지는 경계라서 같은 숫자가 두 곳에 있으면 언젠가
+	# 갈라지고, 그때 표시가 거짓말이 된다(양날 도끼 충격파가 `landing_radius`를
+	# 넘겨받는 것과 같은 이유). 폭탄 반경처럼 이것도 함수를 빠져나가기 전에 넘긴다.
+	drop_aura.radius = PICKUP_RANGE
+	if _is_drawn():
 		_setup_drawn()
 		return
+	# 도는 그림은 첫 프레임부터 날아가는 쪽으로 돌아야 한다 — 위치 변화가 아직 없어서
+	# `_process()`의 갱신이 한 프레임 늦는다.
+	if not is_zero_approx(art_spin) and not is_zero_approx(velocity.x):
+		_spin_dir = signf(velocity.x)
 	if _has_art:
 		_face(velocity)
 	elif velocity.x < 0.0:
@@ -277,6 +372,8 @@ func _apply_size() -> void:
 ## 앞이 **오른쪽**인 원화(로켓 글러브)는 그 90도를 더하면 안 된다 (#161) — 그냥 진행
 ## 방향 각도가 곧 회전값이다. 왼쪽으로 쏘면 180도가 되어 주먹이 왼쪽, 분사가 오른쪽에 온다.
 func _face(direction: Vector2) -> void:
+	if not is_zero_approx(art_spin):
+		return   # 던진 방패 — 계속 도는 그림이라 방향으로 굳히면 안 된다
 	if art_upright:
 		return   # 폭탄 — 돌리면 도화선이 앞을 향한다 (#131)
 	if direction.length_squared() < 0.01:
@@ -299,19 +396,36 @@ func _process(delta: float) -> void:
 	# `queue_redraw()`를 한 번도 지나지 않는다 — 발사 각도(위로 15도)로 굳은 채 날아가
 	# 내려가는 구간에서 그림과 진행 방향이 어긋난다. `_draw()`도 아래 갱신 블록도
 	# 미사일과 화살을 나란히 다루는데 이 줄에만 빠져 있었다.
-	if not _has_art and not missile and not arrow:
+	if not _has_art and not _is_drawn():
 		return
 	var moved := position - _last_position
 	_last_position = position
-	if _has_art:
+	if _has_art and not is_zero_approx(art_spin):
+		# 원반처럼 도는 그림 (던진 방패). **위치 변화로 도는 쪽을 잡는다** —
+		# 클라이언트는 속도를 받지 않아서, 스폰 때 실려 온 방향만으로는 되돌아오거나
+		# 휘는 탄에서 어긋난다 (`_face()`가 방향을 다시 잡는 것과 같은 이유).
+		# 멈춰 있으면 마지막 방향 그대로 계속 돈다.
+		if absf(moved.x) > 0.01:
+			_spin_dir = signf(moved.x)
+		art_sprite.rotation += art_spin * _spin_dir * delta
+	elif _has_art:
 		_face(moved)
-	if missile or arrow:
+	if _is_drawn():
 		# 유도(단검)나 포물선(활)처럼 방향이 바뀌는 것에도 그림이 따라 돌도록
 		# 위치 변화로 진행 방향을 잡는다. 화살촉이 궤도를 따라 기울어진다.
 		if moved.length_squared() >= 0.01:
 			_draw_dir = moved.normalized()
 		_flame_time += delta
 		queue_redraw()
+
+
+## 그림 파일 없이 `_draw()`로 그리는 탄인가 (미사일·화살·구슬).
+##
+## **세 곳이 이 조건을 함께 쓴다** — `_ready()`의 준비, `_process()`의 방향 갱신,
+## 그리고 `_draw()`. 조건을 늘어놓고 쓰다가 한 곳에 화살을 빠뜨려 발사 각도로 굳은 채
+## 날아간 일이 있었다(#257). 새 모양을 붙일 때 고칠 곳이 하나여야 그 일이 안 되풀이된다.
+func _is_drawn() -> bool:
+	return missile or arrow or orb
 
 
 ## 직접 그리는 탄(미사일·화살) 준비. 노란 막대는 이들이 대신하므로 감춘다.
@@ -347,6 +461,9 @@ func _setup_drawn() -> void:
 func _draw() -> void:
 	if arrow:
 		_draw_arrow()
+		return
+	if orb:
+		_draw_orb()
 		return
 	if not missile:
 		return
@@ -412,6 +529,32 @@ func _plume_width(t: float) -> float:
 ## 꼬리 위치별 옅기(0~1). 머리 쪽이 진하고 꼬리로 갈수록 사라진다.
 func _plume_alpha(t: float) -> float:
 	return pow(1.0 - t, 1.35)
+
+
+## 파란 에너지 구슬 (대포 총 기본 공격).
+##
+## 미사일·화살과 같은 규칙이다 — 그림 파일 없이 `_draw()`로만 그리고, **노드를 회전시키지
+## 않는다**(루트를 돌리면 `CollisionShape2D`까지 돌아 판정이 달라진다). 구슬은 원이라
+## 돌릴 것도 없지만, 뒤에 남는 자락은 진행 방향을 봐야 하므로 `_draw_dir`을 쓴다.
+##
+## **바깥에서 안으로 겹쳐 쌓는다.** 씬 루트의 가산 혼합에서는 겹친 만큼 밝아지므로,
+## 파란 빛무리 위에 옅은 하늘색, 그 위에 흰 알맹이를 얹으면 테두리는 파랗고 가운데는
+## 하얗게 타는 동그라미가 된다 — 파랑을 알맹이에 칠하면 가산 혼합에 씻겨 하얗게만 남는다.
+func _draw_orb() -> void:
+	var pulse := 1.0 + ORB_PULSE * sin(_flame_time * ORB_PULSE_RATE)
+	var radius := ORB_RADIUS * size_scale * pulse
+
+	# 진행 방향 뒤로 짧게 끌리는 자락. 구슬만 있으면 날아가는 것이 아니라 떠 있는 것으로
+	# 보인다 — 미사일 꼬리(132px)와 달리 구슬 지름 남짓이라 "동그라미"를 흐리지 않는다.
+	_draw_plume(-_draw_dir, _draw_dir.orthogonal(),
+		ORB_TRAIL_LENGTH * size_scale, radius * 0.55, ORB_EDGE, 0.45)
+
+	# 번져 나가는 파란 빛무리. 알맹이보다 두 배 넓어서 어두운 배경에서도 원으로 읽힌다.
+	Art.draw_glow(self, Vector2.ZERO, radius * ORB_GLOW_RATIO, ORB_EDGE, 0.55)
+	# 알맹이. 파랑 → 하늘 → 흰 순으로 좁혀 가며 가운데를 태운다.
+	draw_circle(Vector2.ZERO, radius, Color(ORB_EDGE, 0.95))
+	draw_circle(Vector2.ZERO, radius * 0.72, Color(ORB_MID, 0.85))
+	draw_circle(Vector2.ZERO, radius * 0.40, Color(ORB_CORE, 0.95))
 
 
 ## 결정질 화살 (#125).
@@ -502,6 +645,9 @@ func _physics_process(delta: float) -> void:
 
 	if use_gravity:
 		velocity.y += GRAVITY * delta
+	# 옮기기 **전에** 지금 자리를 적어 둔다 (#270) — 겹침은 옮긴 뒤에 알려지므로,
+	# 그때 되돌아갈 곳은 이 자리다.
+	_step_start = position
 	position += velocity * delta
 
 	# 정해진 거리를 다 날아가면 사라진다 (로켓 글러브, #161). 기획서가 "단거리 발사"라
@@ -549,6 +695,12 @@ func _swap_with_shooter(target: Node) -> void:
 func _explode() -> void:
 	if _done:
 		return
+	# 소리와 연출은 **맞은 젤리가 있든 없든** 난다 — 빗나간 폭탄도 터지는 것은 마찬가지다.
+	# 그래서 아래 반경 판정보다 앞에 둔다. `_done` 검사 뒤라 두 번 나지 않는다.
+	#
+	# 싣는 두 값은 **바로 아래 판정이 쓰는 그것과 같다** (#262) — 연출의 고리가 닿는
+	# 자리가 곧 맞는 경계여야 하므로, 여기서 따로 계산하지 않고 같은 변수를 넘긴다.
+	exploded.emit(position, explosion_radius)
 	for jelly: Node in get_tree().get_nodes_in_group("jellies"):
 		if jelly.owner_peer_id == shooter_peer or not jelly.alive:
 			continue
@@ -576,13 +728,28 @@ func _on_body_entered(body: Node) -> void:
 			_blocked(body)
 			return
 		_hit_peers[peer_id] = true
-		# 빨간 표창은 때리는 대신 자리를 바꾼다 (데미지 0). 여기서 끝내는 것은
-		# 아래 `server_apply_hit`이 데미지 0으로도 넉백과 피격 연출을 일으키기 때문이다 —
-		# "데미지 없이 위치만 바뀐다"가 기획서에 적힌 그대로다.
+		# 빨간 표창은 때린 **뒤에** 자리를 바꾼다. 예전에는 데미지가 0이라 때리기를
+		# 통째로 건너뛰었는데, 지금은 일반 표창과 같은 데미지가 들어간다 (요청).
+		#
+		# **때리는 것이 먼저다** — 넉백 기준이 `_origin.x`(던진 자리)라, 자리를 먼저
+		# 바꾸면 맞은 젤리가 이미 그 자리에 서 있어 밀리는 방향이 뒤집힌다.
+		# (지금 넉백은 0이지만, 수치를 바꿔도 순서 때문에 어긋나지는 않게 둔다.)
 		if swap_positions:
-			_swap_with_shooter(body)
+			body.server_apply_hit(_damage_at(position), knockback, _origin.x, stun, SOURCE, knockback_speed)
+			# **쓰러졌으면 바꾸지 않는다** — 그 표창이 끝낸 판에서 시체를 옮기는 꼴이 되고,
+			# 라운드 정리와 순간이동이 같은 순간에 겹친다.
+			if body.alive:
+				_swap_with_shooter(body)
 			_finish()
 			return
+		# 이 무기만의 피격음 (소총 기본). **때리기보다 먼저 낸다** — 받는 쪽(`main.gd`)이
+		# 이 순간의 공용 피격음을 막아 자리를 대신하는데, 그 공용 피격음을 내는 것이 바로
+		# 아래 `server_apply_hit` 이기 때문이다. 근접 부딪힘 소리와 같은 순서다.
+		#
+		# 여기까지 왔으면 **맞는 것이 확정이다** — 쏜 사람·이미 맞힌 상대·쓰러진 젤리·
+		# 방패는 위에서 다 걸러졌고, 탄은 공유 무적을 타지 않는다.
+		if impact_sfx:
+			impacted.emit()
 		body.server_apply_hit(_damage_at(position), knockback, _origin.x, stun, SOURCE, knockback_speed)
 		# 번개는 맞은 젤리의 **발밑**으로 떨어진다 (검 특수의 빛기둥과 같은 기준).
 		if hit_lightning:
@@ -591,6 +758,12 @@ func _on_body_entered(body: Node) -> void:
 		# 어디에 맞았는지가 아니라 어디에 서 있었는지가 남는다.
 		if hit_sparks:
 			sparked.emit(position)
+		# 푸른 충격도 **탄이 닿은 자리**에서 터진다 (대포 총) — 알갱이와 같은 기준이다.
+		if hit_burst:
+			burst.emit(position)
+		# 소총 연사의 틱 소리. 자리가 필요 없어 인자가 없다.
+		if tick_sfx:
+			ticked.emit()
 		# 주울 수 있는 것(단검)은 맞힌 뒤에도 사라지지 않고 바닥으로 떨어진다.
 		# 안 그러면 한 번만 쓸 수 있는 무기가 된다.
 		if pickup_owner != 0:
@@ -607,8 +780,15 @@ func _on_body_entered(body: Node) -> void:
 		"vanish", "return":
 			_finish()
 		"stay":
-			velocity = Vector2.ZERO
-			landed = true
+			# **위에서 내려앉은 것만 그 자리에 남는다** (#270). 전에는 어디에 닿았는지를
+			# 가리지 않고 멈춰서, 옆면이나 밑면에 닿은 단검이 공중에 매달렸다 —
+			# 회수 거리(36px) 안에 들어갈 방법이 없어 그 라운드 내내 기본 공격이 막혔다.
+			# 바다의 가운데 기둥과 벽돌의 뜬 발판에서 실제로 걸렸다.
+			if _landed_on_top(body):
+				velocity = Vector2.ZERO
+				landed = true
+			else:
+				_slip_off()
 		"roll":
 			# 세로 속도만 죽이고 가로로 조금 굴린다 (#131).
 			# **가지고 있던 속도를 넘겨받지 않고 ROLL_SPEED 로 깎는다** — 안 그러면
@@ -617,6 +797,43 @@ func _on_body_entered(body: Node) -> void:
 			var keep := minf(absf(velocity.x), ROLL_SPEED)
 			velocity = Vector2(signf(velocity.x) * keep, 0.0)
 			landed = true
+
+
+## 이 지형의 **윗면에 내려앉았는가** (#270).
+##
+## 판단 기준은 속도가 아니라 **직전 자리**다. 아래로 내려오던 중이었는지만 보면 유도
+## 단검이 자기보다 낮은 상대를 쫓다가 기둥 옆면을 들이받는 경우를 가려내지 못한다 —
+## 그때도 세로 속도는 아래쪽이다. 겹치기 직전에 윗면보다 위에 있었다면 그것은 위에서
+## 내려앉은 것이고, 아니면 옆이나 아래에서 닿은 것이다.
+##
+## 지형이 어떤 모양인지 못 읽으면 지금까지의 어림(내려오던 중이었는가)으로 돌아간다.
+## 맵 네 개는 모두 `StaticBody2D` + `CollisionShape2D`(사각형)이지만, 나중에 다른 모양이
+## 들어와도 이 함수 때문에 탄이 이상해지지는 않아야 한다.
+func _landed_on_top(body: Node) -> bool:
+	var shape := body.get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if shape == null:
+		return velocity.y > 0.0
+	var box := shape.shape as RectangleShape2D
+	if box == null:
+		return velocity.y > 0.0
+	var top := shape.global_position.y - box.size.y * 0.5
+	return _step_start.y <= top
+
+
+## 지형에 옆·아래로 부딪혔다 — 붙이지 말고 떨어뜨린다 (#270).
+##
+## **겹치기 직전 자리로 되돌린다.** 겹친 채로 두면 다시 `body_entered` 가 오지 않아서
+## 언제 바닥에 닿았는지 알 수 없고, 그대로 아래로 내려보내면 지형을 뚫고 지나간다.
+##
+## 유도도 여기서 끊는다 — 안 끊으면 다음 프레임에 상대 쪽으로 방향을 다시 잡아
+## 같은 벽을 계속 들이받는다.
+func _slip_off() -> void:
+	homing_peer = 0
+	position = _step_start
+	# 가로 속도까지 지운다. 벽을 타고 미끄러져 내려가야 하는데 가로로 남아 있으면
+	# 떨어지면서 다시 그 벽으로 파고든다.
+	velocity = Vector2.ZERO
+	use_gravity = true
 
 
 ## 이 젤리가 방패를 들어 **이 탄을 막고 있는가** (방패 특수).

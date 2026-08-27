@@ -17,13 +17,15 @@ extends Node2D
 ## 순수 표시라 판정과는 무관하다 — 주워지는 판정은 `projectile.gd`가 한다.
 ## 켜고 끄는 것도 그쪽이다: 복제되는 `landed` 를 보고 매 프레임 `active` 를 맞춘다.
 
-## 오라의 겉 반지름(px). **주워지는 거리와 같은 값이다.**
-const RADIUS := 48.0
 ## 오라의 붉은색.
 const FILL := Color(0.97, 0.14, 0.10)
-## 단검 자체를 감싸는 작은 빛의 반지름과 옅기. 날이 붉게 달아 있는 것으로 읽힌다.
-## 단검 그림보다 **먼저** 그려지므로 진해도 그림을 가리지 않는다.
-const CORE_RADIUS := 22.0
+## 단검 자체를 감싸는 작은 빛의 반지름(겉 반지름에 대한 비율)과 옅기. 날이 붉게 달아
+## 있는 것으로 읽힌다. 단검 그림보다 **먼저** 그려지므로 진해도 그림을 가리지 않는다.
+##
+## **절대 px이 아니라 비율이다** (#256). 예전에는 22px로 적혀 있었는데, 겉 반지름이
+## 48에서 36으로 줄자 그 빛이 붉은 띠와 테두리를 덮어 버렸다 — 오라가 작아질 때
+## 안쪽도 같이 작아져야 한다. 0.46은 48px 시절의 22px과 같은 비율이다.
+const CORE_RATIO := 0.46
 const CORE_ALPHA := 0.7
 ## 테두리 안쪽에 겹쳐 그리는 붉은 띠.
 ##
@@ -46,6 +48,15 @@ const EDGE_SEGMENTS := 40
 ## "지금 여기 놓여 있다"로 읽힌다. 폭이 크면 주워지는 거리가 변하는 것처럼 보인다.
 const PULSE_RATE := 4.2
 const PULSE_DEPTH := 0.12
+
+## 오라의 겉 반지름(px). **부모(`projectile.gd`)가 `PICKUP_RANGE`를 넘겨 준다** (#256) —
+## 여기에 숫자를 다시 적지 않는다. 테두리가 곧 주워지는 경계라서, 같은 값이 두 곳에
+## 있으면 언젠가 갈라지고 그때 표시가 거짓말이 된다(폭탄 반경·착지 충격파와 같은 방식).
+## 기본값은 넘겨받기 전에 한 프레임 그려도 이상하지 않도록 둔 것이다.
+var radius := 36.0:
+	set(value):
+		radius = value
+		queue_redraw()
 
 ## 지금 오라를 띄우는가. 떨어져서 주울 수 있는 단검일 때만 참이다.
 var active := false:
@@ -80,11 +91,11 @@ func _draw() -> void:
 		return
 	var pulse := 1.0 + PULSE_DEPTH * sin(_elapsed * PULSE_RATE)
 	# 날을 감싸는 작은 빛 — 맥박은 여기서만 돈다.
-	Art.draw_glow(self, Vector2.ZERO, CORE_RADIUS * pulse, FILL, CORE_ALPHA, 14)
+	Art.draw_glow(self, Vector2.ZERO, radius * CORE_RATIO * pulse, FILL, CORE_ALPHA, 14)
 	# 가장자리로 갈수록 진해지는 붉은 띠.
 	for i in BAND_STEPS:
 		var t := float(i) / float(BAND_STEPS - 1)
-		draw_arc(Vector2.ZERO, RADIUS * lerpf(BAND_INNER, 0.985, t), 0.0, TAU,
+		draw_arc(Vector2.ZERO, radius * lerpf(BAND_INNER, 0.985, t), 0.0, TAU,
 			EDGE_SEGMENTS, Color(FILL, BAND_ALPHA * t * t * pulse), BAND_WIDTH, true)
-	draw_arc(Vector2.ZERO, RADIUS, 0.0, TAU, EDGE_SEGMENTS,
+	draw_arc(Vector2.ZERO, radius, 0.0, TAU, EDGE_SEGMENTS,
 		Color(EDGE, EDGE_ALPHA), EDGE_WIDTH, true)

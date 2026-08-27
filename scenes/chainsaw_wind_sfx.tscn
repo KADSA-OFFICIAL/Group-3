@@ -1,0 +1,9 @@
+[gd_scene format=3 uid="uid://jellychainsawwindsfx"]
+
+[ext_resource type="Script" path="res://scripts/sfx_oneshot.gd" id="1_sfx"]
+[ext_resource type="AudioStream" path="res://assets/audio/chainsaw_wind.ogg" id="2_wind"]
+
+[node name="ChainsawWindSfx" type="AudioStreamPlayer"]
+stream = ExtResource("2_wind")
+volume_db = -18.0
+script = ExtResource("1_sfx")

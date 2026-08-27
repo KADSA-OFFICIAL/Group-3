@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://jellyknucklechargedsfx"]
+
+[ext_resource type="Script" path="res://scripts/sfx_oneshot.gd" id="1_sfx"]
+[ext_resource type="AudioStream" path="res://assets/audio/knuckle_charged.ogg" id="2_charged"]
+
+[node name="KnuckleChargedSfx" type="AudioStreamPlayer"]
+stream = ExtResource("2_charged")
+volume_db = -22.0
+script = ExtResource("1_sfx")

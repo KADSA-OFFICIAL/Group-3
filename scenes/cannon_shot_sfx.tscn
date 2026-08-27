@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://jellycansfx01"]
+
+[ext_resource type="Script" path="res://scripts/sfx_oneshot.gd" id="1_sfx"]
+[ext_resource type="AudioStream" path="res://assets/audio/cannon_fire.ogg" id="2_shot"]
+
+[node name="CannonShotSfx" type="AudioStreamPlayer"]
+stream = ExtResource("2_shot")
+volume_db = -16.0
+script = ExtResource("1_sfx")

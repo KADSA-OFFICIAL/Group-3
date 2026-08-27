@@ -21,6 +21,67 @@ const SHOTGUN_BLAST_SCENE := preload("res://scenes/shotgun_blast.tscn")
 const SHOCKWAVE_SCENE := preload("res://scenes/shockwave.tscn")
 const HIT_SPARKS_SCENE := preload("res://scenes/hit_sparks.tscn")
 const HEAVY_PUNCH_SCENE := preload("res://scenes/heavy_punch.tscn")
+const CANNON_BURST_SCENE := preload("res://scenes/cannon_burst.tscn")
+## 소리도 연출 씬들과 같은 자리에 둔다 — 짜임이 같다 (`scripts/sfx_oneshot.gd` 참고).
+const CANNON_SHOT_SFX_SCENE := preload("res://scenes/cannon_shot_sfx.tscn")
+const MELEE_CLASH_SFX_SCENE := preload("res://scenes/melee_clash_sfx.tscn")
+const HIT_SFX_SCENE := preload("res://scenes/hit_sfx.tscn")
+const LASER_SWORD_SKILL_SFX_SCENE := preload("res://scenes/laser_sword_skill_sfx.tscn")
+const DAMAGE_TICK_SFX_SCENE := preload("res://scenes/damage_tick_sfx.tscn")
+const DAGGER_RETURN_SFX_SCENE := preload("res://scenes/dagger_return_sfx.tscn")
+const SHIELD_SIZE_SFX_SCENE := preload("res://scenes/shield_size_sfx.tscn")
+const RIFLE_SHOT_SFX_SCENE := preload("res://scenes/rifle_shot_sfx.tscn")
+const RIFLE_BURST_SFX_SCENE := preload("res://scenes/rifle_burst_sfx.tscn")
+## 소총 기본 공격의 탄이 **맞은** 소리. 총성(`RIFLE_SHOT_SFX_SCENE`)과 짝이다 —
+## 그쪽은 쏘는 순간, 이쪽은 닿는 순간이다.
+const RIFLE_HIT_SFX_SCENE := preload("res://scenes/rifle_hit_sfx.tscn")
+const SHURIKEN_SWAP_SFX_SCENE := preload("res://scenes/shuriken_swap_sfx.tscn")
+const SHURIKEN_THROW_SFX_SCENE := preload("res://scenes/shuriken_throw_sfx.tscn")
+const BOMB_THROW_SFX_SCENE := preload("res://scenes/bomb_throw_sfx.tscn")
+const BOMB_EXPLODE_SFX_SCENE := preload("res://scenes/bomb_explode_sfx.tscn")
+const BOMB_BLAST_SCENE := preload("res://scenes/bomb_blast.tscn")
+const STUN_HIT_SFX_SCENE := preload("res://scenes/stun_hit_sfx.tscn")
+## 너클 게이지가 75%를 넘어선 순간의 소리 (#225). 때리는 소리가 아니라 **상태가 바뀐**
+## 소리라, 무기를 든 쪽이 아니라 **맞은 쪽**의 게이지가 찰 때 울린다.
+const KNUCKLE_CHARGED_SFX_SCENE := preload("res://scenes/knuckle_charged_sfx.tscn")
+## 너클 특수(강펀치)가 들어가는 소리 (#225).
+const KNUCKLE_PUNCH_SFX_SCENE := preload("res://scenes/knuckle_punch_sfx.tscn")
+const BOW_SHOT_SFX_SCENE := preload("res://scenes/bow_shot_sfx.tscn")
+const BOW_SKILL_SFX_SCENE := preload("res://scenes/bow_skill_sfx.tscn")
+const CHAINSAW_DASH_SFX_SCENE := preload("res://scenes/chainsaw_dash_sfx.tscn")
+const CHAINSAW_WIND_SFX_SCENE := preload("res://scenes/chainsaw_wind_sfx.tscn")
+const SWORD_SKILL_SFX_SCENE := preload("res://scenes/sword_skill_sfx.tscn")
+const AXE_SKILL_SFX_SCENE := preload("res://scenes/axe_skill_sfx.tscn")
+const AXE_LAND_GROUND_SFX_SCENE := preload("res://scenes/axe_land_ground_sfx.tscn")
+const AXE_LAND_HIT_SFX_SCENE := preload("res://scenes/axe_land_hit_sfx.tscn")
+## **소리 하나를 세 무기가 나눠 쓴다** — 망치·삼지창·장대의 특수다. 소리마다 씬 하나인
+## 짜임(`sfx_oneshot.gd`)은 그대로이고, 그 씬을 부르는 자리가 셋인 것이다.
+const SKILL_CAST_SFX_SCENE := preload("res://scenes/skill_cast_sfx.tscn")
+## 샷건 특수(부채꼴 산탄)의 소리. **총성과 장전이 한 파일에 들어 있다** — 받은 소리가
+## 그렇게 녹음되어 있고, 무기 설명("+장전 쿨타임")이 말하는 것도 그 둘이다.
+const SHOTGUN_SKILL_SFX_SCENE := preload("res://scenes/shotgun_skill_sfx.tscn")
+## 무기 선택 창이 뜨는 소리. **무기가 내는 소리가 아니라 화면이 내는 소리다** — 위의
+## 무기 소리들과 달리 판정과 아무 상관이 없고, 라운드마다 창이 뜨는 그 한 번만 울린다.
+const WEAPON_PICK_SFX_SCENE := preload("res://scenes/weapon_pick_sfx.tscn")
+
+# ─────────────────────────── 피격음 박자 ───────────────────────────
+## 피격음을 다시 울리기까지의 최소 간격(초).
+##
+## **같은 순간에 도착하는 여러 발을 한 소리로 뭉치려는 값이다.** 무적 시간은 다발성
+## 무기가 먹히지 않도록 0.1초로 짧게 잡혀 있어서(`Combat.INVULNERABLE_TIME`), 활 특수
+## 3발·소총 연사·샷건 부채꼴은 전부 따로 데미지가 들어간다. 그대로 울리면 같은 소리가
+## 세 겹 겹쳐 세 배로 커진다 — 소리가 셋인 것이 아니라 한 번 크게 맞은 것이다.
+##
+## 0.09 는 무적 시간(0.1)보다 조금 짧다. 무적을 지나 들어오는 **다음** 타격은 늘 울리고,
+## 한 순간에 몰린 것만 뭉친다.
+const HIT_SFX_INTERVAL := 0.09
+## 지속 데미지(전기톱·광선검)의 피격음 간격(초).
+##
+## 위와 따로 두는 이유: 지속 데미지는 0.2초마다 조금씩 들어오는 **하나의 지속**이라
+## 타격이 여러 번인 것이 아니다. 0.09초 문틈으로 내보내면 초당 다섯 번 퍽퍽거려서
+## 맞는 소리가 아니라 웅웅거림이 된다 — 근접 부딪힘 소리를 넉백 박자에 맞춘 것과 같은 판단.
+## 넉백이 들어가는 박자(`Combat.MELEE_HIT_INTERVAL`, 0.6초)와 같이 두어 밀릴 때 같이 울린다.
+const DOT_SFX_INTERVAL := Combat.MELEE_HIT_INTERVAL
 ## 위치 교환 연출을 띄울 높이 보정. 젤리의 `global_position`은 충돌 상자(48x56)의
 ## 가운데이고 몸(72px)은 발밑이 +`Player.BODY_BOTTOM`(28)이라, 몸 한가운데가 -8이다.
 ## 검 특수의 빛기둥은 반대로 발밑(+28)에 띄운다 — 거기서 위로 솟는 연출이라서다.
@@ -242,6 +303,14 @@ func _add_player(peer_id: int) -> void:
 	player.died.connect(_on_player_died)
 	# 강제 낙하(양날 도끼)가 땅에 닿는 순간도 서버에서만 온다 (#167).
 	player.landed_forced.connect(_on_forced_landed)
+	# 제자리 회전이 끝나 내지르기 시작하는 순간도 서버에서만 온다 (전기톱, #260).
+	player.dash_launched.connect(_on_dash_launched)
+	# 데미지가 들어간 순간도 서버에서만 온다 — 피격음을 울린다.
+	player.damaged.connect(_on_player_damaged)
+	# 기절하며 맞은 순간도 서버에서만 온다 — 기절음을 울린다 (망치·삼지창).
+	player.stunned.connect(_on_player_stunned)
+	# 너클 게이지가 75%를 넘어선 순간도 서버에서만 온다 — 충전음을 울린다 (#225).
+	player.gauge_charged.connect(_on_player_gauge_charged)
 	_dagger_held[peer_id] = true
 	if not scores.has(peer_id):
 		scores[peer_id] = 0
@@ -469,6 +538,10 @@ func _receive_pick_start(options: Dictionary, seconds: float) -> void:
 	var mine: Array = options.get(multiplayer.get_unique_id(), [])
 	_pick_is_mine = not mine.is_empty()
 	_pick_sent = false
+	# 창이 뜨는 소리. **고르는 사람과 관전자 모두에게 울린다** — 아래 두 갈래가 갈리기
+	# 전에 두는 것이 그 뜻이다. 관전자 화면에도 어둡기가 깔리며 판이 넘어간 것이 보이고
+	# (`open_watching`), 그 순간을 알리는 소리는 카드가 있든 없든 같다.
+	_play_weapon_pick_sfx()
 	if _pick_is_mine:
 		weapon_pick.open(mine, seconds)
 	else:
@@ -895,7 +968,7 @@ func _try_melee_basic(attacker: Player, target: Player) -> void:
 	var weapon := Weapons.get_weapon(attacker.weapon_id)
 	if weapon.is_empty() or weapon["basic_damage"] <= 0.0:
 		return
-	if not weapon["basic_kind"].begins_with("melee"):
+	if not _is_melee(weapon):
 		return
 	if not attacker.can_act():
 		return
@@ -937,11 +1010,100 @@ func _try_melee_basic(attacker: Player, target: Player) -> void:
 	# 간격이 0.6초보다 긴 무기(전기톱 1.0초)는 이 조건이 늘 참이라 지금까지와 똑같다.
 	var knock_key := "knock>" + key
 	if now < _next_hit_at.get(knock_key, 0.0):
+		# 틱 소리도 **데미지보다 먼저** 낸다 — 부딪힘 쇳소리와 같은 이유다
+		# (`server_apply_dot()` 이 그 자리에서 `damaged` 를 내고 공용 피격음이 나간다).
+		_try_damage_tick_sfx(weapon, "basic", now)
 		target.server_apply_dot(weapon["basic_damage"])
 		return
 	_next_hit_at[knock_key] = now + Combat.MELEE_HIT_INTERVAL
+	# **때리기보다 먼저 부른다.** `server_apply_hit()` 은 그 자리에서 `damaged` 를 내고,
+	# 그 신호가 곧 피격음을 울린다 — 부딪힘 소리를 나중에 정하면 피격음이 이미 나가 버려
+	# 둘이 같은 순간에 겹친다. 겹치면 두 소리가 한 음색으로 뭉쳐 **더 높은 소리 하나**로
+	# 들린다. 무기끼리 부딪힌 것은 한 번의 사건이므로 소리도 하나여야 한다.
+	_try_melee_clash_sfx(attacker, target, now)
+	# **넉백이 들어가는 이 타이밍에도 틱은 빠지지 않는다.** 지속 데미지 무기는 0.6초마다
+	# 한 번 이 길로 오는데(위 dot 길이 아니라), 여기서 안 내면 다섯 번의 따다다닥 중
+	# 세 번째마다 하나가 빠져서 리듬에 구멍이 뚫린다.
+	_try_damage_tick_sfx(weapon, "basic", now)
+	# 기절은 무기 표에서 바로 읽지 않는다 — **켜져 있는 능력**에서 나온다
+	# (망치 특수). 안 켜져 있으면 0 이라 지금까지와 똑같다.
+	var stun := attacker.stun_bonus()
 	target.server_apply_hit(weapon["basic_damage"], weapon["knockback"],
-		attacker.global_position.x, 0.0, "basic")
+		attacker.global_position.x, stun, "basic")
+	# 기절을 얹은 타격에는 **번개가 내려친다** — 삼지창이 맞혔을 때와 같은 연출이고
+	# 같은 함수를 쓴다(`_play_lightning_strike`). 자리도 같은 기준인 **맞은 젤리의
+	# 발밑**이다.
+	#
+	# **무기 이름이 아니라 기절이 얹혔는지로 가른다** — 위 `stun_bonus()` 와 같은 자리에서
+	# 나온 값이라, 기절을 거는 능력이 다른 무기에 붙어도 번개와 기절이 어긋나지 않는다.
+	# 지금 이 길로 오는 것은 망치 특수뿐이다.
+	#
+	# **기절음(`_on_player_stunned`)과 겹치지 않는다** — 그쪽은 소리고 이쪽은 그림이다.
+	# 삼지창도 둘이 같이 난다.
+	if stun > 0.0:
+		_play_lightning_strike.rpc(target.global_position + Vector2(0.0, Player.BODY_BOTTOM))
+
+
+## 이 무기가 근접인가. `basic_kind` 가 "melee" 로 시작하면 참이다 —
+## 지속 데미지 무기("melee_dot", 전기톱·광선검)도 근접에 든다.
+##
+## **두 곳이 같은 판정을 쓴다** — 때리는 쪽을 가리는 `_try_melee_basic()` 과,
+## 맞는 쪽도 근접인지 보는 `_try_melee_clash_sfx()`. 문자열 비교를 두 군데 적어 두면
+## "melee_" 로 시작하는 갈래가 하나 더 늘 때 한쪽만 고쳐진다.
+func _is_melee(weapon: Dictionary) -> bool:
+	return weapon.get("basic_kind", "").begins_with("melee")
+
+
+## 데미지가 들어갈 때마다 나는 짧은 틱 소리 (광선검·전기톱 기본, 소총 연사).
+##
+## `scope` 는 "basic" 또는 "special" — 무기 표의 `basic_tick_sfx`·`special_tick_sfx` 중
+## 어느 쪽을 볼지다. 소총은 특수(연사)에만 붙고 기본 공격에는 안 붙어서, 무기 하나로
+## 켜고 끌 수 없다 (`special_missile` 이 특수 전용인 것과 같은 사정).
+##
+## **박자를 재지 않는다.** 데미지가 들어가는 박자가 곧 소리의 박자다 — 요점이
+## "따다다닥"이므로 여기서 문틈을 두면 그 리듬이 깎인다. 대신 공용 피격음을 그 리듬보다
+## 길게 막아서(`DOT_SFX_INTERVAL`), 둘이 겹쳐 웅웅거리는 것을 막는다.
+func _try_damage_tick_sfx(weapon: Dictionary, scope: String, now: float) -> void:
+	if not weapon.get("%s_tick_sfx" % scope, false):
+		return
+	_mute_hit_sfx(now, DOT_SFX_INTERVAL)
+	_play_damage_tick_sfx.rpc()
+
+
+## 근접 무기끼리 맞부딪히는 소리.
+##
+## **양쪽이 다 근접일 때만 울린다.** 원거리·폭탄을 든 상대를 근접으로 때리는 것은
+## 무기가 부딪히는 것이 아니라 한쪽이 일방적으로 맞는 것이다.
+##
+## **한 쌍에 한 번만 울린다.** 사거리가 같으면 두 젤리가 서로 들어가는데
+## (`is_blocked()` — "같은 사거리면 둘 다 들어간다"), 각자 울리면 같은 한 번의
+## 부딪힘에 소리가 둘 겹쳐 두 배로 커진다. 그래서 열쇠를 **순서 없는 쌍**으로 잡는다 —
+## `a>b` 와 `b>a` 를 따로 세는 위쪽의 데미지·넉백 열쇠와 다른 점이다.
+##
+## 박자는 넉백과 같은 `Combat.MELEE_HIT_INTERVAL`(0.6초)이다. 지속 데미지 무기의
+## 촘촘한 틱(위쪽에서 이미 돌아간다)에는 붙지 않는다 — 전기톱이 닿아 있는 동안
+## 초당 네 번씩 쇳소리가 나면 부딪히는 소리가 아니라 웅웅거림이 된다.
+func _try_melee_clash_sfx(attacker: Player, target: Player, now: float) -> void:
+	if not _is_melee(Weapons.get_weapon(target.weapon_id)):
+		return
+	# **틱 소리를 내는 무기는 쇳소리를 내지 않는다** (광선검·전기톱). 0.2초마다 고르게
+	# 나야 하는 "따다다닥" 사이에 0.6초마다 다른 소리가 끼면 리듬이 끊기고, 같은 순간에
+	# 겹치면 두 소리가 한 음색으로 뭉쳐 더 높은 소리로 들린다 — 전에 겪은 그 문제다.
+	if Weapons.get_weapon(attacker.weapon_id).get("basic_tick_sfx", false):
+		return
+	var a: int = attacker.owner_peer_id
+	var b: int = target.owner_peer_id
+	var clash_key := "clash>%d,%d" % [mini(a, b), maxi(a, b)]
+	if now < _next_hit_at.get(clash_key, 0.0):
+		return
+	_next_hit_at[clash_key] = now + Combat.MELEE_HIT_INTERVAL
+	# **부딪힘 소리가 이 순간의 피격음을 대신한다.** 쇳소리가 곧 "맞았다"는 소리라
+	# 뒤에 몸통 타격음까지 붙으면 두 소리가 한 음색으로 뭉쳐 더 높은 소리로 들린다.
+	# 문틈을 미리 채워 두면, 바로 뒤의 `server_apply_hit()` 이 내는 `damaged` 는
+	# 조용히 지나간다 — 부딪힘이 쿨타임(0.6초)에 걸려 안 울린 타격은 그대로 피격음이 난다.
+	# 쇳소리는 한 번뿐이라 그 순간만 막는다.
+	_mute_hit_sfx(now, HIT_SFX_INTERVAL)
+	_play_melee_clash_sfx.rpc()
 
 
 ## 원거리 무기의 기본 공격도 자동이다. basic_interval 마다 알아서 발사한다.
@@ -995,6 +1157,25 @@ func _try_ranged_basic(attacker: Player) -> void:
 	if not is_zero_approx(arc):
 		shot["launch_angle"] = arc
 		shot["use_gravity"] = true
+	# 소총만 기본 공격에 총성이 붙는다. **무기 이름으로 가른다** — 바로 위 단검 분기와
+	# 같은 방식이다. 소리 하나가 씬 하나라(`sfx_oneshot.gd`) 무기 표에 켬/끔 값을 두면
+	# 그 값을 켠 다른 무기까지 소총 총성을 내게 된다.
+	#
+	# **경기 내내 울리는 것이 맞다**: 기본 공격은 조작 없이 간격마다 자동으로 나가고
+	# (`_check_basic_attacks`), 총이 나가는데 소리가 없으면 그쪽이 더 어긋난다.
+	# 대신 크기를 낮게 잡았다(-20dB, 씬에서). 소총 기본 간격은 1.2초이고 소리는
+	# 0.78초라 서로 겹치지도 않는다.
+	if weapon["name"] == "소총":
+		_play_rifle_shot_sfx.rpc()
+		# 이 탄이 맞으면 **소총만의 피격음**이 난다 (총성과 짝이다). 탄에 실어 보내는 것은
+		# 맞는 순간을 아는 것이 탄이기 때문이다 — 알갱이·번개와 같은 방식이다.
+		# **연사 탄에는 안 붙는다**: 그쪽은 이미 틱 소리(`special_tick_sfx`)가 리듬을 만든다.
+		shot["impact_sfx"] = true
+	# 활 — 활시위 소리. 소총과 같은 판단이다: 무기 이름으로 가르고, 경기 내내
+	# 울리는 대신 크기를 낮게 잡았다(-20dB, 씬에서). 기본 간격은 0.7초이고 소리는
+	# 0.70초로 맞춰 잘라 두어(앞뒤 무음 제거) 다음 발과 겹치지 않는다.
+	elif weapon["name"] == "활":
+		_play_bow_shot_sfx.rpc()
 	_server_fire(attacker, shot)
 
 
@@ -1019,17 +1200,39 @@ func _check_pending_specials() -> void:
 			continue
 		target.server_apply_hit(info["damage"], info["knockback"],
 			attacker.global_position.x, 0.0, "special")
+		# 양날 도끼가 상대 위로 떨어졌다 (예약이 그렇게 적어 온 경우만).
+		# 여기까지 왔으면 아래에서 예약이 지워지므로 `_on_forced_landed()` 는 그냥
+		# 지나간다 — 땅 착지음과 이 소리가 같이 울리는 일은 없다.
+		if info.get("direct_hit_sfx", false):
+			_play_axe_land_hit_sfx.rpc()
 		if info.get("bleed_dps", 0.0) > 0.0:
-			# 첫 타는 즉시 들어간다. 3초 출혈이면 0·1·2초에 세 번 = 문서상 총 12.
+			# 첫 타는 즉시 들어가고 그 뒤로 `interval`마다 이어진다.
+			# 3초 출혈에 0.2초 간격이면 0·0.2·…·2.8초에 열다섯 번이다.
 			_bleeds[target.owner_peer_id] = {
 				"dps": info["bleed_dps"],
+				"interval": info.get("bleed_interval", 1.0),
 				"until": _now() + info["bleed_duration"],
 				"next_at": _now(),
 			}
 		_special_pending.erase(peer_id)
 
 
-## 출혈은 무적 시간을 무시하고 1초마다 들어간다.
+## 출혈은 무적 시간을 무시하고 무기 표가 정한 박자(`bleed_interval`)로 들어간다.
+##
+## **한 틱은 `dps * interval`이다** (#260). 그래서 박자를 촘촘하게 바꿔도 총량
+## (`bleed_damage * bleed_duration`)은 그대로다 — 전기톱을 0.2초 간격으로 옮기면서
+## 1초에 4씩이 0.2초에 0.8씩이 되었고, 3초 동안 들어가는 12는 변하지 않았다.
+## 세기를 조절할 곳은 여기가 아니라 무기 표의 `bleed_damage`다.
+##
+## 촘촘하게 나눈 이유는 화면이다: 지속 피해인데 1초에 한 번 크게 들어오면 체력이
+## "계속 깎인다"가 아니라 "가끔 뭉텅 준다"로 보인다 — 같은 무기의 기본 공격이 이미
+## 0.2초 박자다(#105, 광선검과 같은 판단).
+##
+## **소리는 이 박자를 따라가지 않는다.** 출혈은 `damaged` 를 `continuous` 로 내보내고
+## (`Player.server_apply_dot`), 받는 쪽은 그것을 `DOT_SFX_INTERVAL`(0.6초) 문틈으로
+## 거른다 — 촘촘하게 나눠도 3초에 다섯 번을 넘지 않으므로 웅웅거리지 않는다.
+## 틱 소리("따다다닥")는 기본 공격 쪽에만 붙어 있어(`_try_damage_tick_sfx`)
+## 출혈이 그 리듬에 끼어들지도 않는다.
 func _tick_bleeds() -> void:
 	var now := _now()
 	for peer_id: int in _bleeds.keys():
@@ -1040,8 +1243,12 @@ func _tick_bleeds() -> void:
 			continue
 		if now < info["next_at"]:
 			continue
-		info["next_at"] = now + 1.0
-		target.server_apply_dot(info["dps"])
+		var interval: float = maxf(float(info.get("interval", 1.0)), 0.01)
+		# **직전 예정 시각에 간격을 더한다** (`now + interval`이 아니다). 물리 프레임이
+		# 0.0167초라 0.2초 간격은 늘 조금씩 늦게 걸리는데, 늦은 시각에서 다시 재면
+		# 그 오차가 쌓여 3초 동안 들어가는 횟수가 열다섯에서 열넷으로 준다.
+		info["next_at"] = float(info["next_at"]) + interval
+		target.server_apply_dot(float(info["dps"]) * interval)
 
 
 ## 소총 연사 — 한 번 누르면 지속시간 동안 자동으로 나간다.
@@ -1132,6 +1339,13 @@ func _server_fire(attacker: Player, base: Dictionary, offsets: Array = [0.0]) ->
 	var art_scale: float = weapon.get("projectile_art_scale", 1.0)
 	# 결정질 화살로 그릴지는 무기가 정한다 — 기본이든 특수든 같은 모양으로 나간다 (#125).
 	var draw_arrow: bool = weapon.get("projectile_arrow", false)
+	# 파란 에너지 구슬로 그릴지도 같은 자리에서 읽는다 (대포 총). **미사일과 겹칠 수
+	# 있다** — 대포 총은 특수만 불꽃 꼬리 미사일이라 특수 탄에는 두 값이 함께 실린다.
+	# 어느 쪽이 이기는지는 `Projectile.setup()`이 한 곳에서 정한다.
+	var draw_orb: bool = weapon.get("projectile_orb", false)
+	# 맞은 자리에 푸른 충격을 터뜨릴지 (대포 총). 위와 같이 무기가 정하므로
+	# 기본·특수·연사 어디서 쏘든 같이 터진다 — 한쪽만 터지면 같은 무기로 안 읽힌다.
+	var hit_burst: bool = weapon.get("projectile_hit_burst", false)
 	# 탄 그림도 무기 표에서 읽는다 (소총의 총알) — 크기와 같은 이유로, 기본에서 쏘든
 	# 연사에서 쏘든 같은 탄이 나가야 한다. 여기서 읽지 않으면 기본 공격 경로와
 	# 연사 경로 두 곳에 같은 줄을 적어야 하고, 한쪽만 고치면 어긋난다.
@@ -1151,6 +1365,8 @@ func _server_fire(attacker: Player, base: Dictionary, offsets: Array = [0.0]) ->
 		if not projectile_art.is_empty() and not data.has("art_file"):
 			data["art_file"] = projectile_art
 		data["arrow"] = draw_arrow
+		data["orb"] = draw_orb
+		data["hit_burst"] = hit_burst
 		data["id"] = _next_projectile_id
 		_next_projectile_id += 1
 		data["shooter_peer"] = attacker.owner_peer_id
@@ -1186,6 +1402,9 @@ func _cone_blast(attacker: Player, weapon: Dictionary) -> void:
 	_play_shotgun_blast.rpc(
 		attacker.global_position + Vector2(0.0, Player.WEAPON_CENTER_Y),
 		signf(float(attacker.facing)), reach, spread)
+	# 소리도 **연출과 같은 자리**다 — 방아쇠를 당긴 순간이라 빗나가도 울린다.
+	# 아래의 거리·각도·방패 검사는 전부 이 뒤에 온다.
+	_play_shotgun_skill_sfx.rpc()
 	var target := _opponent_of(attacker.owner_peer_id)
 	if target == null or not target.alive:
 		return
@@ -1337,6 +1556,10 @@ func _resolve_punch(attacker: Player, shot: Dictionary) -> void:
 	var aim: float = shot["aim"]
 	var reach: float = shot["reach"]
 	_play_heavy_punch.rpc(shot["origin"], aim, reach, shot["spread"], shot["charged"])
+	# 소리도 주먹 연출과 **같은 자리**다. 누른 순간이 아니라 여기인 것은, 예고(0.5초)를
+	# 두고 나서 들어가는 무기라 누를 때 울리면 소리가 그친 뒤에 주먹이 들어가기 때문이다.
+	# 즉발이든(예고 0) 예고를 거치든 이 한 곳을 지나므로 두 길이 갈리지 않는다.
+	_play_knuckle_punch_sfx.rpc()
 
 	var target := _opponent_of(attacker.owner_peer_id)
 	if target == null or not target.alive:
@@ -1412,6 +1635,10 @@ func _spawn_projectile(data: Dictionary) -> Node:
 		projectile.swapped.connect(_on_positions_swapped)
 		projectile.struck.connect(_on_lightning_struck)
 		projectile.sparked.connect(_on_dagger_sparked)
+		projectile.burst.connect(_on_cannon_burst)
+		projectile.ticked.connect(_on_projectile_ticked)
+		projectile.impacted.connect(_on_projectile_impacted)
+		projectile.exploded.connect(_on_bomb_exploded)
 	return projectile
 
 
@@ -1424,6 +1651,10 @@ func _on_projectile_finished(projectile: Projectile) -> void:
 func _on_dagger_picked_up(peer_id: int, projectile: Projectile) -> void:
 	_dagger_held[peer_id] = true
 	projectile.queue_free()
+	# 단검이 손에 돌아오는 소리. **줍는 것과 특수(자동 재수집)가 같은 소리다** —
+	# 둘 다 "떨어져 있던 단검이 손에 돌아왔다"는 하나의 사건이고, 다른 점은
+	# 걸어가서 주웠는지 불러들였는지뿐이다.
+	_play_dagger_return_sfx.rpc()
 
 
 # ─────────────────────────── 특수 공격 (Shift) ───────────────────────────
@@ -1468,6 +1699,13 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 			# 상대가 맞으면 무엇이 때렸는지 화면에서 읽히지 않는다(강펀치 #231과 같은 이유).
 			# 그림은 각 피어가 복제된 시작 신호를 받아 알아서 그리고, 시각은
 			# `_tick_sword_swings()`가 잰다. 쿨타임은 지금까지처럼 누른 순간부터 돈다.
+			# **소리는 누른 순간에 낸다 — 내려베는 순간이 아니다.** 이 특수는 검을
+			# 들어 올렸다(0.26초) 내려베는(0.12초) 동작이고, 외침은 그 들어 올리는
+			# 동작에 얹혀야 맞는다. 데미지가 들어가는 0.38초 뒤에 울리면 소리가
+			# 동작을 뒤따라와서 "멈칫하고 내려친다"가 화면에만 남고 귀에는 안 남는다.
+			# 사거리(150) 밖이라 위에서 돌아간 경우에는 울리지 않는다 — 쿨타임도
+			# 돌지 않는 자리라 소리만 나면 쓴 것처럼 들린다.
+			_play_sword_skill_sfx.rpc()
 			attacker.server_start_swing(weapon["special_windup"], weapon["special_swing"])
 			_sword_swings[peer_id] = {
 				"at": _now() + float(weapon["special_windup"]) + float(weapon["special_swing"]),
@@ -1476,8 +1714,24 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 			}
 			return true
 		"망치":
-			return _melee_special(attacker, target, weapon["special_damage"],
-				weapon["knockback"], weapon["stun_duration"])
+			# 때리지 않고 **능력을 건다** — `special_duration` 동안 기본 공격에
+			# `stun_duration` 짜리 기절이 얹힌다 (`_try_melee_basic` 의 `stun_bonus()`).
+			# 전에는 즉시 한 번 때리고 끝이었는데(`_melee_special()`), 그것은 이 무기의
+			# 기획("공격마다 적에게 기절 효과를 부여")과 다른 동작이었다.
+			# **망치가 그 함수의 마지막 사용자였으므로 함수도 함께 지웠다** —
+			# 남겨 두면 아무도 부르지 않는 판정 코드가 되어, 다음에 읽는 사람이
+			# 근접 특수가 저기로도 들어간다고 믿게 된다.
+			#
+			# `target` 을 보지 않으므로 **상대가 사거리 밖이어도 켜진다** — 광선검의
+			# 관통과 같다. 능력을 켜는 특수는 지금 상대가 어디 있는지와 상관이 없다.
+			#
+			# **소리는 걸기 전에 낸다** — 광선검 관통음과 같은 자리다. 화면에 나타나는
+			# 것이 버프 표시뿐이고 날아가는 것도 때리는 것도 없어서, 켜진 순간을
+			# 알려 줄 것이 소리 말고는 없다.
+			_play_skill_cast_sfx.rpc()
+			attacker.server_apply_buff("stun", weapon["stun_duration"],
+				weapon["special_duration"])
+			return true
 		"글러브":
 			# "단거리 주먹 발사" — 글러브가 손에서 분리되어 연달아 날아간다 (#161·#164).
 			# 옛 구현은 사거리만 1.5배 늘린 즉시 판정이라 화면에 아무것도 안 나타났다.
@@ -1496,29 +1750,62 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 			return _punch_cone(attacker, weapon)
 		"광선검":
 			# 관통 — 일정 시간 상대 무기의 막기를 무시한다.
+			#
+			# **소리는 걸기 전에 낸다** — 대포 총 발사음과 같은 자리다. 이 특수는 눈에
+			# 보이는 것이 관통 빛무리뿐이고 날아가는 것이 없어서, 켜진 순간을 알려 주는
+			# 것이 소리 말고는 없다. 쿨타임 8초라 자주 울리지도 않는다.
+			_play_laser_sword_skill_sfx.rpc()
 			attacker.server_apply_buff("pierce", 1.0, weapon["special_duration"])
 			return true
 		"장대":
 			# 상시 사거리(`reach_multiplier`)가 아니라 **특수 전용 배율**을 쓴다.
 			# 상시로 걸면 특수를 쓰지 않아도 근접 공격을 전부 막는다 (막기 판정 참고).
+			#
+			# **소리는 걸기 전에 낸다** — 망치·광선검과 같은 자리다. 봉이 길어지는 것은
+			# 보이지만(`art_grows_with_reach`) 그 순간을 짚어 주는 소리가 없었다.
+			_play_skill_cast_sfx.rpc()
 			attacker.server_apply_buff("reach", weapon["special_reach_multiplier"],
 				weapon["special_duration"])
 			return true
 		"전기톱":
-			# 관통 돌진. 속도는 일반 점프의 두 배, 벽에 부딪히면 끝난다.
-			attacker.server_start_forced("dash", _dash_safety_time())
+			# **제자리 회전 후 관통 돌진** (#260). 누른 프레임에 튀어 나가지 않고
+			# `spin_time` 동안 제자리에서 톱을 돌린 뒤 돌진한다 — 넘어가는 것은
+			# `Player._apply_forced()`가 하고, 돌진 자체는 지금까지와 같다(속도는 일반
+			# 점프의 두 배, 벽에 부딪히면 끝난다).
+			#
+			# 예약(`_special_pending`)은 **누른 순간 걸어 둔다.** `modes`가 `dash`뿐이라
+			# 도는 동안에는 닿아도 안 맞고, 돌진으로 넘어가는 순간부터 판정이 열린다 —
+			# 도끼가 `rise` 중에 예약을 들고 `fall`에서만 때리는 것과 같은 짜임이다.
+			#
+			# **소리는 걸기 전에 낸다** — 광선검 관통음과 같은 자리다. 특수가 켜지는 그
+			# 순간이고, 벽에 부딪혀 일찍 끝나도 소리는 끝까지 울린다
+			# (씬이 스스로 사라진다, `sfx_oneshot.gd`). 톱 소리가 회전부터 덮으므로
+			# 도는 동안 조용한 구간이 생기지 않는다. 바람 소리는 그 뒤, 실제로
+			# 내지르는 순간에 따로 난다(`_on_dash_launched()`).
+			_play_chainsaw_dash_sfx.rpc()
+			var spin: float = weapon.get("spin_time", 0.0)
+			if spin > 0.0:
+				attacker.server_start_forced("spin", spin)
+			else:
+				attacker.server_start_forced("dash", attacker.dash_time())
 			_special_pending[peer_id] = {
 				"damage": weapon["special_damage"],
 				"knockback": weapon["knockback"],
 				"modes": ["dash"],
 				"bleed_dps": weapon["bleed_damage"],
 				"bleed_duration": weapon["bleed_duration"],
+				# 출혈 박자. 없으면 지금까지처럼 1초에 한 번이다.
+				"bleed_interval": weapon.get("bleed_interval", 1.0),
 			}
 			return true
 		"양날 도끼":
 			# 고속 상승 후 고속 낙하. 데미지는 낙하 중에만 들어간다.
 			# 낙하 중 직격을 놓치면 **착지할 때 주변을 때린다** (#167) — 그 수치를
 			# 여기 같이 실어 둔다. `_on_forced_landed()`가 꺼내 쓴다.
+			# **소리가 셋으로 갈린다** — 이 무기는 결과가 셋이라서다: 켜는 순간,
+			# 상대에게 직격한 착지, 빗나가 땅에 닿은 착지. 여기서 내는 것은 첫째다
+			# (솟는 순간; 전기톱 돌진음과 같은 자리다).
+			_play_axe_skill_sfx.rpc()
 			attacker.server_start_forced("rise", _rise_time())
 			_special_pending[peer_id] = {
 				"damage": weapon["special_damage"],
@@ -1527,12 +1814,21 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 				"landing_damage": weapon["landing_damage"],
 				"landing_radius": weapon["landing_radius"],
 				"landing_rupture_speed": weapon["landing_rupture_speed"],
+				# 직격했을 때 낼 소리. **무기 이름으로 가르지 않고 여기 실어 보낸다** —
+				# `_check_pending_specials()` 는 전기톱 돌진·글러브도 함께 지나가는
+				# 공용 자리라, 거기서 이름을 다시 묻는 대신 예약에 적어 둔다
+				# (`landing_radius` 가 착지 쪽 갈림을 겸하는 것과 같은 방식이다).
+				"direct_hit_sfx": true,
 			}
 			return true
 		"활":
 			# 관통 화살 여러 발 — 벌어진 평행. **발 수는 무기 표가 정한다** (#128).
 			# 전에는 여기서 3발을 하드코딩해 표의 special_projectiles 가 죽은 값이었다.
 			var count: int = weapon.get("special_projectiles", 1)
+			# 폭격 소리는 다발이어도 **한 번만** 울린다 — 소총 연사음과 같은 자리다.
+			# 화살 다섯 발마다 울리면 같은 소리가 다섯 겹 겹쳐 다섯 배로 커진다.
+			# 쏘기 전에 부른다: 아래 `_server_fire`가 탄이 나가는 그 순간이다.
+			_play_bow_skill_sfx.rpc()
 			_server_fire(attacker, {
 				"damage": weapon["special_damage"],
 				"knockback": weapon["knockback"],
@@ -1540,7 +1836,14 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 			}, _parallel_offsets(count, Combat.PARALLEL_SPACING))
 			return true
 		"대포 총":
-			# 특수만 불꽃 꼬리 미사일이다 — 기본 공격 탄은 노란 막대 그대로 (#121).
+			# 특수만 불꽃 꼬리 미사일이다 — 기본 공격 탄은 파란 구슬로 나간다
+			# (무기 표의 `projectile_orb`; 전에는 공용 노란 막대였다).
+			#
+			# **소리는 특수에만 붙는다.** 기본 공격은 1.4초마다 조작 없이 자동으로
+			# 나가서(`_check_basic_attacks`) 같은 소리를 달면 경기 내내 울린다 —
+			# 스킬은 쿨타임 6초에 직접 누르는 것이라 한 번 울릴 값이 있다.
+			# 쏘기 전에 부른다: 아래 `_server_fire`는 탄이 나가는 그 순간이다.
+			_play_cannon_shot_sfx.rpc()
 			_server_fire(attacker, {
 				"damage": weapon["special_damage"],
 				"knockback": weapon["knockback"],
@@ -1551,6 +1854,10 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 		"삼지창":
 			# 던지고 맞으면 기절. "자동 회수"는 지금은 사라지는 것으로 처리하고,
 			# 돌아오는 연출은 그래픽 작업 때 붙인다.
+			#
+			# **소리는 쏘기 전에 낸다** — 대포 총·활 특수와 같은 자리다.
+			# 아래 `_server_fire`가 삼지창이 손을 떠나는 그 순간이다.
+			_play_skill_cast_sfx.rpc()
 			_server_fire(attacker, {
 				"damage": weapon["special_damage"],
 				"knockback": weapon["knockback"],
@@ -1576,6 +1883,14 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 			# 겉모습이 같으면 피할지 말지를 정할 근거가 화면에 없다 (#131).
 			# 표에서 꺼낸 값은 Variant라 명시 타입으로 받는다 (#66).
 			var shuriken_art: String = weapon["empowered_file"] if swap else weapon["file"]
+			# 던지는 소리 (#261). **쏘기 전에 부른다** — 폭탄·대포 총·소총과 같은 자리로,
+			# 아래 `_server_fire`가 표창이 손을 떠나는 그 순간이다.
+			#
+			# **강화든 아니든 같은 소리다.** 손에서 나가는 동작이 같아서다 — 무엇을
+			# 던졌는지는 그림(`empowered_file`, 빨간 표창)이 이미 말하고, 강화 쪽은
+			# 맞는 순간에 자기 소리(`shuriken_swap`)를 따로 낸다. 소리를 여기서
+			# 둘로 가르면 같은 동작에 두 이름이 붙는다 (너클 강펀치와 같은 판단).
+			_play_shuriken_throw_sfx.rpc()
 			_server_fire(attacker, {
 				"damage": weapon["empowered_damage"] if swap else weapon["special_damage"],
 				"knockback": weapon["empowered_knockback"] if swap else weapon["knockback"],
@@ -1596,6 +1911,10 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 			# 피할지 말지를 정할 근거가 화면에 없다 (#131).
 			# 표에서 꺼낸 값은 Variant라 명시 타입으로 받는다 (#66).
 			var bomb_art: String = weapon["empowered_file"] if empowered else weapon["file"]
+			# 던지는 소리. 던지는 순간에 나므로 **터지는 소리(`exploded`)와 자리가 다르다** —
+			# 사이에 도화선 3초가 있어서 둘이 겹치지 않는다. 쏘기 전에 부르는 것은
+			# 대포 총·소총과 같다.
+			_play_bomb_throw_sfx.rpc()
 			_server_fire(attacker, {
 				"damage": weapon["empowered_damage"] if empowered else weapon["special_damage"],
 				"knockback": weapon["empowered_knockback"] if empowered else weapon["knockback"],
@@ -1612,8 +1931,19 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 			return true
 		"소총":
 			# 한 번 누르면 지속시간 동안 자동 연사. **시간**으로 끝난다.
+			#
+			# 틱 소리는 탄에 실어 보낸다 — 소리가 나야 하는 순간이 "쏘는 때"가 아니라
+			# **"맞는 때"**라서, 그때를 아는 것은 탄이다(`Projectile.ticked`).
+			# 기본 공격 탄에는 실리지 않으므로 그쪽은 지금까지처럼 공용 피격음이다.
+			#
+			# **연사음은 한 번만 튼다.** 소리 파일 자체가 2초짜리 연발이라 지속시간
+			# (`burst_duration`, 2초)과 길이를 맞춰 두었다 — 발마다 틀면 0.1초 간격으로
+			# 20개가 겹쳐 웅웅거린다. 쏘기 전에 부르는 것은 대포 총과 같다.
+			# 위의 틱 소리와는 자리가 다르다: 이건 **쏘는** 소리, 그건 **맞는** 소리다.
+			_play_rifle_burst_sfx.rpc()
 			_start_burst(peer_id, weapon["special_damage"], weapon["knockback"],
-				weapon["burst_interval"], weapon["burst_duration"])
+				weapon["burst_interval"], weapon["burst_duration"], 0, -1,
+				{"tick_sfx": weapon.get("special_tick_sfx", false)})
 			return true
 		"단검":
 			# 특수 = 자동 재수집. 주우러 가지 않아도 손으로 돌아온다.
@@ -1623,6 +1953,10 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 			for projectile: Projectile in projectiles_root.get_children():
 				if projectile.pickup_owner == peer_id:
 					projectile.queue_free()
+			# 줍는 것과 같은 소리다 (`_on_dagger_picked_up()` 참고).
+			# **위의 이미-들고-있음 검사 뒤에 온다** — 그쪽은 `false` 로 빠져나가
+			# 쿨타임도 안 돌므로 아무 일도 일어나지 않은 것이고, 소리도 나면 안 된다.
+			_play_dagger_return_sfx.rpc()
 			return true
 		"방패":
 			# **하나뿐인 길게/짧게로 갈리는 특수다.** 길게(0.3초 이상, `Player.LONG_PRESS_TIME`)는
@@ -1631,6 +1965,9 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 			# 눌린 기록을 지운다 — 그래서 손을 뗄 때 던지기가 겹쳐 나가지 않고 쿨타임도
 			# 한 번만 돈다 (`Player._check_long_press`·`_receive_skill` 참고).
 			if long_press:
+				# 소리는 걸기 전에 낸다 (광선검 관통음과 같은 자리) — 크기 증가는
+				# 그림이 커지는 것 말고는 알림이 없어서, 켜진 순간을 소리로 짚어 준다.
+				_play_shield_size_sfx.rpc()
 				attacker.server_apply_buff("size", weapon["size_multiplier"], weapon["special_duration"])
 			else:
 				_server_fire(attacker, {
@@ -1640,29 +1977,15 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 					# 노란 막대로 날아가면 16 데미지짜리가 오는데 무엇이 오는지가
 					# 화면에 없고, 크기 증가 쪽과 구별도 안 된다.
 					"art_file": weapon["file"],
-					# 진행 방향으로 돌리면 방패가 옆으로 눕는다 — 원화가 세로(위가 위)라
-					# `_face()`의 기본 +90도가 걸리면 넘어진 것처럼 보인다. 폭탄이
-					# 도화선 때문에 세워 두는 것과 같은 처리다 (#131).
-					"art_upright": true,
+					# **원반처럼 돌면서 날아간다.** 세워 둔 채(`art_upright`) 날리면
+					# 손에 든 모습 그대로 미끄러져 가고, 진행 방향으로 한 번 돌려 굳히면
+					# (`_face()`의 기본 +90도) 넘어진 채 굳은 것으로 보인다 — 둘 다
+					# 던진 것으로 안 보였다. 도는 값 하나가 그 자리를 대신한다.
+					"art_spin": weapon["throw_spin"],
 				})
 			return true
 		_:
 			return false
-
-
-## 바라보는 방향으로 사거리 안에 있으면 맞는다.
-## 빗나가도 발동은 한 것이므로 true — 쿨타임은 돌아간다.
-func _melee_special(attacker: Player, target: Player, damage: float, knockback: int,
-		stun := 0.0, reach_bonus := 1.0) -> bool:
-	if not _faces(attacker, target):
-		return true  # 방향이 안 맞아 빗나감
-	var reach: float = (MELEE_REACH + attacker.current_reach()) * reach_bonus
-	if attacker.global_position.distance_to(target.global_position) > reach:
-		return true  # 사거리 밖
-	if is_blocked(attacker, target):
-		return true  # 상대 무기에 막힘
-	target.server_apply_hit(damage, knockback, attacker.global_position.x, stun, "special")
-	return true
 
 
 # ─────────────────────────── 연출 ───────────────────────────
@@ -1736,6 +2059,119 @@ func _on_dagger_sparked(at: Vector2) -> void:
 	_play_hit_sparks.rpc(at)
 
 
+## 대포 총 포탄이 맞혔다 (서버 전용 — 투사체가 알려 온다). 위 둘과 같은 짜임이다.
+func _on_cannon_burst(at: Vector2) -> void:
+	_play_cannon_burst.rpc(at)
+
+
+## 틱 소리를 내는 탄(소총 연사)이 맞혔다 (서버 전용 — 투사체가 알려 온다).
+##
+## **무기 표를 다시 보지 않는다.** 어느 무기의 연사인지는 탄을 쏠 때 이미 정해져
+## `tick_sfx` 로 실려 있다 — 여기서 쏜 젤리의 지금 무기를 되짚으면, 탄이 날아가는 동안
+## 라운드가 바뀌어 무기가 갈렸을 때(`server_set_weapon`) 엉뚱한 판단이 된다.
+##
+## 공용 피격음을 막는 것은 근접 틱과 같다 (`_try_damage_tick_sfx()`).
+func _on_projectile_ticked() -> void:
+	_mute_hit_sfx(_now(), DOT_SFX_INTERVAL)
+	_play_damage_tick_sfx.rpc()
+
+
+## 소총 기본 공격의 탄이 맞았다 (서버 전용 — 투사체가 알려 온다).
+##
+## **무기 표를 다시 보지 않는다** — 위의 틱과 같은 이유로, 어느 무기의 탄인지는 쏠 때
+## 이미 `impact_sfx` 로 실려 있다.
+##
+## **공용 피격음을 대신한다.** 총알이 몸에 박히는 소리가 곧 "맞았다"는 소리라, 뒤에
+## 몸통 타격음까지 붙으면 두 소리가 한 음색으로 뭉쳐 더 높은 소리로 들린다 —
+## 근접 부딪힘 소리(`_try_melee_clash_sfx()`)에서 겪은 그대로다. 그래서 문틈을 미리
+## 채워 두고, 바로 뒤의 `server_apply_hit()` 이 내는 `damaged` 는 조용히 지나가게 한다.
+## 이 순서가 되도록 탄이 신호를 **때리기 전에** 낸다.
+##
+## 박자를 재지 않는다 — 소총 기본 간격(1.2초)이 곧 박자이고 소리는 0.22초다.
+func _on_projectile_impacted() -> void:
+	_mute_hit_sfx(_now(), HIT_SFX_INTERVAL)
+	_play_rifle_hit_sfx.rpc()
+
+
+## 폭탄이 터졌다 (서버 전용 — 투사체가 알려 온다).
+##
+## **공용 피격음을 막지 않는다.** 틱 소리(위)와 달리 이건 0.2초마다 되풀이되는 것이
+## 아니라 한 번뿐이고, 터진 것과 그 안에 누가 있었는지는 서로 다른 소식이다 —
+## 빗나간 폭탄도 터지는 소리는 나야 하고, 맞았으면 맞은 소리가 겹쳐 나는 편이 맞다.
+## 연출도 같은 자리에서 띄운다 (#262) — 터진 순간이 곧 이 신호다. 소리와 짝이라
+## 빗나간 폭탄에도 함께 뜬다.
+func _on_bomb_exploded(at: Vector2, blast_radius: float) -> void:
+	_play_bomb_explode_sfx.rpc()
+	_play_bomb_blast.rpc(at, blast_radius)
+
+
+## 어떤 피해든 들어갔다 (서버 전용 — 젤리가 알려 온다). 피격음을 울린다.
+##
+## **무기를 가리지 않는다.** 데미지가 지나가는 두 문에서만 신호가 오므로
+## (`Player.damaged`), 무기가 늘어도 이 함수는 그대로다 — 그것이 "기본적으로" 울린다는 뜻이다.
+##
+## **한 소리는 전체에 하나다.** 맞은 젤리별로 세지 않는다 — 사거리가 같아 서로 동시에
+## 들어갈 때(`is_blocked()` 의 "같은 사거리면 둘 다 들어간다") 젤리별로 울리면 같은
+## 순간에 같은 소리가 둘 겹쳐 두 배로 커진다. 근접 부딪힘 소리를 한 쌍에 한 번으로
+## 묶은 것과 같은 판단이다 (`_try_melee_clash_sfx()`).
+##
+## 박자를 재는 자리로 `_next_hit_at` 을 쓰는 것은 그 표가 라운드마다 비워지기 때문이다
+## (`_start_round()`) — 따로 변수를 두면 비우는 곳 세 군데를 같이 고쳐야 하고,
+## 한 곳을 빠뜨리면 지난 라운드의 시각이 남아 첫 타격이 조용해진다.
+func _on_player_damaged(_peer_id: int, continuous: bool) -> void:
+	if not _hit_sfx_due(_now(), continuous):
+		return
+	_play_hit_sfx.rpc()
+
+
+## 기절하며 맞았다 (서버 전용 — 젤리가 알려 온다). 기절을 거는 무기는 둘뿐이고
+## 둘 다 특수로만 건다: 망치 특수가 켜져 있는 동안의 근접 타격과, 던진 삼지창이다.
+##
+## **공용 피격음을 막지 않는다.** 데미지와 기절은 같은 타격의 다른 두 결과이고,
+## 기절음은 그 위에 얹히는 표시다 — 광선검 틱처럼 0.2초마다 되풀이되어 웅웅거릴
+## 일도 없다: 망치는 0.9초 간격(소리는 0.83초)이고 삼지창은 쿨타임 7초다.
+func _on_player_stunned(_peer_id: int) -> void:
+	_play_stun_hit_sfx.rpc()
+
+
+## 너클 게이지가 75%를 넘어섰다 (서버 전용 — 젤리가 알려 온다, #225).
+##
+## **오라가 켜지는 그 순간이다.** 화면에서는 몸에 오라가 돌기 시작하고 게이지 바 색이
+## 바뀌는데, 맞고 있는 사람은 자기 머리 위를 보고 있지 않다 — 소리가 "이제 강펀치가
+## 달라진다"를 대신 알린다.
+##
+## 박자를 재지 않는다. 문턱을 넘는 것은 게이지가 0으로 돌아간 뒤에야 다시 있는 일이고
+## (특수를 쓰거나 라운드가 바뀌거나), 그 사이에 두 번 울릴 길이 없다.
+##
+## **피격음과 같은 순간에 나간다** — 게이지는 맞아야 차기 때문이다. 그래서 씬의
+## `volume_db` 를 피격음(-20)보다 낮게(-22) 잡아 두 소리가 한 덩어리로 뭉치지 않고
+## 타격 아래에 깔리게 했다. 뜻이 다른 소리라 한쪽이 다른 쪽 자리를 대신할 수는 없다
+## (`_mute_hit_sfx()` 가 근접 부딪힘에서 한 것과는 경우가 다르다).
+func _on_player_gauge_charged(_peer_id: int) -> void:
+	_play_knuckle_charged_sfx.rpc()
+
+
+## 지금 피격음을 울릴 차례인가. 참을 돌려주면서 **다음 차례를 함께 미룬다** —
+## 묻는 것과 미루는 것을 나누면 부르는 쪽이 한쪽을 빠뜨릴 수 있다.
+##
+## 시각을 인자로 받는 것은 박자를 눈으로 확인할 수 있게 하려는 것이다 (트리 없이 부른다).
+func _hit_sfx_due(now: float, continuous: bool) -> bool:
+	if now < _next_hit_at.get("hitsfx", 0.0):
+		return false
+	_next_hit_at["hitsfx"] = now + (DOT_SFX_INTERVAL if continuous else HIT_SFX_INTERVAL)
+	return true
+
+
+## 피격음을 `seconds` 동안 삼킨다 — 다른 소리가 그 자리를 대신할 때 쓴다.
+##
+## **얼마나 삼키는지를 부르는 쪽이 정한다.** 대신하는 소리가 한 번뿐이면(부딪힘 쇳소리)
+## 그 순간만 막으면 되지만, 대신하는 소리가 **계속 이어지면**(0.2초마다 나는 틱)
+## 한 순간만 막아서는 다음 틱과 함께 공용 피격음이 새어 나온다 — 그러면 둘이 겹쳐
+## 리듬이 웅웅거림이 된다. 이어지는 소리는 그 간격보다 길게 막아야 한다.
+func _mute_hit_sfx(now: float, seconds: float) -> void:
+	_next_hit_at["hitsfx"] = now + seconds
+
+
 ## 삼지창 특수의 번개. `at`은 맞은 젤리의 발밑이고, 줄기는 화면 위에서 거기까지 내려온다.
 @rpc("authority", "call_local", "reliable")
 func _play_lightning_strike(at: Vector2) -> void:
@@ -1756,9 +2192,342 @@ func _play_hit_sparks(at: Vector2) -> void:
 	effects_root.add_child(sparks)
 
 
+## 폭탄이 터지는 자리의 폭발 (#262). `at`은 터진 자리, `blast_radius`는 **판정에 쓰는
+## 반경 그대로**다 — 연출의 고리가 닿는 자리가 곧 맞는 경계다. 둘이 따로 놀면 이 연출은
+## 오히려 거짓말이 된다(착지 충격파 `_play_shockwave`와 같은 규칙).
+##
+## 위치를 붙이기 전에 넣는 것은 알갱이·번개와 같은 이유다 — `_ready()`가 이 값으로
+## 살과 불티가 뻗는 방향의 씨앗을 잡아서, 나중에 넣으면 모든 폭발이 (0, 0)으로
+## 같은 모양이 된다.
+@rpc("authority", "call_local", "reliable")
+func _play_bomb_blast(at: Vector2, blast_radius: float) -> void:
+	var blast := BOMB_BLAST_SCENE.instantiate()
+	blast.position = at
+	blast.radius = blast_radius
+	effects_root.add_child(blast)
+
+
+## 대포 총 포탄이 맞은 자리에서 터지는 푸른 충격. `at`은 탄이 닿은 자리다.
+##
+## 위치를 붙이기 전에 넣는 것은 알갱이·번개와 같은 이유다 — `_ready()`가 이 값으로
+## 살과 알갱이가 뻗는 방향의 씨앗을 잡아서, 나중에 넣으면 모든 피격이 (0, 0)으로
+## 같은 모양이 된다.
+@rpc("authority", "call_local", "reliable")
+func _play_cannon_burst(at: Vector2) -> void:
+	var burst := CANNON_BURST_SCENE.instantiate()
+	burst.position = at
+	effects_root.add_child(burst)
+
+
+## 대포 총 특수(미사일)를 쏠 때의 발사음. **소리라서 위치를 받지 않는다** —
+## 연출과 달리 어디서 났는지를 화면에 남기지 않으므로 좌표가 쓸 데가 없다.
+##
+## `Effects` 아래에 붙는 것은 연출과 같다 (한 판이 끝나 그 밑을 비울 때 같이 사라진다).
+@rpc("authority", "call_local", "reliable")
+func _play_cannon_shot_sfx() -> void:
+	effects_root.add_child(CANNON_SHOT_SFX_SCENE.instantiate())
+
+
+## 근접 무기끼리 맞부딪히는 소리. 발사음과 같은 이유로 위치를 받지 않는다.
+## 울릴 조건과 박자는 `_try_melee_clash_sfx()` 가 정한다.
+@rpc("authority", "call_local", "reliable")
+func _play_melee_clash_sfx() -> void:
+	effects_root.add_child(MELEE_CLASH_SFX_SCENE.instantiate())
+
+
+## 피해가 들어간 소리. 위 둘과 같은 이유로 위치를 받지 않는다.
+## 울릴 박자는 `_on_player_damaged()` 가 정한다.
+@rpc("authority", "call_local", "reliable")
+func _play_hit_sfx() -> void:
+	effects_root.add_child(HIT_SFX_SCENE.instantiate())
+
+
+## 광선검 특수(관통)를 켤 때의 소리. 위 셋과 같은 이유로 위치를 받지 않는다.
+## 박자를 재지 않는 것은 대포 총 발사음과 같다 — 쿨타임(8초)이 곧 박자다.
+@rpc("authority", "call_local", "reliable")
+func _play_laser_sword_skill_sfx() -> void:
+	effects_root.add_child(LASER_SWORD_SKILL_SFX_SCENE.instantiate())
+
+
+## 데미지가 들어갈 때마다 나는 짧은 틱. 울릴 조건은 `_try_damage_tick_sfx()` 가 정한다.
+##
+## **다른 소리보다 자주 오간다** — 광선검·전기톱은 초당 다섯 번, 소총 연사는 그 이상이다.
+## 그래도 `reliable` 로 두는 것은 다른 소리·연출과 같은 길을 쓰기 위해서다: 순서가
+## 어긋나거나 빠지면 "따다다닥"의 리듬이 그만큼 깨지고, 한 판에 오가는 양은
+## 투사체 스폰(연사 20발)보다 적다.
+@rpc("authority", "call_local", "reliable")
+func _play_damage_tick_sfx() -> void:
+	effects_root.add_child(DAMAGE_TICK_SFX_SCENE.instantiate())
+
+
+## 단검이 손에 돌아오는 소리 (주워서든 특수로 불러들여서든).
+##
+## 박자를 재지 않는다. 한 번 돌아오면 다시 던져야 또 돌아올 수 있어서
+## (`_dagger_held`), 연달아 울릴 길이 애초에 없다.
+@rpc("authority", "call_local", "reliable")
+func _play_dagger_return_sfx() -> void:
+	effects_root.add_child(DAGGER_RETURN_SFX_SCENE.instantiate())
+
+
+## 방패를 크게 들어 올리는 소리 (방패 특수의 길게 누르기).
+##
+## 박자를 재지 않는다. 쿨타임(5초)이 곧 박자이고, 길게/짧게가 갈리는 순간 한 번만
+## 부른다 — 광선검 관통음과 같은 자리다. **던지기 쪽에는 안 붙는다**: 소리가 갈라져야
+## 화면을 안 보고도 어느 쪽이 나갔는지 알 수 있다.
+@rpc("authority", "call_local", "reliable")
+func _play_shield_size_sfx() -> void:
+	effects_root.add_child(SHIELD_SIZE_SFX_SCENE.instantiate())
+
+
+## 소총 기본 공격의 총성. 울릴 조건은 `_try_ranged_basic()` 이 정한다.
+##
+## **박자를 따로 재지 않는다** — 기본 간격(1.2초)이 곧 박자다. 피격음처럼 여러 발이
+## 한 순간에 몰리는 일이 없어서 뭉칠 것도 없다.
+@rpc("authority", "call_local", "reliable")
+func _play_rifle_shot_sfx() -> void:
+	effects_root.add_child(RIFLE_SHOT_SFX_SCENE.instantiate())
+
+
+## 소총 특수(연발)의 연사음. 특수를 켜는 순간 **한 번만** 울린다 —
+## 소리 길이가 연사 지속시간과 같아서 그 2초를 통째로 덮는다.
+## 소총 기본 공격의 탄이 몸에 맞는 소리. 울릴 조건은 `_on_projectile_impacted()` 이
+## 정한다 — 그 자리에서 공용 피격음도 함께 막는다.
+@rpc("authority", "call_local", "reliable")
+func _play_rifle_hit_sfx() -> void:
+	effects_root.add_child(RIFLE_HIT_SFX_SCENE.instantiate())
+
+
+@rpc("authority", "call_local", "reliable")
+func _play_rifle_burst_sfx() -> void:
+	effects_root.add_child(RIFLE_BURST_SFX_SCENE.instantiate())
+
+
+## 활 기본 공격의 활시위 소리. 울릴 조건은 `_try_ranged_basic()` 이 정한다.
+##
+## **박자를 따로 재지 않는다** — 기본 간격(0.7초)이 곧 박자이고, 소리를 그보다
+## 짧게(0.70초) 잘라 두어 겹칠 자리가 없다.
+@rpc("authority", "call_local", "reliable")
+func _play_bow_shot_sfx() -> void:
+	effects_root.add_child(BOW_SHOT_SFX_SCENE.instantiate())
+
+
+## 활 특수(관통 화살 폭격)의 소리. 특수를 켜는 순간 **한 번만** 울린다 —
+## 다발(5발)마다 울리면 한 번 크게 쏜 것이 아니라 다섯 배로 커진 소리가 된다.
+##
+## 박자를 재지 않는다. 쿨타임(6초)이 곧 박자다.
+@rpc("authority", "call_local", "reliable")
+func _play_bow_skill_sfx() -> void:
+	effects_root.add_child(BOW_SKILL_SFX_SCENE.instantiate())
+
+
+## 전기톱 특수(관통 돌진)의 톱 소리. 특수를 켜는 순간 한 번만 울린다.
+##
+## 박자를 재지 않는다 — 쿨타임(7초)이 곧 박자다. 소리는 1.62초이고, 제자리 회전
+## 0.45초(#260)에 돌진이 길어도 화면 폭을 건너는 시간(약 1.03초, `Player.dash_time()`)이
+## 붙어 1.48초다 — 회전부터 돌진 끝까지를 톱 소리가 거의 그대로 덮는다.
+## **손에 든 톱이라 그대로 두었다** — 총성처럼 한 번 나고 끝나야 하는 소리가 아니다.
+@rpc("authority", "call_local", "reliable")
+func _play_chainsaw_dash_sfx() -> void:
+	effects_root.add_child(CHAINSAW_DASH_SFX_SCENE.instantiate())
+
+
+## 전기톱이 내지르는 순간 바람을 가르는 소리 (#260). 회전이 끝나는 그 순간에
+## 한 번만 울린다 — 부르는 자리는 `_on_dash_launched()` 다.
+##
+## **톱 소리와 나뉘어 있는 이유**: 특수가 두 단계라 소리도 둘이다. 톱은 켜는 순간부터
+## 계속 돌아가는 소리고, 바람은 내지르는 그 한 순간의 소리다 — 양날 도끼가 켜는 순간·
+## 직격 착지·빗나간 착지로 셋을 나눈 것과 같은 판단이다.
+##
+## 크기는 톱 소리(-16dB)보다 조금 작게 잡았다(씬에서 -18dB) — 바람이 톱보다 크면
+## 무엇을 들고 있는지가 뒤집혀 들린다.
+@rpc("authority", "call_local", "reliable")
+func _play_chainsaw_wind_sfx() -> void:
+	effects_root.add_child(CHAINSAW_WIND_SFX_SCENE.instantiate())
+
+
+## 검 특수("데마시아")의 외침. 울릴 조건은 `_execute_special()` 의 `"검"` 갈래가
+## 정한다 — 사거리 안에서 실제로 발동한 경우만이다.
+##
+## 박자를 재지 않는다 — 쿨타임(6초)이 곧 박자다. 소리가 2.99초로 긴데, 데미지가
+## 들어가는 것은 0.38초 뒤이므로 **소리는 판정보다 오래 남는다**. 그것이 맞다:
+## 외침이 끝나야 한 방이 끝나는 무기다.
+@rpc("authority", "call_local", "reliable")
+func _play_sword_skill_sfx() -> void:
+	effects_root.add_child(SWORD_SKILL_SFX_SCENE.instantiate())
+
+
+## 양날 도끼 특수를 켜는 소리 (솟아오르는 순간). 울릴 조건은 `_execute_special()` 의
+## `"양날 도끼"` 갈래가 정한다.
+##
+## 박자를 재지 않는다 — 쿨타임(`special_cooldown`)이 곧 박자다. 다만 이 소리는
+## **착지음과 겹친다**: 솟는 데 0.25초(`_rise_time()`)이고 그만큼 떨어져 내리므로
+## 공중에 있는 시간이 0.5초 안팎인데 이 소리는 1.60초다. 셋을 다르게 들리는 소리로
+## 받았으므로 같은 소리가 겹쳐 커지는 문제는 아니고, 솟는 소리가 남은 채로 땅이
+## 갈라지는 쪽이 순서대로 들린다.
+@rpc("authority", "call_local", "reliable")
+func _play_axe_skill_sfx() -> void:
+	effects_root.add_child(AXE_SKILL_SFX_SCENE.instantiate())
+
+
+## 양날 도끼가 **빗나가 땅에** 떨어진 소리. 울릴 조건은 `_on_forced_landed()` 가 정한다 —
+## 땅 격파 연출(`_play_shockwave`)과 같은 순간, 같은 자리다.
+@rpc("authority", "call_local", "reliable")
+func _play_axe_land_ground_sfx() -> void:
+	effects_root.add_child(AXE_LAND_GROUND_SFX_SCENE.instantiate())
+
+
+## 양날 도끼가 **상대 위로** 떨어진 소리 (직격). 울릴 조건은
+## `_check_pending_specials()` 가 정한다 — 예약에 `direct_hit_sfx` 가 적혀 있을 때만이다.
+##
+## 위의 땅 착지음과 **둘 중 하나만 울린다**. 직격하면 예약이 지워져 착지 쪽이 그냥
+## 지나가고, 빗나가면 여기 올 것이 없다 — 한 번의 특수가 소리를 두 번 내지 않는다.
+@rpc("authority", "call_local", "reliable")
+func _play_axe_land_hit_sfx() -> void:
+	effects_root.add_child(AXE_LAND_HIT_SFX_SCENE.instantiate())
+
+
+## 망치·삼지창·장대 특수의 소리. 울릴 조건은 `_execute_special()` 의 그 세 갈래가 정한다.
+##
+## **셋이 같은 소리를 쓴다** — 받은 소리가 하나여서다. 무기마다 갈라 두면 같은 파일을
+## 세 씬이 가리키게 되어, 나중에 하나를 바꿀 때 나머지 둘이 조용히 남는다.
+## 소리를 무기별로 나눌 때가 오면 이 함수를 셋으로 가르는 것이 그 자리다.
+##
+## 박자를 재지 않는다 — 쿨타임(망치 8초, 삼지창 7초, 장대 10초)이 곧 박자다.
+## 소리는 1.05초라 그 안에 두 번 울릴 길이 없다.
+##
+## 겹치는 것이 없는지도 봐 두었다: 망치·장대는 능력만 걸어서 이 순간에 다른 소리가
+## 없고, 삼지창은 던지는 순간이라 맞을 때 나는 기절음(`_play_stun_hit_sfx`)과는
+## 시각이 갈린다 — 날아가는 시간만큼 뒤다.
+@rpc("authority", "call_local", "reliable")
+func _play_skill_cast_sfx() -> void:
+	effects_root.add_child(SKILL_CAST_SFX_SCENE.instantiate())
+
+
+## 샷건 특수가 나갔다. 울릴 조건은 `_cone_blast()` 가 정한다 — 부채꼴 연출을 띄우는
+## 그 자리이고, **맞았는지와 무관하다**: 빗나간 산탄도 총성은 난다.
+##
+## 실을 것이 없다. 부채꼴이 어디로 열렸는지는 연출(`_play_shotgun_blast`)이 이미 그리고,
+## 소리에는 좌우가 없다 (`sfx_oneshot.gd`).
+##
+## 박자를 재지 않는다 — 쿨타임(2.5초)이 곧 박자이고 소리는 1.39초다. 샷건은 기본 공격이
+## 없어서(무기 표의 `basic_damage: 0`) 이 소리와 겹칠 다른 소리도 없다. 다만 맞았으면
+## 공용 피격음이 뒤따라 겹치는데, 그것은 막지 않는다 — 폭탄 터지는 소리와 같은 판단으로,
+## 쏜 것과 맞은 것은 서로 다른 소식이다.
+@rpc("authority", "call_local", "reliable")
+func _play_shotgun_skill_sfx() -> void:
+	effects_root.add_child(SHOTGUN_SKILL_SFX_SCENE.instantiate())
+
+
+## 무기 선택 창이 떴다. 울릴 조건은 `_receive_pick_start()` 가 정한다 — 라운드마다 한 번,
+## 창이 열리는 그 순간이다.
+##
+## **여기만 `@rpc` 가 아니다.** 위아래의 소리들은 서버가 판정을 끝내고 각 피어에게
+## 알리는 것이라 원격 호출이 필요했지만, 이 소리를 부르는 자리(`_receive_pick_start`)는
+## 이미 서버가 보낸 것을 받아 **각자의 화면에서** 도는 중이다. 여기에 `.rpc()` 를 또
+## 붙이면 클라이언트가 남에게 소리를 시키는 꼴이 되고, 그 권한은 서버에만 있어서
+## 조용히 막힌다.
+##
+## **헤드리스 서버에서는 이 함수가 아예 안 돈다** — 부르는 자리가 `call_remote` 라
+## 서버 자신은 지나가지 않는다. 소리 장치가 없는 쪽에서 노드만 쌓이는 일이 없다.
+##
+## 박자를 재지 않는다 — 라운드 사이에 한 번뿐이고, 소리는 1.06초다. 이때 화면에서
+## 나는 다른 소리도 없다: 판이 끝나 무기들이 멎은 뒤에 뜨는 창이다.
+func _play_weapon_pick_sfx() -> void:
+	effects_root.add_child(WEAPON_PICK_SFX_SCENE.instantiate())
+
+
+## 표창을 던지는 소리 (#261). 울릴 조건은 특수의 "표창" 갈래가 정한다.
+##
+## 박자를 재지 않는다 — 쿨타임(2.5초)이 곧 박자이고 소리는 0.44초다. 폭탄 던지는
+## 소리(`_play_bomb_throw_sfx`)와 같은 자리·같은 판단이다.
+##
+## **소리 파일 앞을 잘라 두었다** (0.86초 → 0.44초). 원본은 도는 소리(휙)가 0.45초쯤
+## 이어진 뒤에야 "챡" 하는 정점이 왔다 — 부르는 자리는 표창이 손을 떠나는 그 순간인데
+## 정작 손을 떠난 소리가 반 박자 늦게 들려서, 던지는 동작과 소리가 어긋나 보였다.
+## 지금은 정점이 0.09초에 있다(앞에 0.08초의 짧은 도는 소리만 남겼다 — 아주 없애면
+## 정점이 문턱 없이 튀어나와 딱딱하게 들린다). **파일을 바꿔서 맞췄지, 부르는 자리를
+## 늦추지 않았다** — 늦추면 서버가 탄을 내는 시각과 소리가 갈라져 무엇을 기준으로
+## 맞춘 것인지가 코드에서 사라진다.
+##
+## 크기를 낮게(-17dB, 씬에서) 잡은 것은 **자주 울리는 소리라서다** — 쿨타임이 짧은
+## 축이라 경기 내내 들린다. 활시위(-20dB)가 같은 이유로 낮다.
+@rpc("authority", "call_local", "reliable")
+func _play_shuriken_throw_sfx() -> void:
+	effects_root.add_child(SHURIKEN_THROW_SFX_SCENE.instantiate())
+
+
+## 강화(빨간) 표창이 맞아 자리가 바뀌는 소리. 울릴 조건은 `_on_positions_swapped()` 가
+## 정한다 — 위치 교환 연출과 같은 신호를 쓴다.
+##
+## 박자를 재지 않는다. 강화 표창은 뽑기(35%)로 하나씩 나가고 쿨타임이 2.5초라
+## 연달아 울릴 길이 없다.
+##
+## **던지는 소리와 겹치지 않는다** (#261): 던지는 순간과 맞는 순간 사이에 표창이
+## 날아가는 시간이 있고, 던지는 소리는 0.44초, 이쪽은 0.50초다.
+@rpc("authority", "call_local", "reliable")
+func _play_shuriken_swap_sfx() -> void:
+	effects_root.add_child(SHURIKEN_SWAP_SFX_SCENE.instantiate())
+
+
+## 폭탄을 던지는 소리. 울릴 조건은 특수의 "폭탄" 갈래가 정한다.
+## 박자를 재지 않는다 — 쿨타임(3.5초)이 곧 박자다.
+@rpc("authority", "call_local", "reliable")
+func _play_bomb_throw_sfx() -> void:
+	effects_root.add_child(BOMB_THROW_SFX_SCENE.instantiate())
+
+
+## 폭탄이 터지는 소리. 울릴 조건은 `_on_bomb_exploded()` 가 정한다 —
+## 도화선이 다 타서 터지든 닿아서 터지든 같은 한 곳(`Projectile._explode()`)을 지난다.
+@rpc("authority", "call_local", "reliable")
+func _play_bomb_explode_sfx() -> void:
+	effects_root.add_child(BOMB_EXPLODE_SFX_SCENE.instantiate())
+
+
+## 기절하며 맞는 소리 (망치 특수·삼지창 특수). 울릴 조건은 `_on_player_stunned()` 가 정한다.
+##
+## **무기마다 나누지 않았다** — 기절을 거는 것은 둘뿐이고 걸리는 쪽에서 일어나는 일이
+## 같다. 무엇에 맞았는지는 화면이 말한다(망치는 앞에 서 있고, 삼지창은 번개가 내려친다).
+@rpc("authority", "call_local", "reliable")
+func _play_stun_hit_sfx() -> void:
+	effects_root.add_child(STUN_HIT_SFX_SCENE.instantiate())
+
+
+## 너클 게이지가 75%를 넘어선 소리 (#225). 울릴 조건은 `_on_player_gauge_charged()` 가
+## 정한다 — 문턱을 넘는 그 한 번뿐이다.
+##
+## **누구의 게이지가 찼는지는 싣지 않는다.** 소리에 좌우가 없고(`sfx_oneshot.gd`),
+## 오라와 게이지 바가 이미 누구인지를 화면에서 말한다.
+@rpc("authority", "call_local", "reliable")
+func _play_knuckle_charged_sfx() -> void:
+	effects_root.add_child(KNUCKLE_CHARGED_SFX_SCENE.instantiate())
+
+
+## 너클 특수(강펀치) 소리 (#225). 울릴 조건은 `_resolve_punch()` 가 정한다 —
+## 주먹 연출이 뜨는 그 순간이고, **맞았는지와 무관하다**: 헛친 주먹도 소리는 난다
+## (연출을 먼저 띄우는 것과 같은 이유다).
+##
+## 박자를 재지 않는다 — 쿨타임(5초)이 곧 박자이고, 예약은 한 사람당 하나뿐이라
+## (`_tick_punches()`) 겹칠 자리가 없다.
+##
+## **충전(75% 이상)이든 아니든 같은 소리다.** 충전 여부는 연출이 통째로 달라지는 것으로
+## 이미 드러나고(`heavy_punch.gd`), 소리를 둘로 가르면 파일이 하나뿐인 지금은 같은
+## 파일을 두 씬이 가리키게 된다.
+@rpc("authority", "call_local", "reliable")
+func _play_knuckle_punch_sfx() -> void:
+	effects_root.add_child(KNUCKLE_PUNCH_SFX_SCENE.instantiate())
+
+
 ## 빨간 표창이 자리를 바꿨다 (서버 전용 — 투사체가 알려 온다).
 func _on_positions_swapped(from_position: Vector2, to_position: Vector2) -> void:
 	_play_swap_burst.rpc(from_position, to_position)
+	# 소리도 같은 자리에서 낸다 — 강화(빨간) 표창이 맞은 순간이 곧 이 신호다.
+	#
+	# **공용 피격음과 겹친다.** 이 표창도 데미지가 들어가게 되면서
+	# (`Projectile._on_body_entered`가 자리를 바꾸기 전에 `server_apply_hit`을 지난다)
+	# 맞은 소리와 바뀐 소리가 함께 난다. 소총 탄처럼 한쪽을 막지 않는 것은 폭탄과 같은
+	# 이유다 — 맞았다는 것과 자리가 바뀌었다는 것은 서로 다른 소식이고, 둘 다 들려야
+	# 무슨 일이 일어났는지가 소리만으로 갈린다.
+	_play_shuriken_swap_sfx.rpc()
 
 
 ## 위치 교환 연출. **두 자리에 하나씩** 띄운다 — 하나만 띄우면 어디로 갔는지 알 수 없다.
@@ -1778,6 +2547,17 @@ func _play_swap_burst(from_position: Vector2, to_position: Vector2) -> void:
 		effects_root.add_child(burst)
 
 
+## 제자리 회전이 끝나 전기톱이 내지르기 시작했다 (#260). 서버 전용.
+##
+## **바람 소리는 여기서 난다 — 특수를 누른 자리가 아니다.** 누른 순간은 아직 제자리에서
+## 도는 중이라, 거기서 울리면 바람이 회전에 얹혀 무엇의 소리인지 흐려진다. 이 순간이
+## 정확히 "지금 내지른다"이고, 톱 소리(`_play_chainsaw_dash_sfx`)가 그 밑에 깔려 있다.
+func _on_dash_launched(_peer_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	_play_chainsaw_wind_sfx.rpc()
+
+
 ## 강제 낙하(양날 도끼)가 땅에 닿았다 — **좌우로 땅을 갈라 보낸다** (#167). 서버 전용.
 ##
 ## 여기서는 시작만 한다. 실제로 때리는 것은 `_tick_ruptures()`가 앞선을 밀면서 하고,
@@ -1794,6 +2574,11 @@ func _on_forced_landed(peer_id: int, at: Vector2) -> void:
 	if radius <= 0.0:
 		return
 	_special_pending.erase(peer_id)   # 착지로 기회를 다 썼다
+	# 빗나가 땅에 닿은 착지음. **여기 오는 것은 양날 도끼뿐이다** — 위의
+	# `landing_radius` 가 이미 그 갈림이고, 직격했으면 예약이 지워져 여기 올 것이
+	# 없다(함수 주석 참고). 그래서 직격음과 이 소리는 서로를 밀어낸다.
+	# 아래 `speed` 검사보다 앞에 둔다: 땅에 닿은 것은 격파가 뻗든 말든 일어난 일이다.
+	_play_axe_land_ground_sfx.rpc()
 	var speed: float = info.get("landing_rupture_speed", 0.0)
 	if speed <= 0.0:
 		return
@@ -1864,12 +2649,6 @@ func _play_shockwave(at: Vector2, radius: float, speed: float) -> void:
 	wave.speed = speed
 	effects_root.add_child(wave)
 	wave.global_position = at + Vector2(0.0, Player.BODY_BOTTOM)
-
-
-## 돌진이 벽 없는 맵에서 무한히 이어지지 않게 하는 안전장치.
-## 화면 폭을 돌진 속도로 지나가는 시간이면 충분하다.
-func _dash_safety_time() -> float:
-	return get_viewport_rect().size.x / Player.FORCED_SPEED
 
 
 ## 상승에서 낙하로 넘어가는 시점. 일반 점프가 정점에 닿는 시간의 두 배 속도이므로 절반이다.

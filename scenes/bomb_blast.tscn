@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://jellybombblast01"]
+
+[ext_resource type="Script" path="res://scripts/bomb_blast.gd" id="1_blast"]
+
+[node name="BombBlast" type="Node2D"]
+script = ExtResource("1_blast")
