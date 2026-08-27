@@ -719,7 +719,7 @@ func _on_weapon_chosen(index: int) -> void:
 
 
 ## 낙사 — 화면 밖으로 나가거나 즉사 구역(물·용암)에 닿으면 죽는다.
-## 좌우 벽이 있고 즉사 구역이 없는 맵(평지·벽돌)에서는 일어나지 않는다.
+## 좌우 벽이 있고 즉사 구역이 없는 맵(오두막·투기장)에서는 일어나지 않는다.
 func _check_falls() -> void:
 	if _match_over:
 		return

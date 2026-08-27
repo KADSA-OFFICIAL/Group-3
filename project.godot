@@ -32,7 +32,6 @@ window/stretch/mode="canvas_items"
 [gui]
 
 theme/custom="res://resources/ui_theme.tres"
-theme/custom_font="res://resources/korean_font.tres"
 
 [input]
 

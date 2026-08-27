@@ -1,7 +1,8 @@
 extends Node2D
 ## 바닥에 떨어져 주울 수 있는 단검 주변에 도는 빨간 오라 (#250).
 ##
-## **테두리가 실제로 주워지는 거리다**(`Projectile.PICKUP_RANGE` 48px). 폭탄 반경을
+## **테두리가 실제로 주워지는 거리다** — `Projectile`이 `PICKUP_RANGE`를 `radius`로
+## 넘겨 준다(#256, 양날 도끼 충격파가 `landing_radius`를 받는 것과 같은 방식). 폭탄 반경을
 ## 그린 것과 같은 이유다(#140) — 눈으로 배운 범위가 실제와 어긋나면 표시가 거짓말이 된다.
 ## 그래서 맥박은 안쪽 빛만 치고 **테두리는 제자리에 가만히 있는다.**
 ##
@@ -87,7 +88,7 @@ func _process(delta: float) -> void:
 ## 단검이 움직여도 다시 그릴 필요가 없다 — 원점을 기준으로 그리므로 노드가
 ## 옮겨질 때 그려 둔 것이 함께 따라간다 (`blast_radius.gd`와 같다).
 func _draw() -> void:
-	if not active:
+	if not active or radius <= 0.0:
 		return
 	var pulse := 1.0 + PULSE_DEPTH * sin(_elapsed * PULSE_RATE)
 	# 날을 감싸는 작은 빛 — 맥박은 여기서만 돈다.

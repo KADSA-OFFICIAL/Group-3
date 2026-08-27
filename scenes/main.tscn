@@ -57,9 +57,9 @@ horizontal_alignment = 1
 vertical_alignment = 1
 
 [node name="RoomSwitcher" parent="UI/HUD" instance=ExtResource("4_switcher")]
-offset_left = 454.0
+offset_left = 416.0
 offset_top = 56.0
-offset_right = 698.0
+offset_right = 736.0
 offset_bottom = 108.0
 
 [node name="P1Card" type="Panel" parent="UI/HUD"]
