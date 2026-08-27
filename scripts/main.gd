@@ -246,13 +246,16 @@ func _on_lobby_changed() -> void:
 	_load_map(Lobby.map_name)
 
 
-## 관전자 화면. 조작할 것이 없으니 조작 안내를 나가는 방법으로 바꿔 준다 (이슈 #167).
+## 관전자 화면. 이 기기가 보기만 한다는 것을 알려 준다 (이슈 #167).
 ## 자기 젤리가 없다는 것 말고는 플레이어 화면과 같다 — HUD·배너·투사체가 다 보인다.
+##
+## 문구는 씬에 적혀 있고 여기서는 켜기만 한다 — 플레이어에게는 접힌 채로 둔다.
+## 카드가 화면 맨 위로 올라가면서(이슈 #267) 조작 안내가 없어졌고, 관전 안내는
+## 젤리와 겹치지 않는 가운데 빈 자리(`ObserverCard`)로 옮겼다.
 func _setup_observer_view() -> void:
 	if not Lobby.is_observer(multiplayer.get_unique_id()):
 		return
-	$UI/HUD/HintCard/ControlsHint.text = "관전 중 — 이 기기는 경기를 보기만 합니다
-접속 종료: ESC"
+	$UI/HUD/ObserverCard.visible = true
 
 
 ## 클라이언트가 전투 화면 준비를 마쳤음을 서버에 알린다.
@@ -871,7 +874,6 @@ func _load_map(map_name: String) -> void:
 	# 갈아 줄 때 무엇이 깔렸는지 기억한다. 폴백으로 다른 맵이 깔려도 **요청한 이름**을
 	# 적어 둔다 — 판단 기준이 `Lobby.map_name`과의 비교이므로 같은 값이어야 한다.
 	_loaded_map = map_name
-	$UI/HUD/MapCard/MapLabel.text = "맵: " + map_name
 	for child in map_root.get_children():
 		# queue_free()는 프레임 끝에야 노드를 뗀다. 그때까지 옛 지형의 충돌 몸체가
 		# 물리 공간에 남아 **새 맵과 겹친 채로 한 프레임이 돈다** — 먼저 떼어 낸다.
