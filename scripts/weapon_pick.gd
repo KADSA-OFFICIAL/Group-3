@@ -31,6 +31,22 @@ const INTRO_SETTLE := 0.45
 ## 어둡기가 다 깔리는 데 걸리는 시간(초). 카드보다 먼저 자리를 잡아 바탕이 된다.
 const DIM_TIME := 0.28
 
+## 창 내용을 오른쪽으로 미는 양(px, 기준 화면 1152×648). **0이면 지금까지와 같은 화면**이다.
+##
+## 릴리즈한 exe를 다른 기기에서 켜면 이 창이 통째로 왼쪽으로 쏠려 보인다는 보고가 있었는데
+## (#299), 저장소 안에서는 재현되지 않았다 — 카드 상자는 폭 900에 내용도 정확히 900이라
+## 해상도와 무관하게 가운데로 계산되고(1152x648·1920x1080·1366x768·800x600 에서 전부
+## 좌우 여백 126 : 126), 16:9가 아닌 창에서도 엔진의 letterbox가 가운데로 잡혔다.
+## 디스플레이 배율 100%·기본 해상도에서도 증상이 남아 DPI 쪽도 아니었다.
+##
+## 그래서 원인을 잡는 대신 **미는 양을 여기 한 곳에 두고** 눈으로 맞춘다. 값을 바꿀 때는
+## 씬이 아니라 이 줄을 고친다 — 씬과 스크립트 두 곳에 자리 값이 갈리면 한쪽만 고쳤을 때
+## 조용히 어긋난다.
+##
+## **126을 넘기지 말 것** — 카드 상자가 x 126~1026에 놓이므로 그보다 크게 밀면
+## 오른쪽 카드가 화면(1152) 밖으로 나간다.
+const SHIFT_X := 120.0
+
 @onready var _cards: Array = [$Cards/Card0, $Cards/Card1, $Cards/Card2]
 @onready var _card_box: HBoxContainer = $Cards
 @onready var _timer_label: Label = $Timer
@@ -55,6 +71,22 @@ func _ready() -> void:
 		_cards[index].pressed.connect(_on_card_pressed.bind(index))
 	_dim_alpha = _dim.color.a
 	_shine.cards = _cards
+	_apply_shift()
+
+
+## 창 내용을 `SHIFT_X` 만큼 오른쪽으로 옮긴다 (#299).
+##
+## **`Dim` 은 밀지 않는다** — 화면 전체를 덮는 것이 그 노드의 일이라, 밀면 왼쪽에 안 덮인
+## 띠가 생긴다. **`Shine` 도 밀지 않는다** — 카드 자리를 그때그때 되짚어 그리므로
+## (`card_shine.gd` 의 `_card_rect()`) 카드를 옮기면 저절로 따라온다.
+##
+## `_ready()` 에서 딱 한 번 돈다. 창을 열 때마다 부르면 라운드마다 조금씩 더 밀린다 —
+## 앵커로 놓인 노드에 `position` 을 주는 것은 offset 을 그만큼 옮기는 일이라 누적된다.
+func _apply_shift() -> void:
+	if is_zero_approx(SHIFT_X):
+		return
+	for node: Control in [$Title, $Timer, $Cards, $Status]:
+		node.position.x += SHIFT_X
 
 
 ## 남은 시간 표시와 등장 연출.
