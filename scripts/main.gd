@@ -266,6 +266,12 @@ func _notify_ready() -> void:
 func _add_player(peer_id: int) -> void:
 	if players_root.has_node("Player_%d" % peer_id):
 		return
+	# **자리가 찼으면 스폰하지 않는다** (#315). 관전자는 `_notify_ready` 가 역할로 걸러
+	# 내지만, 역할이 아직 등록되지 않은 피어는 그 검사를 통과해 여기까지 온다 —
+	# 그대로 두면 싸우는 젤리가 셋이 되고(`Lobby.order` 는 이미 둘로 막혀 있어 슬롯을
+	# 못 받는다) 자리 계산이 대비값으로 떨어져 남의 스폰에 겹쳐 선다.
+	if _fighter_count() >= Network.MAX_PLAYERS:
+		return
 	# 슬롯과 선택값은 대기실에서 서버가 확정한 것을 그대로 쓴다
 	var index: int = Lobby.slot_of(peer_id)
 	if index < 0:
@@ -296,7 +302,15 @@ func _add_player(peer_id: int) -> void:
 
 	# 두 사람이 다 들어왔으면 첫 라운드를 연다 (#205). 라운드가 무기 선택으로 시작하게
 	# 되면서 "첫 판"에도 여는 순간이 필요해졌다 — 전에는 스폰이 곧 시작이었다.
-	if not _match_over and not _picking and players_root.get_child_count() >= Network.MAX_PLAYERS:
+	#
+	# **여는 것은 첫 판뿐이다** (#315). `_intro_shown` 이 "이 경기에서 판을 이미 열었는가"를
+	# 들고 있다 — 첫 `_start_round()` 에서 켜지고 `_server_reset_match()` 에서 꺼진다.
+	# 전에는 `not _picking` 만 봤는데, 그러면 무기 선택 구간만 막히고 표지 그림 구간·
+	# 카운트다운·판이 도는 중·다음 판 대기 중이 전부 뚫린다: 경기 도중에 피어가 하나
+	# 붙으면 그 자리에서 판이 처음부터 다시 열려 맵이 새로 뽑히고 젤리가 스폰으로
+	# 돌아갔다. 라운드마다 지형이 반드시 바뀌게 되면서(#310) 화면이 통째로 갈리는 것으로
+	# 드러났다.
+	if not _match_over and not _intro_shown and _fighter_count() >= Network.MAX_PLAYERS:
 		_start_round()
 
 
@@ -629,7 +643,11 @@ func _check_falls() -> void:
 ## 예약된 라운드 재시작·대기실 복귀를 처리한다.
 func _tick_round() -> void:
 	var now := _now()
-	if _round_restart_at > 0.0 and now >= _round_restart_at:
+	# **카드가 떠 있는 동안에는 판을 다시 열지 않는다** (#315) — 예약을 버리지 않고
+	# 미룬다. 고르는 중에 지형이 갈리면 읽고 있던 카드가 남의 판 위에 뜬 것이 되고,
+	# 젤리도 스폰으로 되돌아가 무엇이 일어났는지 알 수 없다. `_pick_deadline` 이 선택을
+	# 반드시 끝내므로(`_finish_pick_phase`) 이 예약이 영원히 밀리는 일은 없다.
+	if _round_restart_at > 0.0 and now >= _round_restart_at and not _picking:
 		_start_round()
 	# 표지 그림이 끝났다 — 미뤄 둔 무기 선택을 이제 연다 (요청).
 	if _pick_opens_at > 0.0 and now >= _pick_opens_at:
