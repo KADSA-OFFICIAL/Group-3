@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://jellymain0001"]
+[gd_scene load_steps=8 format=3 uid="uid://jellymain0001"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="2_mainscript"]
 [ext_resource type="Script" path="res://scripts/jelly_preview.gd" id="3_preview"]
@@ -7,14 +7,6 @@
 [ext_resource type="PackedScene" path="res://scenes/match_intro.tscn" id="6_intro"]
 [ext_resource type="PackedScene" path="res://scenes/point_gain.tscn" id="7_point"]
 [ext_resource type="PackedScene" path="res://scenes/countdown.tscn" id="8_count"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bar_fill_p2"]
-bg_color = Color(0.42, 0.45, 0.82, 1)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_right = 12
-corner_radius_bottom_left = 12
-corner_detail = 10
 
 [node name="Main" type="Node2D"]
 script = ExtResource("2_mainscript")
@@ -41,11 +33,51 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 
+[node name="ScoreCard" type="Panel" parent="UI/HUD"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -180.0
+offset_top = 8.0
+offset_right = 180.0
+offset_bottom = 64.0
+
+[node name="P1Score" type="Label" parent="UI/HUD/ScoreCard"]
+offset_left = 16.0
+offset_top = 8.0
+offset_right = 164.0
+offset_bottom = 48.0
+theme_override_colors/font_color = Color(0.8, 0.29, 0.56, 1)
+theme_override_font_sizes/font_size = 26
+text = "○○○  0"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="Divider" type="Label" parent="UI/HUD/ScoreCard"]
+offset_left = 164.0
+offset_top = 8.0
+offset_right = 196.0
+offset_bottom = 48.0
+theme_override_colors/font_color = Color(0.62, 0.56, 0.66, 1)
+theme_override_font_sizes/font_size = 22
+text = ":"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="P2Score" type="Label" parent="UI/HUD/ScoreCard"]
+offset_left = 196.0
+offset_top = 8.0
+offset_right = 344.0
+offset_bottom = 48.0
+theme_override_colors/font_color = Color(0.42, 0.45, 0.82, 1)
+theme_override_font_sizes/font_size = 26
+text = "0  ○○○"
+vertical_alignment = 1
+
 [node name="ObserverCard" type="Panel" parent="UI/HUD"]
 offset_left = 452.0
-offset_top = 8.0
+offset_top = 72.0
 offset_right = 700.0
-offset_bottom = 48.0
+offset_bottom = 112.0
 visible = false
 
 [node name="Label" type="Label" parent="UI/HUD/ObserverCard"]
@@ -58,89 +90,9 @@ vertical_alignment = 1
 
 [node name="RoomSwitcher" parent="UI/HUD" instance=ExtResource("4_switcher")]
 offset_left = 416.0
-offset_top = 56.0
+offset_top = 120.0
 offset_right = 736.0
-offset_bottom = 108.0
-
-[node name="P1Card" type="Panel" parent="UI/HUD"]
-offset_left = 8.0
-offset_top = 8.0
-offset_right = 372.0
-offset_bottom = 110.0
-
-[node name="Name" type="Label" parent="UI/HUD/P1Card"]
-offset_left = 18.0
-offset_top = 12.0
-offset_right = 258.0
-offset_bottom = 40.0
-theme_override_font_sizes/font_size = 20
-text = "1P"
-
-[node name="Hp" type="Label" parent="UI/HUD/P1Card"]
-offset_left = 258.0
-offset_top = 12.0
-offset_right = 346.0
-offset_bottom = 40.0
-theme_override_font_sizes/font_size = 20
-text = "100"
-horizontal_alignment = 2
-
-[node name="Bar" type="ProgressBar" parent="UI/HUD/P1Card"]
-offset_left = 18.0
-offset_top = 46.0
-offset_right = 346.0
-offset_bottom = 72.0
-show_percentage = false
-value = 100.0
-
-[node name="Score" type="Label" parent="UI/HUD/P1Card"]
-offset_left = 18.0
-offset_top = 76.0
-offset_right = 346.0
-offset_bottom = 98.0
-theme_override_font_sizes/font_size = 20
-text = "○○○  0 / 3"
-
-[node name="P2Card" type="Panel" parent="UI/HUD"]
-offset_left = 780.0
-offset_top = 8.0
-offset_right = 1144.0
-offset_bottom = 110.0
-
-[node name="Name" type="Label" parent="UI/HUD/P2Card"]
-offset_left = 106.0
-offset_top = 12.0
-offset_right = 346.0
-offset_bottom = 40.0
-theme_override_font_sizes/font_size = 20
-text = "2P"
-horizontal_alignment = 2
-
-[node name="Hp" type="Label" parent="UI/HUD/P2Card"]
-offset_left = 18.0
-offset_top = 12.0
-offset_right = 106.0
-offset_bottom = 40.0
-theme_override_font_sizes/font_size = 20
-text = "100"
-
-[node name="Bar" type="ProgressBar" parent="UI/HUD/P2Card"]
-offset_left = 18.0
-offset_top = 46.0
-offset_right = 346.0
-offset_bottom = 72.0
-theme_override_styles/fill = SubResource("StyleBoxFlat_bar_fill_p2")
-show_percentage = false
-value = 100.0
-
-[node name="Score" type="Label" parent="UI/HUD/P2Card"]
-offset_left = 18.0
-offset_top = 76.0
-offset_right = 346.0
-offset_bottom = 98.0
-theme_override_font_sizes/font_size = 20
-text = "○○○  0 / 3"
-horizontal_alignment = 2
+offset_bottom = 172.0
 
 [node name="Banner" type="Label" parent="UI/HUD"]
 anchor_left = 0.5
