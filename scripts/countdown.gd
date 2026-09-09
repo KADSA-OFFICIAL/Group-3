@@ -48,28 +48,17 @@ const RING_SEGMENTS := 40
 
 const FONT := preload("res://resources/display_font.tres")
 
-## 칸이 넘어갔다 — `main.gd` 가 이때 그 칸의 소리를 낸다 (`point_gain.gd` 와 같은 짜임).
-## 칸 번호(0=3, 1=2, 2=1, 3=START!)를 실어 보내므로 받는 쪽이 몇 번째인지 따로
-## 기억하지 않아도 된다.
-signal step_started(step: int)
-
 var _elapsed := -1.0
-## 이미 알린 칸. 소리는 칸마다 한 번만 나가야 하는데 `_step()` 은 매 프레임 같은 값을
-## 주므로, 이것을 기억해 두지 않으면 한 칸에 소리가 스무 번 넘게 나간다.
-var _announced := -1
 
 
 func _ready() -> void:
 	visible = false
 
 
-## 처음부터 다시 센다. 소리는 `main.gd` 가 `step_started` 를 받아 따로 낸다 —
-## 그림 노드가 소리까지 들면 소리만 바꾸고 싶을 때 이 파일을 건드려야 한다.
+## 처음부터 다시 센다.
 func play() -> void:
 	_elapsed = 0.0
-	_announced = -1
 	visible = true
-	_advance()
 	queue_redraw()
 
 
@@ -79,19 +68,9 @@ func _process(delta: float) -> void:
 	_elapsed += delta
 	if _elapsed >= TOTAL:
 		_elapsed = -1.0
-		_announced = -1
 		visible = false
 		return
-	_advance()
 	queue_redraw()
-
-
-## 칸이 넘어갔으면 한 번 알린다.
-func _advance() -> void:
-	var step := _step()
-	if step != _announced:
-		_announced = step
-		step_started.emit(step)
 
 
 ## 지금 칸의 번호(0=3, 1=2, 2=1, 3=START!).
