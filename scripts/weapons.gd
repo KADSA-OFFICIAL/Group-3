@@ -576,6 +576,7 @@ const LIST: Array[Dictionary] = [
 		"special_damage": 1.5, "special_cooldown": 8.0, "knockback": 0,
 		# 발당 3 → 1.5 로 낮춤 (확정).
 		# 연사 지속시간도 3초 → 2초 로 줄였다 (확정) — 개별 무적이 되면서 다 맞으면 너무 셌다.
+		"burst_interval": 0.1, "burst_duration": 2.0,
 	},
 	{
 		"name": "방패",
