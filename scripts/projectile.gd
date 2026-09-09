@@ -16,10 +16,9 @@ signal picked_up(peer_id: int, projectile: Node)
 ## 쪽(`main.gd`)이 쓴다. 여기서 직접 RPC를 부르지 않는 것은 연출이 `Effects` 아래에
 ## 붙어야 하고 그 노드를 아는 것이 main.gd이기 때문이다 (검 특수의 빛기둥과 같다).
 ##
-## **바꾸기 전, 그리고 때리기 전에 낸다** — 받는 쪽이 공용 피격음을 삼키고 자기 소리로
-## 그 자리를 대신하는데, 그 공용 피격음을 내는 것이 `server_apply_hit` 이다. 아래
-## `impacted` 와 같은 순서이고 이유도 같다. 그래서 "바꿨다"가 아니라 "바꾼다"이다:
-## 맞은 젤리가 쓰러지면 이 신호가 나간 뒤에도 실제 교환은 일어나지 않는다.
+## **바꾸기 전에 낸다** — 싣는 두 위치가 바꾸기 전의 것이라 옮긴 뒤에는 둘 다 어긋난다.
+## 그래서 "바꿨다"가 아니라 "바꾼다"이다: 맞은 젤리가 쓰러지면 이 신호가 나간 뒤에도
+## 실제 교환은 일어나지 않는다.
 signal swapped(from_position: Vector2, to_position: Vector2)
 ## 번개를 부르는 탄(삼지창 특수)이 맞혔다. 값은 **맞은 젤리의 발밑**이다 —
 ## 번개가 거기로 내려온다. 연출을 띄우는 쪽이 `main.gd`인 이유는 위 `swapped`와 같다.
@@ -30,15 +29,6 @@ signal sparked(at: Vector2)
 ## 푸른 충격을 터뜨리는 탄(대포 총)이 맞혔다. 값은 **탄이 닿은 자리**다 — 기준이
 ## 알갱이(`sparked`)와 같다. 연출을 띄우는 쪽이 `main.gd`인 이유도 같다.
 signal burst(at: Vector2)
-## 틱 소리를 내는 탄(소총 연사)이 맞혔다. **자리를 싣지 않는다** — 위의 셋은 맞은 자리에
-## 그림을 띄우지만 이쪽은 소리뿐이라 좌표가 쓸 데가 없다.
-signal ticked
-## **자기만의 피격음**을 가진 탄(소총 기본)이 맞혔다. `ticked` 와 같이 자리를 싣지 않는다 —
-## 소리뿐이라 좌표가 쓸 데가 없다.
-##
-## **`server_apply_hit` 보다 먼저 낸다** (아래 `_on_body_entered` 참고). 받는 쪽이 공용
-## 피격음의 자리를 대신해야 하는데, 그 공용 피격음을 내는 것이 `server_apply_hit` 이다.
-signal impacted
 ## 폭탄이 터졌다 (도화선이 다 타서든 닿아서든).
 ##
 ## **터진 자리와 반경을 싣는다** (#262). 전에는 소리뿐이라 좌표가 쓸 데가 없었지만,
@@ -195,13 +185,6 @@ var arrow := false
 var orb := false
 ## 맞은 자리에 푸른 충격이 터진다 (대포 총). `hit_sparks`와 같이 연출만 붙는 값이다.
 var hit_burst := false
-## 맞을 때마다 짧은 틱 소리를 낸다 (소총 연사). 위와 같이 판정에 닿지 않는 값이다.
-var tick_sfx := false
-## 맞은 순간 **이 무기만의 피격음**을 낸다 (소총 기본). 위와 같이 판정에 닿지 않는다.
-##
-## 위의 `tick_sfx` 와 다른 값인 것은 켜지는 자리가 다르기 때문이다 — 틱은 소총 **연사**에,
-## 이쪽은 소총 **기본**에 붙는다. 하나로 묶으면 연사 한 발마다 두 소리가 겹친다.
-var impact_sfx := false
 ## 0보다 크면 넉백 단계 대신 이 속도로 민다 (대포 총 미사일, #121).
 var knockback_speed := 0.0
 
@@ -273,8 +256,6 @@ func setup(data: Dictionary) -> void:
 	hit_lightning = data.get("hit_lightning", false)
 	hit_sparks = data.get("hit_sparks", false)
 	hit_burst = data.get("hit_burst", false)
-	tick_sfx = data.get("tick_sfx", false)
-	impact_sfx = data.get("impact_sfx", false)
 	max_distance = data.get("max_distance", 0.0)
 	size_scale = data.get("size_scale", 1.0)
 	art_scale = data.get("art_scale", 1.0)
@@ -750,33 +731,20 @@ func _on_body_entered(body: Node) -> void:
 		# (지금 넉백은 0이지만, 수치를 바꿔도 순서 때문에 어긋나지는 않게 둔다.)
 		if swap_positions:
 			# 바꿀 상대(쏜 사람)가 아직 있는지를 **때리기 전에** 본다. 없으면 이 표창은
-			# 평범한 표창처럼 때리기만 하고 끝난다 — 소리도 연출도 없다.
+			# 평범한 표창처럼 때리기만 하고 끝난다 — 연출도 없다.
 			var shooter := _swap_shooter()
 			if shooter != null:
-				# **때리기보다 먼저 낸다** — 받는 쪽(`main.gd`)이 공용 피격음을 삼키고
-				# 자기 소리(`shuriken_swap`)로 그 자리를 대신하는데, 그 공용 피격음을
-				# 내는 것이 바로 아래 `server_apply_hit` 이기 때문이다. 소총 탄의
-				# `impacted` 와 **완전히 같은 순서**이고, 이유도 같다.
-				#
 				# 싣는 두 위치는 **바꾸기 전의** 것이라 지금 재는 것이 맞다 —
 				# 아래 `_swap_with_shooter()` 가 옮긴 뒤에는 둘 다 어긋난다.
 				swapped.emit(shooter.global_position, body.global_position)
 			body.server_apply_hit(_damage_at(position), knockback, _origin.x, stun, SOURCE, knockback_speed)
 			# **쓰러졌으면 옮기지 않는다** — 그 표창이 끝낸 판에서 시체를 옮기는 꼴이 되고,
-			# 라운드 정리와 순간이동이 같은 순간에 겹친다. 소리와 연출은 위에서 이미
-			# 나갔으므로, 맞는 순간에 무슨 표창이었는지는 화면에 남는다.
+			# 라운드 정리와 순간이동이 같은 순간에 겹친다. 연출은 위에서 이미 나갔으므로,
+			# 맞는 순간에 무슨 표창이었는지는 화면에 남는다.
 			if shooter != null and body.alive:
 				_swap_with_shooter(shooter, body)
 			_finish()
 			return
-		# 이 무기만의 피격음 (소총 기본). **때리기보다 먼저 낸다** — 받는 쪽(`main.gd`)이
-		# 이 순간의 공용 피격음을 막아 자리를 대신하는데, 그 공용 피격음을 내는 것이 바로
-		# 아래 `server_apply_hit` 이기 때문이다. 근접 부딪힘 소리와 같은 순서다.
-		#
-		# 여기까지 왔으면 **맞는 것이 확정이다** — 쏜 사람·이미 맞힌 상대·쓰러진 젤리·
-		# 방패는 위에서 다 걸러졌고, 탄은 공유 무적을 타지 않는다.
-		if impact_sfx:
-			impacted.emit()
 		body.server_apply_hit(_damage_at(position), knockback, _origin.x, stun, SOURCE, knockback_speed)
 		# 번개는 맞은 젤리의 **발밑**으로 떨어진다 (검 특수의 빛기둥과 같은 기준).
 		if hit_lightning:
@@ -788,9 +756,6 @@ func _on_body_entered(body: Node) -> void:
 		# 푸른 충격도 **탄이 닿은 자리**에서 터진다 (대포 총) — 알갱이와 같은 기준이다.
 		if hit_burst:
 			burst.emit(position)
-		# 소총 연사의 틱 소리. 자리가 필요 없어 인자가 없다.
-		if tick_sfx:
-			ticked.emit()
 		# 주울 수 있는 것(단검)은 맞힌 뒤에도 사라지지 않고 바닥으로 떨어진다.
 		# 안 그러면 한 번만 쓸 수 있는 무기가 된다.
 		if pickup_owner != 0:

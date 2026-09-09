@@ -145,20 +145,6 @@ const RING_SEGMENTS := 48
 ## `korean_font.tres`(계통 글꼴)를 직접 들면 이 장면만 옛 글꼴로 남는다.
 const FONT := preload("res://resources/display_font.tres")
 
-## 칸 위에서 빛이 터지는 순간. `main.gd` 가 이때 소리를 낸다 (이슈 #273).
-##
-## **소리를 여기서 직접 내지 않는다** — 소리 하나가 씬 하나이고 그 씬을 부르는 자리가
-## 곧 소리가 나는 조건이라는 짜임을 지킨다(`sfx_oneshot.gd`). 그림 노드가 소리까지 들면
-## 소리만 바꾸고 싶을 때 이 파일을 건드려야 한다(`match_intro.gd` 와 같은 이유).
-##
-## **장면이 열리는 순간이 아니라 빛이 터지는 순간이다.** 뽑아 둔 소리는 띠가 들어오는
-## 소리가 아니라 칸이 채워지는 소리라서, 0초에 내면 소리가 그림보다 0.6초 앞선다.
-##
-## **채워지는 칸 번호(0부터)를 함께 싣는다.** 포인트마다 소리가 달라서 받는 쪽이 어느
-## 소리인지 알아야 하는데, 그것을 `main.gd` 가 따로 기억하면 장면과 소리가 어긋날
-## 자리가 하나 생긴다 — 장면이 자기가 채우는 칸을 그대로 말해 주면 그럴 수 없다.
-signal burst_started(pip_index: int)
-
 ## 시작한 뒤 흐른 시간(초). 음수면 돌고 있지 않다.
 var _elapsed := -1.0
 
@@ -207,10 +193,6 @@ func _process(delta: float) -> void:
 		return
 	var before := _elapsed
 	_elapsed += delta
-	# 빛이 터지는 시각을 **넘어선 그 프레임에** 한 번만 알린다. `_elapsed >= BURST_AT` 로
-	# 보면 터진 뒤 매 프레임 소리가 나가고, 따로 깃발을 두면 `play()` 마다 되돌려야 한다.
-	if before < BURST_AT and _elapsed >= BURST_AT:
-		burst_started.emit(_new_pip)
 	if _elapsed >= TOTAL:
 		_elapsed = -1.0
 		visible = false

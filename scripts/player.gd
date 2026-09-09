@@ -19,44 +19,6 @@ signal special_requested(peer_id: int, long_press: bool)
 ## 서버에서만 발생한다. 강제 낙하(양날 도끼)가 땅에 닿았다 — 인자는 떨어진 자리 (#167).
 ## 그 주변을 때리는 판정은 main.gd 가 한다.
 signal landed_forced(peer_id: int, at: Vector2)
-## 서버에서만 발생한다. 제자리 회전이 끝나 **지금 막 내지르기 시작했다** (전기톱, #260).
-##
-## 소리를 여기서 직접 내지 않는 것은 `landed_forced`와 같은 이유다 — 연출·소리는
-## `Effects` 아래에 붙어야 하고 그 노드를 아는 것이 main.gd 다. 이 노드가 아는 것은
-## "지금 넘어갔다"는 시점뿐이고, 그것으로 무엇을 할지는 저쪽이 정한다.
-signal dash_launched(peer_id: int)
-## 서버에서만 발생한다. 이 플레이어가 **실제로 데미지를 받았다** — 무적·사망으로
-## 걸러진 것과 데미지 0인 것은 내지 않는다. 인자는 맞은 플레이어의 peer id 와,
-## 그것이 지속 데미지(출혈·전기톱)의 한 틱인지.
-##
-## 무엇으로 맞았는지는 싣지 않는다. 무기·투사체마다 따로 알리는 대신 데미지가 지나가는
-## 두 문(`server_apply_hit`·`server_apply_dot`)에서만 내보내므로, **모든 피해가 빠짐없이
-## 한 자리로 모인다** — 소리를 "기본적으로" 울리려면 새 무기가 늘어도 여기가 안 변해야 한다.
-##
-## 소리를 여기서 직접 내지 않는 이유는 `sparked`·`burst` 와 같다: 연출은 `Effects` 아래에
-## 붙어야 하고 그 노드를 아는 것이 main.gd 다.
-signal damaged(peer_id: int, continuous: bool)
-
-## 이 젤리가 **기절하며** 맞았다 (망치 특수가 얹은 기절, 삼지창 특수의 삼지창).
-##
-## 위의 `damaged` 와 같은 자리(`server_apply_hit`)에서 나가지만 신호를 따로 둔 것은
-## 뜻이 다르기 때문이다 — 그쪽은 "피해를 입었다", 이쪽은 "굳었다"다. 데미지가 0이어도
-## 기절이 얹혀 있으면 굳는 것이므로 조건도 서로 다르다.
-##
-## **무엇으로 굳었는지는 싣지 않는다.** 기절을 거는 무기가 둘(망치·삼지창)인데 소리는
-## 하나다 — 걸리는 길이 다를 뿐 화면에서 일어나는 일은 같다.
-signal stunned(peer_id: int)
-
-## 이 젤리의 게이지가 **방금 75%를 넘어섰다** (너클, #225). 서버에서만 발생한다.
-##
-## **넘어서는 순간 한 번만 낸다** — 75% 위에서 또 맞아도 다시 나지 않는다.
-## 게이지가 얼마나 찼는지가 아니라 "이제 강펀치가 달라진다"가 이 신호의 뜻이라,
-## 오라가 켜지는 그 한 순간과 짝이 맞아야 한다(둘 다 `is_charged()`가 정한다).
-##
-## 데미지가 지나가는 두 문(`server_apply_hit`·`server_apply_dot`)에서 함께 나간다 —
-## 출혈로 차서 넘는 것도 맞아서 넘는 것과 같은 일이기 때문이다.
-signal gauge_charged(peer_id: int)
-
 ## 이 플레이어를 조작하는 클라이언트의 peer id. 스폰할 때 서버가 정한다.
 @export var owner_peer_id := 0
 @export var player_name: String = "1P"
@@ -369,8 +331,6 @@ func _apply_forced(input: Dictionary, delta: float) -> void:
 			# 다 돌면 지금까지와 똑같은 돌진으로 이어진다. 데미지는 돌진 구간에서만
 			# 들어가므로(`_special_pending`의 `modes`) 여기까지는 아무도 안 맞는다.
 			if _now() >= _forced_deadline:
-				if multiplayer.is_server():
-					dash_launched.emit(owner_peer_id)
 				_receive_forced.rpc("dash", dash_time())
 		"dash":
 			velocity.x = facing * FORCED_SPEED
@@ -1276,20 +1236,8 @@ func server_apply_hit(damage: float, knockback_level: int, from_x: float,
 	if direction == 0.0:
 		direction = 1.0
 	# 너클은 내가 맞을 때 게이지가 찬다. **받은 데미지에 비례한다** (#225).
-	var was_charged := is_charged()
 	var new_gauge := _gauge_after(damage)
 	_receive_hit.rpc(new_hp, knockback_level, direction, stun, source, new_gauge, knockback_speed)
-	# 이 한 방으로 75%를 넘었는지 본다 (#225). `_receive_hit`이 `call_local`이라
-	# 여기서는 이미 새 게이지가 들어가 있다.
-	_emit_gauge_charged(was_charged)
-	# **무적·사망 검사를 다 지난 뒤에 낸다** — 위에서 걸러진 것은 맞은 것이 아니다.
-	# 데미지 0(넉백만 주는 것)도 뺀다: "피해를 입었다"가 이 신호의 뜻이다.
-	if damage > 0.0:
-		damaged.emit(owner_peer_id, false)
-	# **데미지와 조건이 다르다** — 기절이 얹혀 있으면 데미지가 0이어도 굳는다.
-	# 무적·사망 검사를 다 지난 뒤인 것은 위와 같다.
-	if stun > 0.0:
-		stunned.emit(owner_peer_id)
 
 
 ## 출혈 같은 지속 데미지. 무적 시간을 무시하고 들어가고, 넉백도 없다.
@@ -1297,18 +1245,12 @@ func server_apply_dot(damage: float) -> void:
 	if not multiplayer.is_server() or not alive:
 		return
 	_receive_dot.rpc(maxf(hp - damage, 0.0))
-	# 지속 데미지도 피해다 — 다만 촘촘히 들어오므로 `continuous` 를 참으로 실어,
-	# 소리를 울릴 박자를 받는 쪽(main.gd)이 따로 잡게 한다.
-	if damage > 0.0:
-		damaged.emit(owner_peer_id, true)
 	# 출혈도 "받은 데미지"다 (#225) — 너클 게이지는 여기서도 찬다.
 	# `_receive_dot` 의 인자를 늘리지 않고 따로 보내는 것은, 게이지를 쓰지 않는 무기에는
 	# 보낼 것이 없어서다(아래 비교에서 걸러진다).
-	var was_charged := is_charged()
 	var filled := _gauge_after(damage)
 	if not is_equal_approx(filled, gauge):
 		server_set_gauge(filled)
-		_emit_gauge_charged(was_charged)
 
 
 ## 이만큼 데미지를 받은 뒤의 게이지 (#225).
@@ -1323,19 +1265,6 @@ func _gauge_after(damage: float) -> float:
 		return gauge
 	var top: float = data["gauge_max"]
 	return minf(gauge + damage * top / fill, top)
-
-
-## 게이지가 이번 피해로 **75%를 넘어섰으면** 한 번 알린다 (#225).
-##
-## `was_charged`는 게이지가 차기 **전에** 잰 `is_charged()`다. 이미 차 있었으면 아무 일도
-## 없다 — 문턱을 넘는 그 한 번만이 소리를 낼 자리다.
-##
-## 게이지를 쓰지 않는 무기는 `is_charged()`가 늘 거짓이라 여기서 저절로 걸러진다.
-## 쓰러진 젤리도 뺀다: 마지막 한 방에 죽으면서 게이지가 찬 것은 들려줄 것이 아니다.
-func _emit_gauge_charged(was_charged: bool) -> void:
-	if was_charged or not alive or not is_charged():
-		return
-	gauge_charged.emit(owner_peer_id)
 
 
 ## 데미지 없는 사망 (낙사 등).
