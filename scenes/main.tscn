@@ -94,37 +94,6 @@ offset_top = 120.0
 offset_right = 736.0
 offset_bottom = 172.0
 
-[node name="P1Card" type="Panel" parent="UI/HUD"]
-offset_left = 8.0
-offset_top = 8.0
-offset_right = 228.0
-offset_bottom = 56.0
-
-[node name="Name" type="Label" parent="UI/HUD/P1Card"]
-offset_left = 18.0
-offset_top = 10.0
-offset_right = 202.0
-offset_bottom = 38.0
-theme_override_font_sizes/font_size = 20
-text = "1P"
-vertical_alignment = 1
-
-[node name="P2Card" type="Panel" parent="UI/HUD"]
-offset_left = 924.0
-offset_top = 8.0
-offset_right = 1144.0
-offset_bottom = 56.0
-
-[node name="Name" type="Label" parent="UI/HUD/P2Card"]
-offset_left = 18.0
-offset_top = 10.0
-offset_right = 202.0
-offset_bottom = 38.0
-theme_override_font_sizes/font_size = 20
-text = "2P"
-horizontal_alignment = 2
-vertical_alignment = 1
-
 [node name="Banner" type="Label" parent="UI/HUD"]
 anchor_left = 0.5
 anchor_right = 0.5

@@ -2196,33 +2196,26 @@ func _process(_delta: float) -> void:
 	_update_hud()
 
 
-## 이름·무기와 라운드 포인트 표시. 대기실 접속 순서(Lobby.order)가 1P·2P를 정한다.
+## 라운드 포인트 표시. 대기실 접속 순서(Lobby.order)가 1P·2P를 정한다.
 ##
-## 라벨은 전부 흰 카드(`P1Card`·`P2Card`·`ScoreCard`) **안**에 들어 있다 — 카드 밖에 두면
-## 맵 배경 위에 그대로 그려져서 어두운 맵(용암)에서 진한 글자가 묻힌다(이슈 #112).
+## 라벨은 흰 카드(`ScoreCard`) **안**에 들어 있다 — 카드 밖에 두면 맵 배경 위에 그대로
+## 그려져서 어두운 맵(용암)에서 진한 글자가 묻힌다(이슈 #112).
 ##
-## **체력은 여기서 내지 않는다** (이슈 #317). 늘 떠 있던 체력 바와 숫자를 걷어내고,
-## 맞은 순간 젤리 머리 위에 2초만 뜨는 바(`health_bar.gd`)로 옮겼다 — 싸우는 동안 눈은
-## 젤리를 보고 있어서, 화면 구석의 바는 정작 맞은 순간에 읽히지 않았다.
-## 비운 자리에는 승패를 가르는 유일한 조건인 라운드 포인트를 맨 위 가운데로 올렸다.
+## **화면 좌우 맨 위에는 이제 아무것도 없다** (이슈 #317, 요청). 늘 떠 있던 체력 바와
+## 숫자는 맞은 순간 젤리 머리 위에 2초만 뜨는 바(`health_bar.gd`)로 옮겼고, 남아 있던
+## 이름·무기 카드(`P1Card`·`P2Card`)도 걷어냈다 — 이름은 젤리 머리 위 `NameLabel` 이
+## 이미 달고 있고 무기는 손에 든 그림으로 읽힌다. 싸우는 동안 눈이 가지 않는 자리에
+## 같은 것을 한 번 더 적고 있던 셈이다.
+##
+## 남은 것은 승패를 가르는 유일한 조건인 라운드 포인트뿐이고, 그것을 맨 위 가운데로 올렸다.
 func _update_hud() -> void:
 	var score_card := $UI/HUD.get_node("ScoreCard")
 	for slot in 2:
-		var card := $UI/HUD.get_node("P%dCard" % (slot + 1))
-		var label := card.get_node("Name") as Label
 		var score_label := score_card.get_node("P%dScore" % (slot + 1)) as Label
-		var player: Player = null
 		var peer_id := 0
 		if slot < Lobby.order.size():
 			peer_id = Lobby.order[slot]
-			player = get_player(peer_id)
 		score_label.text = _score_text(int(scores.get(peer_id, 0)), slot == 1)
-		if player == null:
-			label.text = "%dP —" % (slot + 1)
-			continue
-		# 무기 선택이 끝나기 전에는 아직 아무것도 안 들었다 (#205) — 빈칸 대신 줄표를 둔다.
-		var weapon_text := player.weapon_id if player.weapon_id != "" else "—"
-		label.text = "%dP  %s" % [slot + 1, weapon_text]
 
 	var banner_label := $UI/HUD.get_node("Banner") as Label
 	banner_label.text = banner
