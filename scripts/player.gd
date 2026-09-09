@@ -127,6 +127,14 @@ const KNOCKBACK_CONTROL_LOCK := 0.2
 ## 전투 상태. 서버가 정하고 RPC로 양쪽에 복제된다.
 var hp := Combat.MAX_HP
 var alive := true
+## 마지막으로 피해를 입은 시각(초)과 그 **직전** 체력. 머리 위 체력 바(`health_bar.gd`)가
+## 언제 뜰지와 이번에 얼마나 깎였는지를 여기서 읽는다 (이슈 #317).
+##
+## **복제하지 않는다.** 값을 정하는 `_receive_hit`·`_receive_dot` 자체가 `call_local` 이라
+## 두 기기가 같은 순간에 각자 같은 값을 적는다 — 복제 목록에 넣으면 같은 것을 한 번 더
+## 실어 보내는 셈이고, 늦게 도착한 쪽이 바를 두 번 켠다.
+var hurt_at := -1.0
+var hurt_from_hp := Combat.MAX_HP
 ## 바라보는 방향 (1 오른쪽 / -1 왼쪽). 특수 공격은 이 방향으로 나간다.
 var facing := 1
 ## 지금 어떤 포즈의 원화를 입고 있는가 (#176). 평소에는 `Characters.POSE_IDLE`이고,
@@ -1398,6 +1406,7 @@ func server_end_forced() -> void:
 @rpc("authority", "call_local", "reliable")
 func _receive_hit(new_hp: float, knockback_level: int, direction: float,
 		stun: float, source: String, new_gauge: float, knockback_speed := 0.0) -> void:
+	_mark_hurt(new_hp)
 	hp = new_hp
 	gauge = new_gauge
 	if source != "projectile":
@@ -1466,8 +1475,21 @@ func _receive_pose(value: String) -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _receive_dot(new_hp: float) -> void:
+	_mark_hurt(new_hp)
 	hp = new_hp
 	_check_death()
+
+
+## 머리 위 체력 바를 띄울 순간을 적어 둔다 (이슈 #317). `hp` 를 덮어쓰기 **전에** 부른다 —
+## 직전 체력이 있어야 이번에 깎인 몫을 흰 자국으로 보여줄 수 있다.
+##
+## **줄어들 때만 적는다.** 데미지 없는 사망(`server_kill` 의 낙사)은 이미 0인 체력을 다시
+## 0으로 적으므로 여기에 걸리지 않고, 그래서 떨어져 죽은 젤리 위에 빈 바가 뜨지 않는다.
+func _mark_hurt(new_hp: float) -> void:
+	if new_hp >= hp:
+		return
+	hurt_at = _now()
+	hurt_from_hp = hp
 
 
 ## 이 함수는 모든 피어에서 돌아간다 (_receive_hit·_receive_dot이 복제되므로).
@@ -1496,6 +1518,10 @@ func _check_death() -> void:
 func _receive_reset(spawn_position: Vector2, spawn_facing: int) -> void:
 	hp = Combat.MAX_HP
 	alive = true
+	# 지난 라운드의 마지막 일격이 남긴 체력 바를 지운다 (이슈 #317) — 안 지우면 새 라운드가
+	# 시작되자마자 아무도 안 맞았는데 바가 떠 있다.
+	hurt_at = -1.0
+	hurt_from_hp = Combat.MAX_HP
 	facing = spawn_facing
 	gauge = 0.0
 	special_ready = true

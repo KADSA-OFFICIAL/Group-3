@@ -228,7 +228,9 @@ func _receive_round_map(map_name: String) -> void:
 ##
 ## 문구는 씬에 적혀 있고 여기서는 켜기만 한다 — 플레이어에게는 접힌 채로 둔다.
 ## 카드가 화면 맨 위로 올라가면서(이슈 #267) 조작 안내가 없어졌고, 관전 안내는
-## 젤리와 겹치지 않는 가운데 빈 자리(`ObserverCard`)로 옮겼다.
+## 젤리와 겹치지 않는 가운데 빈 자리(`ObserverCard`)로 옮겼다. 그 가운데 맨 위는
+## 라운드 포인트 카드가 쓰게 되어(이슈 #317) 관전 안내와 방 전환은 그 아래로 내렸다 —
+## 관전자도 점수는 봐야 하므로 둘 중 하나를 접는 것이 아니라 세로로 겹치지 않게 놓는다.
 func _setup_observer_view() -> void:
 	if not Lobby.is_observer(multiplayer.get_unique_id()):
 		return
@@ -2194,37 +2196,33 @@ func _process(_delta: float) -> void:
 	_update_hud()
 
 
-## 체력·점수 표시. 대기실 접속 순서(Lobby.order)가 1P·2P를 정한다.
+## 이름·무기와 라운드 포인트 표시. 대기실 접속 순서(Lobby.order)가 1P·2P를 정한다.
 ##
-## 라벨은 전부 흰 카드(`P1Card`·`P2Card`) **안**에 들어 있다 — 카드 밖에 두면 맵 배경 위에
-## 그대로 그려져서 어두운 맵(용암)에서 진한 글자가 묻힌다(이슈 #112).
-## 체력은 막대와 숫자를 함께 낸다. 막대 길이만으로는 남은 값을 정확히 읽을 수 없고,
-## 막대 안에 숫자를 그리면(`show_percentage`) 채운 쪽과 빈 쪽 중 한쪽에서 반드시 묻힌다.
+## 라벨은 전부 흰 카드(`P1Card`·`P2Card`·`ScoreCard`) **안**에 들어 있다 — 카드 밖에 두면
+## 맵 배경 위에 그대로 그려져서 어두운 맵(용암)에서 진한 글자가 묻힌다(이슈 #112).
+##
+## **체력은 여기서 내지 않는다** (이슈 #317). 늘 떠 있던 체력 바와 숫자를 걷어내고,
+## 맞은 순간 젤리 머리 위에 2초만 뜨는 바(`health_bar.gd`)로 옮겼다 — 싸우는 동안 눈은
+## 젤리를 보고 있어서, 화면 구석의 바는 정작 맞은 순간에 읽히지 않았다.
+## 비운 자리에는 승패를 가르는 유일한 조건인 라운드 포인트를 맨 위 가운데로 올렸다.
 func _update_hud() -> void:
+	var score_card := $UI/HUD.get_node("ScoreCard")
 	for slot in 2:
 		var card := $UI/HUD.get_node("P%dCard" % (slot + 1))
-		var bar := card.get_node("Bar") as ProgressBar
 		var label := card.get_node("Name") as Label
-		var hp_label := card.get_node("Hp") as Label
-		var score_label := card.get_node("Score") as Label
+		var score_label := score_card.get_node("P%dScore" % (slot + 1)) as Label
 		var player: Player = null
 		var peer_id := 0
 		if slot < Lobby.order.size():
 			peer_id = Lobby.order[slot]
 			player = get_player(peer_id)
-		score_label.text = _score_text(int(scores.get(peer_id, 0)))
+		score_label.text = _score_text(int(scores.get(peer_id, 0)), slot == 1)
 		if player == null:
-			bar.value = 0.0
 			label.text = "%dP —" % (slot + 1)
-			hp_label.text = "—"
 			continue
-		bar.max_value = Combat.MAX_HP
-		bar.value = player.hp
 		# 무기 선택이 끝나기 전에는 아직 아무것도 안 들었다 (#205) — 빈칸 대신 줄표를 둔다.
 		var weapon_text := player.weapon_id if player.weapon_id != "" else "—"
 		label.text = "%dP  %s" % [slot + 1, weapon_text]
-		# 올림으로 낸다 — 0.4처럼 남은 체력을 "0"으로 적으면 살아 있는데 죽은 것으로 읽힌다.
-		hp_label.text = "%d" % ceili(player.hp)
 
 	var banner_label := $UI/HUD.get_node("Banner") as Label
 	banner_label.text = banner
@@ -2234,10 +2232,18 @@ func _update_hud() -> void:
 
 ## 딴 포인트는 채운 동그라미, 남은 포인트는 빈 동그라미로 보여주고 숫자를 함께 적는다.
 ## 동그라미만 있으면 몇 포인트 중 몇 포인트인지 한눈에 안 읽힌다 (3포인트 선취).
-func _score_text(score: int) -> String:
+##
+## `mirrored` 는 가운데 카드의 **오른쪽 칸(2P)**이다 (이슈 #317). 한 카드 안에 두 편이
+## 마주 보고 앉으므로 오른쪽은 숫자와 동그라미의 순서를 뒤집어 좌우 대칭으로 만든다 —
+## 딴 만큼이 양쪽에서 가운데를 향해 차오르는 모양이 된다.
+## 선취 점수(`/ 3`)는 더 이상 적지 않는다. 동그라미 개수 자체가 그 수이고, 좁은 가운데
+## 카드에 두 번 적으면 정작 몇 대 몇인지가 글자에 묻힌다.
+func _score_text(score: int, mirrored: bool) -> String:
 	var filled := clampi(score, 0, Combat.POINTS_TO_WIN)
-	var dots := "●".repeat(filled) + "○".repeat(Combat.POINTS_TO_WIN - filled)
-	return "%s  %d / %d" % [dots, filled, Combat.POINTS_TO_WIN]
+	var empty := Combat.POINTS_TO_WIN - filled
+	if mirrored:
+		return "%d  %s" % [filled, "●".repeat(filled) + "○".repeat(empty)]
+	return "%s  %d" % ["○".repeat(empty) + "●".repeat(filled), filled]
 
 
 func _unhandled_input(event: InputEvent) -> void:
