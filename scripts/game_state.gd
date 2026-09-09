@@ -12,8 +12,9 @@ var CHARACTERS: Array[String] = Characters.names()
 ## 화면이 훑을 목록이 필요 없어졌다. 통합 가이드: docs/weapon-system.md
 
 ## **맵 목록도 여기 없다** (요청). 무기(#205)와 같은 길을 갔다 — 대기실에서 고르던 것을
-## 없앴고, 지금은 라운드가 열릴 때마다 전투 화면의 서버가 `Maps.resolve(Maps.RANDOM)`로
-## 직접 뽑는다 (`main.gd`의 `_start_round`). 화면이 훑을 목록이 필요 없어졌다.
+## 없앴고, 지금은 라운드가 열릴 때마다 전투 화면의 서버가 직접 뽑는다
+## (`main.gd`의 `_pick_round_map()`). 화면이 훑을 목록이 필요 없어졌다.
+## 뽑기는 맵 목록을 섞은 가방에서 한 장씩 꺼내므로 **판마다 지형이 반드시 바뀐다** (#310).
 ## **맵을 추가·변경하려면 `Maps.LIST`를 고친다** — 뽑기가 그 표를 그대로 읽는다.
 
 var p1_config := {"character": Characters.id_at(0)}
