@@ -35,7 +35,7 @@ extends RefCounted
 ##                   사거리 우위는 아래 special_reach_multiplier로 특수 동안만 준다
 ##   special_reach_multiplier 특수를 쓴 동안 걸리는 사거리 배율 (장대). 지속은 special_duration.
 ##                   상시가 아니므로 막기 우위도 그 시간에만 생긴다
-##   empowered_file  서버가 **미리 뽑아 둔** 강화를 들고 있을 때의 그림 (폭탄·표창).
+##   empowered_file  `main.gd` 가 **미리 뽑아 둔** 강화를 들고 있을 때의 그림 (폭탄·표창).
 ##                   계기는 뽑기(`empowered_chance`)다 — main.gd의 `_roll_empowered()`
 ##   ready_file      특수 **쿨타임이 끝나** 쓸 수 있을 때의 그림 (양날 도끼).
 ##                   계기는 `special_ready`다. 위의 empowered_file 과 하나만 쓴다
@@ -91,7 +91,7 @@ extends RefCounted
 ##   projectile_hit_burst 이 무기의 탄이 맞은 자리에 푸른 충격 파열을 띄운다.
 ##                    hit_sparks(단검의 빨간 알갱이)와 같은 자리의 값이다 —
 ##                    연출만 붙고 데미지·넉백은 하나도 안 변한다
-##   preview_file    **대기실 선택창**에만 쓰는 그림. 없으면 `file` 을 양쪽에 쓴다.
+##   preview_file    **선택 창 선택창**에만 쓰는 그림. 없으면 `file` 을 양쪽에 쓴다.
 ##                   손에 든 모습과 무기 자체의 모습이 다른 무기에만 적는다 —
 ##                   너클은 선택창에 금속 너클, 손에는 뻗은 주먹이 나온다 (preview_texture 참고)
 
@@ -366,7 +366,7 @@ const LIST: Array[Dictionary] = [
 		# 쿨타임 3 → **2.5** (#222). 던지기 간격이 짧아지는 만큼 아래 빨간 표창(35%)이
 		# 나오는 빈도도 함께 올라간다 — 뽑기는 던진 직후에 다시 돌기 때문이다.
 		"special_damage": 14.0, "special_cooldown": 2.5, "knockback": 0,
-		# 빨간 표창은 폭탄의 강화와 **같은 틀**을 쓴다 (#134) — 서버가 미리 뽑아
+		# 빨간 표창은 폭탄의 강화와 **같은 틀**을 쓴다 (#134) — `main.gd` 가 미리 뽑아
 		# 손에 들려 보여 주고, 던진 직후 다시 뽑는다. 그래서 필드 이름도 `empowered_*`다.
 		# 다만 폭탄이 데미지를 올리는 것과 달리 이쪽은 **데미지는 그대로 두고**
 		# 1P·2P 위치를 바꾼다 — 더 아픈 것이 아니라 판을 뒤집는 것이다.
@@ -602,8 +602,7 @@ const LIST: Array[Dictionary] = [
 		"basic_damage": 7.0, "basic_interval": 0.0, "basic_kind": "melee",
 		"special_damage": 16.0, "special_cooldown": 5.0, "knockback": 1,
 		# 짧게 누르면 던지기(16), 길게 누르고 있으면 크기 증가 (확정).
-		# 가르는 시간은 `Player.LONG_PRESS_TIME`(0.3초)이고 **서버가 잰다** —
-		# 클라이언트가 재면 길게/짧게를 속일 수 있다.
+		# 가르는 시간은 `Player.LONG_PRESS_TIME`(0.3초)이고 `Player` 가 잰다.
 		# 던진 방패도 손에 든 것과 같은 `shield.png`로 날아간다 (main.gd 의 "방패" 분기).
 		"size_multiplier": 2.0, "special_duration": 4.0,
 		# 던진 방패는 **원반처럼 돌면서** 날아간다 (초당 라디안, 약 2.4바퀴).
@@ -657,7 +656,7 @@ static func texture_file(file: String) -> Texture2D:
 	return load(path)
 
 
-## 대기실 선택창에 보여줄 무기 그림 (#173). `preview_file` 이 있으면 그쪽을,
+## 선택 창 선택창에 보여줄 무기 그림 (#173). `preview_file` 이 있으면 그쪽을,
 ## 없으면 손에 드는 그림(`file`)을 그대로 쓴다 — 나머지 16종은 달라지지 않는다.
 ##
 ## 파일이 없어 null 이 나오면 `file` 로 되돌아간다. 선택창 그림만 빠졌을 때
