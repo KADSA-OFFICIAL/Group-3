@@ -3,7 +3,7 @@ extends Node2D
 ##
 ## `light_burst.gd`(검)·`lightning_strike.gd`(삼지창)와 같은 규칙이다 — 그림 파일 없이
 ## `_draw()`로만 그리고, 노드에 가산 혼합이 걸려 있어 겹칠수록 하얘진다.
-## **판정과 전혀 얽히지 않는다.** 서버가 착지를 정한 뒤 각 피어가 자기 화면에 띄우고
+## **판정과 전혀 얽히지 않는다.** main.gd 가 착지를 정한 뒤 화면에 띄우고
 ## (`main.gd`의 `_play_shockwave`), 다 재생하면 스스로 `queue_free()`한다.
 ##
 ## **이 연출이 없으면 안 되는 이유**: 착지 데미지는 눈에 보이는 것이 하나도 없다.
@@ -50,7 +50,7 @@ var _shards: Array[Dictionary] = []
 
 func _ready() -> void:
 	# 모양은 노드 이름으로 씨앗을 잡은 난수라 **양쪽 화면에 같게** 뜬다.
-	# 이름은 각 피어가 같은 순서로 붙이므로 같다.
+	# 이름은 붙는 순서로 정해진다.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(name)
 	for side in [-1.0, 1.0]:

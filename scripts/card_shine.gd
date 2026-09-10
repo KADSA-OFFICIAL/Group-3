@@ -77,7 +77,7 @@ func refresh(values: Array) -> void:
 func _draw() -> void:
 	for i in mini(cards.size(), progress.size()):
 		var card: Control = cards[i]
-		# **`visible` 이 아니라 `is_visible_in_tree()` 다.** 관전자 화면은 카드를 담은
+		# **`visible` 이 아니라 `is_visible_in_tree()` 다.** 카드를 담은
 		# 상자(`Cards`)째로 숨기는데(`open_watching`), 카드 자신의 `visible` 은 참으로
 		# 남아 있다 — 그것만 보면 아무것도 없는 자리에 빛 세 덩이가 뜬다.
 		if card == null or not card.is_visible_in_tree():

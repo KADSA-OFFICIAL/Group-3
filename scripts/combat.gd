@@ -34,7 +34,7 @@ const ROUND_START_GRACE := 2.0
 const COUNTDOWN_STEP := 0.42
 
 ## 세는 데 걸리는 전체 시간. 칸이 넷(`3`·`2`·`1`·`START!`)이다.
-## `countdown.gd` 가 이 둘을 그대로 읽고 서버도 이만큼 젤리를 얼려 둔다 —
+## `countdown.gd` 가 이 둘을 그대로 읽고 `main.gd` 도 이만큼 젤리를 얼려 둔다 —
 ## 상수를 양쪽에 따로 두면 한쪽만 고쳤을 때 조용히 어긋난다.
 const COUNTDOWN_TIME := COUNTDOWN_STEP * 4.0
 
@@ -43,7 +43,7 @@ const COUNTDOWN_TIME := COUNTDOWN_STEP * 4.0
 const POINTS_TO_WIN := 3
 
 ## 포인트 획득 장면이 처음부터 끝까지 도는 시간 (이슈 #273).
-## `point_gain.gd` 의 `TOTAL` 이 이 값을 그대로 읽고, 서버는 이만큼 다음 판과
+## `point_gain.gd` 의 `TOTAL` 이 이 값을 그대로 읽고, `main.gd` 는 이만큼 다음 판과
 ## 결과 화면을 미룬다 — 두 곳이 같은 값을 봐야 장면이 잘리지 않는다.
 const POINT_GAIN_TIME := 2.6
 
@@ -54,9 +54,9 @@ const POINT_GAIN_TIME := 2.6
 ## 도는 자리다. 짧게 잡으면 장면이 끝나기 전에 다음 판의 무기 선택 카드가 그 위에 뜬다.
 const ROUND_RESTART_DELAY := 2.8
 
-## 3포인트에 도달해 승리가 표시된 뒤 대기실로 돌아가기까지의 시간.
+## 3포인트에 도달해 승리가 표시된 뒤 선택 창로 돌아가기까지의 시간.
 ##
-## 마지막 포인트에서는 결과 화면이 획득 장면 **뒤에** 뜨므로, 서버는 복귀 예약을
+## 마지막 포인트에서는 결과 화면이 획득 장면 **뒤에** 뜨므로, `main.gd` 는 복귀 예약을
 ## `POINT_GAIN_TIME + MATCH_END_DELAY` 로 잡는다 — 이 값은 결과 화면이 실제로
 ## 떠 있는 시간이다 (`main.gd` 의 `_on_player_died`).
 const MATCH_END_DELAY := 4.0
