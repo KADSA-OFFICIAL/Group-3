@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3 uid="uid://jellymain0001"]
+[gd_scene load_steps=8 format=3 uid="uid://jellymain0001"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="2_mainscript"]
 [ext_resource type="Script" path="res://scripts/jelly_preview.gd" id="3_preview"]
@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" path="res://scenes/match_intro.tscn" id="6_intro"]
 [ext_resource type="PackedScene" path="res://scenes/point_gain.tscn" id="7_point"]
 [ext_resource type="PackedScene" path="res://scenes/countdown.tscn" id="8_count"]
+[ext_resource type="PackedScene" path="res://scenes/touch_controls.tscn" id="9_touch"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("2_mainscript")
@@ -84,6 +85,9 @@ vertical_alignment = 1
 [node name="PointGain" parent="UI/HUD" instance=ExtResource("7_point")]
 
 [node name="Countdown" parent="UI/HUD" instance=ExtResource("8_count")]
+
+[node name="TouchControls" parent="UI/HUD" instance=ExtResource("9_touch")]
+covers = [NodePath("../WeaponPick"), NodePath("../ResultOverlay"), NodePath("../MatchIntro")]
 
 [node name="ResultOverlay" type="Control" parent="UI/HUD"]
 visible = false

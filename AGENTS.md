@@ -9,7 +9,7 @@
 
 **2026-09-10에 온라인 구조를 걷어내고 오프라인 한 화면 2인으로 되돌렸다**(이슈 #320). 없어진 것: `Network`·`Lobby` 오토로드, 접속 화면·방·포트, 관전 역할과 관전 빌드, `@rpc`·`MultiplayerSpawner`·`MultiplayerSynchronizer`, `run-server.bat`·`docs/server.md`. 한 프로세스가 젤리 둘을 다 굴리고, 판정 코드(`main.gd`)는 그대로 남았으며 복제만 사라졌다. **되살리지 말 것** — 필요해지면 이 이슈 이전 이력에서 꺼낸다.
 
-**젤리마다 키가 따로 있다** — 1P는 `WASD`+왼쪽 `Shift`, 2P는 방향키+`Space`(액션 이름은 `p1_left`·`p2_left` …). 플레이어 번호는 1과 2이고 자리는 0·1이며 변환은 `GameState.id_at()`·`slot_of()`가 한다.
+**조작은 화면 위의 조이스틱 2개 + 궁극기 버튼 2개다**(이슈 #322) — 플랫폼이 모바일이고 왼쪽이 1P, 오른쪽이 2P다. **키보드도 그대로 살아 있다**(PC 확인용): 1P는 `WASD`+왼쪽 `Shift`, 2P는 방향키+`Space`(액션 이름은 `p1_left`·`p2_left` …). 플레이어 번호는 1과 2이고 자리는 0·1이며 변환은 `GameState.id_at()`·`slot_of()`가 한다.
 
 `main` 브랜치는 2026-07-26에 새 구현(커밋 `e2a7dcb`)으로 교체되었다. 이전 구현(`autoload/game_manager.gd`, `scripts/weapons/`, `scenes/maps/` 등)은 `backup/main-before-reset` 브랜치에만 있고 현재 코드베이스에는 없다 — 그 경로를 참조하지 말 것.
 
@@ -21,6 +21,7 @@ title(`StartButton`으로 시작) → select(1P·2P가 각자 캐릭터를 고�
 - `scripts/game_state.gd` = 오토로드 싱글턴 `GameState`: 화면 간 선택 정보 전달. `CHARACTERS`(`Characters.names()` 5종 — 사본을 두지 않고 캐릭터 표에서 만든다), `WEAPONS`("랜덤" + `Weapons.names()` 17종 — 마찬가지), `MAPS`("랜덤" + `Maps.names()` 4종 — 마찬가지), `p1_config`/`p2_config`(weapon·character), `map_name`, `get_config(prefix)`.
 - `scenes/title.tscn` + `scripts/title.gd` = 타이틀 화면. **화면 전체가 표지 원화다**(요청) — `Cover`(TextureRect)가 `assets/ui/cover.png`를 바닥에 맞춰 덮고, 원화에 로고와 젤리가 이미 있으므로 `TitleLabel`·`JellyLeft`·`JellyRight`를 없앴다. 남은 조작은 로고를 피해 네 귀퉁이로 갔고(`StartButton`은 원화에 그려진 띠 자리), 글자는 흰색 + 진한 테두리다. `cover.png`는 경기 표지(`match_intro.tscn`)와 같이 쓴다.
 - `scenes/select.tscn` + `scripts/select.gd` = 캐릭터 선택 창(두 패널 다 조작할 수 있다). `P1Panel`/`P2Panel`은 흰 카드(`Card`) 위에 얹히며 자리마다 하나씩이고 **둘 다 조작할 수 있다**(이슈 #320). `StatusLabel`에는 조작 안내를 적고, `GoButton`(`시작!`)을 누르면 곧바로 main 으로 넘어간다. **가운데 칸이 아예 없다**(요청) — 화면은 `1P 패널 | StatusLabel + GoButton | 2P 패널` 세 칸이다. 꾸밈은 `Decor`(`scripts/select_decor.gd`)가 통째로 `_draw()`로 그린다(왼쪽 분홍·오른쪽 남색 그라데이션, 가운데 번개, 별·젤리 조각, 꽃밭, `VS`, `캐릭터 선택` 리본 — 자리는 `SEED`로 고정). 카드는 편마다 색이 다르고(`player_panel.gd`의 `accent`) `_apply_accent()`가 카드·버튼·별 배지를 거기서 만든다 — **스타일박스는 반드시 `duplicate()`** 해야 한다(씬의 `SubResource`는 인스턴스끼리 같은 객체를 나눠 써서, 복제하지 않으면 1P를 칠할 때 2P까지 바뀐다). 맵도 무기도 라운드가 시작될 때 전투 화면에서 정해지므로 여기서 고를 것이 없어 안내판 둘(`MapBox`·`WeaponBox`)을 치우고 그 자리에 `StatusLabel`·`GoButton`을 올렸다. 되살리지 말 것.
+- `scenes/touch_controls.tscn` + `scripts/touch_controls.gd`·`virtual_stick.gd`·`skill_button.gd` = **화면 터치 조작물**(이슈 #322). `main.tscn` 의 `UI/HUD` 아래에 있고 왼쪽 아래가 1P, 오른쪽 아래가 2P다. 조이스틱 하나가 이동·점프(위)·급강하(아래)를 다 맡고 버튼은 궁극기 하나뿐이다. **손가락을 받는 곳은 `touch_controls.gd` 하나다** — `Button`·`_gui_input` 은 손가락 하나만 받아서 조작물마다 따로 받으면 두 사람이 동시에 못 민다. 손가락 번호를 볼 수 있는 `_input()` 에서 받아 `press()`·`drag()`·`release()` 로 나눠 준다. 세기는 늘 1.0 이고(아날로그면 키보드와 이동 속도가 달라진다), 덮는 화면(`covers`: `WeaponPick`·`ResultOverlay`·`MatchIntro`)이 뜨면 접히면서 잡고 있던 것을 놓는다.
 - `scenes/player_panel.tscn` + `scripts/player_panel.gd` = 플레이어 1인 패널(양쪽 재사용). `mirrored`가 true면 아이콘 열을 오른쪽으로 옮긴다. 무기/캐릭터 버튼은 각각 목록을 순환하고, `RandomButton`은 전부 랜덤. 사용자 조작으로 값이 바뀌면 `config_changed`를 내보낸다. `apply_config()` 는 들고 있던 값을 표시만 한다(이때는 시그널을 내보내지 않는다).
 - `scripts/weapon_preview.gd` = 라운드 시작 무기 선택 카드(`weapon_pick.tscn`)의 무기 그림 미리보기. 대기실에는 무기 칸이 없다. `jelly_preview.gd`와 같은 형태이고 `Art.content_rect()`로 여백을 뺀다. 그림이 있는 무기가 7종뿐이라 **없으면 아무것도 그리지 않고** 옆의 이름 라벨이 대신한다. 무기 원화는 세로로 긴 것(검 1:4.7)과 가로로 긴 것(전기톱·대포 총)이 섞여 있어 칸은 세로로 잡았다.
 - `scripts/jelly_preview.gd` = 젤리곰 미리보기. `character_id` setter가 `Characters.texture()`로 그림을 받아 `queue_redraw()`를 호출하고, `_draw()`가 비율을 지켜 가운데에 그린다.
@@ -58,7 +59,7 @@ title(`StartButton`으로 시작) → select(1P·2P가 각자 캐릭터를 고�
   - 예외적으로 씬에 남긴 `theme_override`는 **화면마다 하나뿐인 주 동작 버튼**(타이틀 `StartButton`·대기실 `GoButton`은 핑크, `RandomButton`은 라벤더)과 글자 크기·색 같은 개별 값이다. 새 버튼은 기본 흰 카드 모양을 그대로 쓰는 것이 원칙이다.
 
 
-**자리마다 한 벌씩, 액션이 모두 10개다**(이슈 #320): `p1_left`·`p1_right`·`p1_jump`·`p1_fast_fall`·`p1_skill`, `p2_…`. 1P는 `A`/`D`·`W`·`S`·왼쪽 `Shift`, 2P는 `←`/`→`·`↑`·`↓`·`Space`다. 읽는 곳은 `Player.read_input()` 하나이고 이름은 `GameState.action(player_id, name)` 이 만든다. 전투 중 ESC(`ui_cancel`)로 title 복귀.
+**자리마다 한 벌씩, 액션이 모두 10개다**(이슈 #320): `p1_left`·`p1_right`·`p1_jump`·`p1_fast_fall`·`p1_skill`, `p2_…`. 1P는 `A`/`D`·`W`·`S`·왼쪽 `Shift`, 2P는 `←`/`→`·`↑`·`↓`·`Space`다. 읽는 곳은 `Player.read_input()` 하나이고 이름은 `GameState.action(player_id, name)` 이 만든다. **화면 조작물(`scenes/touch_controls.tscn`)은 이 액션을 흉내 내기만 한다**(이슈 #322) — `Input.parse_input_event()` 로 `InputEventAction` 을 넣으므로 읽는 쪽은 키보드인지 손가락인지 모르고, 그래서 터치를 붙이면서 입력 읽는 코드를 한 줄도 안 고쳤다. 전투 중 ESC(`ui_cancel`)로 title 복귀.
 **기본 공격에는 입력이 없다** — 근접은 닿으면, 원거리는 간격마다 `main.gd` 가 자동으로 판정한다.
 
 ### 미구현 (로드맵 #32 기준)

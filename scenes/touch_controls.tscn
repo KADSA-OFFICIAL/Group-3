@@ -1,0 +1,105 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/touch_controls.gd" id="1_touch"]
+[ext_resource type="Script" path="res://scripts/virtual_stick.gd" id="2_stick"]
+[ext_resource type="Script" path="res://scripts/skill_button.gd" id="3_skill"]
+
+[node name="TouchControls" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_touch")
+
+[node name="P1Stick" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 46.0
+offset_top = -180.0
+offset_right = 190.0
+offset_bottom = -36.0
+grow_vertical = 0
+mouse_filter = 2
+script = ExtResource("2_stick")
+player_id = 1
+
+[node name="P1Skill" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 220.0
+offset_top = -118.0
+offset_right = 316.0
+offset_bottom = -22.0
+grow_vertical = 0
+mouse_filter = 2
+script = ExtResource("3_skill")
+player_id = 1
+
+[node name="Label" type="Label" parent="P1Skill"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.99, 0.95, 0.92, 0.86)
+theme_override_font_sizes/font_size = 18
+text = "궁극기"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="P2Stick" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -190.0
+offset_top = -180.0
+offset_right = -46.0
+offset_bottom = -36.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+script = ExtResource("2_stick")
+player_id = 2
+
+[node name="P2Skill" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -316.0
+offset_top = -118.0
+offset_right = -220.0
+offset_bottom = -22.0
+grow_horizontal = 0
+grow_vertical = 0
+mouse_filter = 2
+script = ExtResource("3_skill")
+player_id = 2
+
+[node name="Label" type="Label" parent="P2Skill"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.99, 0.95, 0.92, 0.86)
+theme_override_font_sizes/font_size = 18
+text = "궁극기"
+horizontal_alignment = 1
+vertical_alignment = 1
