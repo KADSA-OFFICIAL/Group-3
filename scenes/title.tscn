@@ -49,13 +49,29 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 color = Color(0.99, 0.95, 0.92, 1)
 
-[node name="Cover" type="TextureRect" parent="."]
+[node name="CoverBack" type="TextureRect" parent="."]
 layout_mode = 1
-anchors_preset = 12
-anchor_top = 1.0
+anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+modulate = Color(0.62, 0.62, 0.68, 1)
+texture = ExtResource("2_cover")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="Cover" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -576.0
 offset_top = -768.0
+offset_right = 576.0
 grow_horizontal = 2
 grow_vertical = 0
 mouse_filter = 2
@@ -78,11 +94,14 @@ text = "JELLY WARS  —  스틱매너"
 
 [node name="StartButton" type="Button" parent="."]
 anchor_left = 0.5
+anchor_top = 1.0
 anchor_right = 0.5
+anchor_bottom = 1.0
 offset_left = -278.0
-offset_top = 550.0
+offset_top = -98.0
 offset_right = 278.0
-offset_bottom = 606.0
+offset_bottom = -42.0
+grow_vertical = 0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
 theme_override_colors/font_pressed_color = Color(1, 0.93, 0.97, 1)
