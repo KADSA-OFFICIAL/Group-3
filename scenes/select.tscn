@@ -81,21 +81,28 @@ offset_bottom = 572.0
 accent = Color(0.96, 0.55, 0.78, 1)
 
 [node name="P2Panel" parent="." unique_id=1015086149 instance=ExtResource("2_panel")]
-anchors_preset = 0
-offset_left = 716.0
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -436.0
 offset_top = 78.0
-offset_right = 1136.0
+offset_right = -16.0
 offset_bottom = 572.0
+grow_horizontal = 0
 mirrored = true
 default_character = 1
 accent = Color(0.56, 0.59, 0.91, 1)
 
 [node name="GoButton" type="Button" parent="." unique_id=402992325]
-layout_mode = 0
-offset_left = 456.0
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -120.0
 offset_top = 452.0
-offset_right = 696.0
+offset_right = 120.0
 offset_bottom = 528.0
+grow_horizontal = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_pressed_color = Color(1, 0.93, 0.97, 1)
 theme_override_colors/font_hover_color = Color(1, 1, 1, 1)

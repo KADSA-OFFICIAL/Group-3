@@ -134,6 +134,9 @@ var banner := ""
 ## 현재 깔린 맵 지형과 그 즉사 구역 (물·용암). 없는 맵이면 _hazard가 null이다.
 var _map: Node2D = null
 var _hazard: Area2D = null
+## 맵 칸(`Maps.SIZE`)을 화면 가운데에 놓기 위해 밀어 둔 거리 (#329).
+## 16:9 화면에서는 (0, 0)이라 예전과 아무것도 달라지지 않는다 — `_center_map()` 참고.
+var _map_offset := Vector2.ZERO
 ## 아직 안 나온 맵들. 판마다 하나씩 꺼내 쓰고, 비면 다시 섞어 채운다 —
 ## `_pick_round_map()` 참고.
 var _map_pool: Array[String] = []
@@ -151,6 +154,8 @@ var _homes_measured := false
 const WIN_COLOR := Color(0.96, 0.55, 0.78)
 
 @onready var map_root: Node2D = $MapRoot
+## map_backdrop.gd는 class_name이 없어 타입을 붙이지 않는다 (위와 같은 방식).
+@onready var map_backdrop = $Backdrop/Fill
 @onready var players_root: Node2D = $Players
 @onready var projectiles_root: Node2D = $Projectiles
 @onready var effects_root: Node2D = $Effects
@@ -670,6 +675,29 @@ func _load_map(map_name: String) -> void:
 	_map = scene.instantiate() as Node2D
 	map_root.add_child(_map)
 	_hazard = _map.get_node_or_null("Hazard") as Area2D
+	# 맵은 1152x648 한 칸에만 그려지므로(#264) 화면이 그보다 넓거나 높으면 자리가 남는다.
+	# 칸을 가운데로 옮기고(#329), 남는 자리는 이 맵의 배경으로 채운다 — 지형은 안 건드린다.
+	_center_map()
+	map_backdrop.show_map(_map)
+
+
+## 맵 칸을 화면 가운데에 놓는다 (#329).
+##
+## 비율이 `expand` 라 뷰포트는 기기 비율을 그대로 따라가는데, **남는 자리는 전부
+## 오른쪽·아래에 붙는다** — 원점이 왼쪽 위에 고정되기 때문이다. 그대로 두면 20:9 폰에서
+## 맵이 왼쪽으로 쏠리고 오른쪽에만 288px 빈 칸이 남는다. 화면 가운데를 잡는 HUD·연출과도
+## 어긋난다.
+##
+## **맵 노드 하나만 민다.** 그림과 충돌 상자가 같이 움직이므로 "원화 픽셀 x 0.6 = 충돌
+## 상자 좌표"(#264)는 그대로고, 스폰 지점도 맵의 자식이라 저절로 따라온다. 맵 안쪽
+## 좌표를 고치는 것이 아니라 칸째로 옮기는 것이라 발판 높이·간격은 한 픽셀도 안 바뀐다.
+##
+## **판이 도는 중에는 다시 재지 않는다** — 창 크기가 바뀔 때마다 맵을 옮기면 이미 서 있는
+## 젤리가 지형 밖에 남아 떨어진다. 다음 판에서 `_load_map()` 이 다시 잰다.
+func _center_map() -> void:
+	_map_offset = ((get_viewport_rect().size - Maps.SIZE) * 0.5).floor()
+	if _map != null:
+		_map.position = _map_offset
 
 
 ## 맵이 들고 있는 스폰 지점. 맵에 없으면 대비값을 쓴다.
@@ -678,7 +706,8 @@ func _spawn_position(index: int) -> Vector2:
 		var marker := _map.get_node_or_null("Spawns/Spawn%d" % (index + 1)) as Marker2D
 		if marker != null:
 			return marker.global_position
-	return SPAWN_POSITIONS[index % SPAWN_POSITIONS.size()]
+	# 맵이 없을 때의 대비값도 맵 칸 기준이라 같이 민다 (#329).
+	return SPAWN_POSITIONS[index % SPAWN_POSITIONS.size()] + _map_offset
 
 
 ## 서로 마주 보게 둔다. 2P는 왼쪽을 본다.

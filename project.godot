@@ -28,7 +28,7 @@ GameState="*res://scripts/game_state.gd"
 window/size/viewport_width=1152
 window/size/viewport_height=648
 window/stretch/mode="canvas_items"
-window/stretch/aspect="keep"
+window/stretch/aspect="expand"
 window/handheld/orientation="landscape"
 
 [gui]
