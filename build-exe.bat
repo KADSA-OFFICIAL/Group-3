@@ -2,8 +2,7 @@
 rem ============================================================
 rem  배포본(exe) 만들기 - 더블클릭 한 번으로 두 개를 내보낸다 (요청)
 rem
-rem  플레이어용 build\JellyWars.exe 와 관전용 build\JellyWars-Observer.exe 를
-rem  차례로 내보낸다. 프리셋은 export_presets.cfg 에 들어 있고 이 스크립트는
+rem  build\JellyWars.exe 를 내보낸다. 프리셋은 export_presets.cfg 에 들어 있고 이 스크립트는
 rem  그것을 이름으로 부르기만 한다 - 프리셋을 고치면 여기는 손댈 필요가 없다.
 rem  자세한 설명과 나눠 주는 방법은 docs/build.md.
 rem
@@ -64,7 +63,6 @@ rem 릴리스로 내보낸다. 디버그 빌드는 팀에 주는 것이 아니다.
 set "FAILED="
 
 call :EXPORT "Windows Desktop" "build\JellyWars.exe" "플레이어용"
-call :EXPORT "Windows Desktop (Observer)" "build\JellyWars-Observer.exe" "관전용"
 
 echo.
 if defined FAILED (
@@ -81,16 +79,14 @@ if defined FAILED (
 echo  ===== 다 됐습니다 =====
 echo.
 echo  만들어진 파일
-for %%F in ("%PROJECT_DIR%\build\JellyWars.exe" "%PROJECT_DIR%\build\JellyWars-Observer.exe") do (
+for %%F in ("%PROJECT_DIR%\build\JellyWars.exe") do (
 	if exist "%%~F" echo    - %%~nxF  [%%~zF 바이트]
 )
 echo.
 echo  나눠 줄 때
 echo    - 팀원에게는 JellyWars.exe 하나만 보내면 됩니다.
 echo      게임 데이터가 exe 안에 들어 있어 pck 를 따로 보낼 필요가 없습니다.
-echo    - 관전 기기에는 JellyWars-Observer.exe 를 보냅니다.
-echo    - 서버컴 주소가 바뀌면 scripts\network.gd 의 DEFAULT_ADDRESS 를 고치고
-echo      다시 내보내야 합니다. 옛 exe 는 바뀐 서버에 못 붙습니다.
+echo    - 두 사람이 한 기기 앞에 앉아 같이 합니다. 접속도 서버도 없습니다.
 echo.
 echo  build 폴더를 엽니다.
 start "" "%PROJECT_DIR%\build"

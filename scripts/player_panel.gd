@@ -8,10 +8,10 @@ extends Control
 ## 자리 이름이라기보다 정체를 알 수 없는 상자였다. 다시 넣지 말 것: 1P·2P 구분은
 ## 패널 위치(왼쪽·오른쪽)와 카드 색이 이미 하고 있다.
 ##
-## 온라인에서는 자기 패널만 조작할 수 있고(`set_interactive`),
-## 상대 패널은 서버가 보낸 값을 `apply_config()`로 표시만 한다.
+## **두 패널을 다 조작할 수 있다** (#320). 온라인이던 시절에는 자기 패널만 만질 수
+## 있었고 상대 패널은 서버가 보낸 값을 표시만 했는데, 한 화면에서는 나눌 것이 없다.
 
-## 이 패널의 선택이 사용자 조작으로 바뀌었을 때 (서버 전송용)
+## 이 패널의 선택이 사용자 조작으로 바뀌었을 때 (`GameState` 에 적으라는 뜻)
 signal config_changed
 
 @export var mirrored := false          # 2P는 아이콘 열이 오른쪽으로
@@ -107,26 +107,7 @@ func _apply_accent() -> void:
 	star.color = accent
 
 
-## 조작 가능 여부. 상대 패널은 false로 두어 표시 전용이 된다.
-func set_interactive(value: bool) -> void:
-	for button in [character_button, random_button]:
-		button.disabled = not value
-
-
-## 관전자용 표시 전용 모드 (이슈 #184).
-##
-## `set_interactive(false)`는 버튼을 **잠근 채로 남겨** 두는데, 관전자에게는 애초에 조작할 것이
-## 없으므로 누를 것은 치우고 볼 것만 남긴다. 캐릭터 버튼은 값이 글자로 적혀 있어
-## **그 자체가 표시**이므로 남기되, 잠가서 흐리게 만들지 않고 눌리지만 않게 한다.
-func set_display_only(flag: bool) -> void:
-	random_button.visible = not flag
-	for button in [character_button]:
-		button.disabled = false if flag else button.disabled
-		button.mouse_filter = Control.MOUSE_FILTER_IGNORE if flag else Control.MOUSE_FILTER_STOP
-		button.focus_mode = Control.FOCUS_NONE if flag else Control.FOCUS_ALL
-
-
-## 서버가 보낸 선택값을 그대로 표시한다. config_changed를 내보내지 않는다.
+## 들고 있던 선택값을 그대로 표시한다. config_changed를 내보내지 않는다.
 func apply_config(config: Dictionary) -> void:
 	character_i = maxi(GameState.CHARACTERS.find(config.get("character", "")), 0)
 	_update_ui()

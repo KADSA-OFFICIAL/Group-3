@@ -2,16 +2,14 @@ class_name Projectile
 extends Area2D
 ## 허공을 나는 것 (화살·총알·표창·산탄·던진 단검·폭탄 등).
 ##
-## 서버만 이동과 판정을 하고, 클라이언트는 동기화된 위치를 그린다.
-## 상대 무기에 막히지 않는다 — 회피로만 피한다.
+## 이동도 판정도 스스로 한다. 상대 무기에 막히지 않는다 — 회피로만 피한다.
 ##
-## 스폰·디스폰은 main.gd의 ProjectileSpawner(MultiplayerSpawner)가 맡는다.
-## 서버에서 queue_free()하면 클라이언트에서도 함께 사라진다.
+## 만들고 없애는 것은 main.gd다 (`_spawn_projectile`).
 
-## 서버가 이 투사체를 없애야 할 때 알린다.
+## 다 쓴 투사체를 없애 달라고 알린다.
 signal finished(projectile: Node)
 ## 바닥에 남은 것(단검)을 주인이 주웠다.
-signal picked_up(peer_id: int, projectile: Node)
+signal picked_up(player_id: int, projectile: Node)
 ## 빨간 표창이 자리를 바꾼다. 두 값은 **바꾸기 전의** 위치다 — 연출을 두 자리에 띄우는
 ## 쪽(`main.gd`)이 쓴다. 여기서 직접 RPC를 부르지 않는 것은 연출이 `Effects` 아래에
 ## 붙어야 하고 그 노드를 아는 것이 main.gd이기 때문이다 (검 특수의 빛기둥과 같다).
@@ -126,7 +124,7 @@ const ARROW_MID := Color(0.55, 0.88, 1.0)
 const ARROW_EDGE := Color(0.20, 0.45, 0.95)
 
 ## 쏜 플레이어의 peer id. 자기 자신은 맞지 않는다.
-var shooter_peer := 0
+var shooter_id := 0
 var damage := 0.0
 var knockback := Combat.Knockback.WEAK
 var stun := 0.0
@@ -139,7 +137,7 @@ var on_solid := "vanish"
 var falloff_min_damage := 0.0
 var falloff_distance := 0.0
 ## 이 peer의 젤리를 자동으로 따라간다 (단검). 0 이면 직선.
-var homing_peer := 0
+var homing_id := 0
 ## 이 시간이 지나면 스스로 터진다 (폭탄). 0 이면 안 터진다.
 var fuse := 0.0
 ## 터질 때 이 반경 안을 때린다 (폭탄). 0 이면 단발 명중.
@@ -192,12 +190,7 @@ var velocity := Vector2.ZERO
 
 ## 벽·바닥에 닿아 그 자리에 멈췄는가 (`on_solid` 이 "stay"·"roll" 인 것).
 ##
-## **판정은 서버만 하지만 이 값은 복제된다** (씬의 `Sync` 설정) — 떨어진 단검 주변에
-## 도는 오라(#250)를 두 화면이 각자 그려야 하고, 클라이언트는 속도를 받지 않아서
-## 스스로는 멈춘 것을 알 수 없다. 스폰 상태에도 실려서, 경기 중에 들어온 관전자는
-## 이미 떨어져 있던 단검의 오라를 바로 본다 (#182).
-##
-## 그래서 이름에 밑줄이 없다 — 서버만 보는 값이 아니라 `position` 처럼 양쪽이 보는 값이다.
+## 떨어진 단검 주변에 도는 오라(#250)가 이 값을 보고 켜진다 — 그래서 이름에 밑줄이 없다.
 var landed := false
 
 ## 이번 **물리** 프레임에 움직이기 직전의 자리 (#270). 겹침은 움직인 뒤에 알려지므로,
@@ -214,7 +207,7 @@ var _step_start := Vector2.ZERO
 
 var _spawn_time := 0.0
 var _origin := Vector2.ZERO
-var _hit_peers := {}
+var _hit_ids := {}
 var _done := false
 var _has_art := false
 var _last_position := Vector2.ZERO
@@ -232,9 +225,9 @@ var _wisps: Array[Dictionary] = []
 @onready var drop_aura: DropAuraNode = $DropAura
 
 
-## 모든 피어에서 스폰 데이터로 호출된다 (add_child 전).
+## 스폰 데이터로 값을 채운다 (`main.gd` 가 `add_child` 앞에 부른다).
 func setup(data: Dictionary) -> void:
-	shooter_peer = data["shooter_peer"]
+	shooter_id = data["shooter_id"]
 	damage = data["damage"]
 	knockback = data["knockback"]
 	stun = data.get("stun", 0.0)
@@ -243,7 +236,7 @@ func setup(data: Dictionary) -> void:
 	on_solid = data.get("on_solid", "vanish")
 	falloff_min_damage = data.get("falloff_min_damage", 0.0)
 	falloff_distance = data.get("falloff_distance", 0.0)
-	homing_peer = data.get("homing_peer", 0)
+	homing_id = data.get("homing_id", 0)
 	fuse = data.get("fuse", 0.0)
 	explosion_radius = data.get("explosion_radius", 0.0)
 	pickup_owner = data.get("pickup_owner", 0)
@@ -275,10 +268,6 @@ func setup(data: Dictionary) -> void:
 func _ready() -> void:
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
-	# 전투 화면에 있는 피어에게만 보낸다 (이슈 #182). `public_visibility` 는 건드리지 않는다 —
-	# 끄면 필터가 참이어도 아무에게도 안 보인다(이슈 #167에서 투사체가 통째로 사라졌다).
-	if multiplayer.is_server():
-		$Sync.add_visibility_filter(Lobby.can_view)
 	_spawn_time = _now()
 	_last_position = position
 	_step_start = position
@@ -370,10 +359,9 @@ func _face(direction: Vector2) -> void:
 	art_sprite.rotation = direction.angle() + PI * 0.5
 
 
-## 그리기는 모든 피어가 한다. 클라이언트는 속도를 받지 않으므로 복제된 위치의
-## 변화로 진행 방향을 잡는다 — 유도(단검)로 방향이 바뀌어도 그림이 따라 돈다.
+## 진행 방향은 위치의 변화로 잡는다 — 유도(단검)로 방향이 바뀌어도 그림이 따라 돈다.
 func _process(delta: float) -> void:
-	# 떨어져서 주울 수 있는 단검 주변의 오라 (#250). `landed` 가 복제되므로 두 화면에
+	# 떨어져서 주울 수 있는 단검 주변의 오라 (#250). `landed` 하나만 보고
 	# 같이 뜬다. **아래 일찍 돌아가는 조건보다 앞에 둔다** — 그 조건은 그림이 있는
 	# 탄만 통과시키는데, 오라는 그림과 상관없이 켜지고 꺼져야 한다.
 	drop_aura.active = landed and pickup_owner != 0
@@ -388,7 +376,7 @@ func _process(delta: float) -> void:
 	_last_position = position
 	if _has_art and not is_zero_approx(art_spin):
 		# 원반처럼 도는 그림 (던진 방패). **위치 변화로 도는 쪽을 잡는다** —
-		# 클라이언트는 속도를 받지 않아서, 스폰 때 실려 온 방향만으로는 되돌아오거나
+		# 스폰 때 실려 온 방향만 보면 되돌아오거나
 		# 휘는 탄에서 어긋난다 (`_face()`가 방향을 다시 잡는 것과 같은 이유).
 		# 멈춰 있으면 마지막 방향 그대로 계속 돈다.
 		if absf(moved.x) > 0.01:
@@ -416,8 +404,8 @@ func _is_drawn() -> bool:
 
 ## 직접 그리는 탄(미사일·화살) 준비. 노란 막대는 이들이 대신하므로 감춘다.
 ##
-## 불꽃 가닥 모양은 노드 이름(`Projectile_<id>`)으로 씨앗을 잡은 난수라 **양쪽 화면에 같게**
-## 뜬다. 이름은 스폰 데이터의 id에서 나오므로 모든 피어에서 같다.
+## 불꽃 가닥 모양은 노드 이름(`Projectile_<id>`)으로 씨앗을 잡은 난수라, 같은 탄은 늘
+## 같은 모양으로 뜬다.
 func _setup_drawn() -> void:
 	visual.hide()
 	if velocity.length_squared() >= 0.01:
@@ -599,8 +587,7 @@ func _draw_arrow_body(forward: Vector2, perp: Vector2,
 
 
 func _physics_process(delta: float) -> void:
-	# 이동은 서버만 계산한다. 클라이언트는 동기화된 위치를 받는다.
-	if not multiplayer.is_server() or _done:
+	if _done:
 		return
 
 	# 도화선 (폭탄) — 바닥에 놓여 있어도 시간이 되면 터진다.
@@ -624,8 +611,8 @@ func _physics_process(delta: float) -> void:
 		return
 
 	# 유도 (단검) — 상대를 향해 방향을 계속 고친다.
-	if homing_peer != 0:
-		var target := _find_jelly(homing_peer)
+	if homing_id != 0:
+		var target := _find_jelly(homing_id)
 		if target != null:
 			velocity = (target.global_position - position).normalized() * Combat.PROJECTILE_SPEED
 
@@ -652,14 +639,14 @@ func _now() -> float:
 	return Time.get_ticks_msec() / 1000.0
 
 
-func _find_jelly(peer_id: int) -> Node:
+func _find_jelly(player_id: int) -> Node:
 	for jelly: Node in get_tree().get_nodes_in_group("jellies"):
-		if jelly.owner_peer_id == peer_id:
+		if jelly.player_id == player_id:
 			return jelly
 	return null
 
 
-## 빨간 표창 — 맞은 쪽과 던진 쪽의 자리를 맞바꾼다. **서버에서만 부른다.**
+## 빨간 표창 — 맞은 쪽과 던진 쪽의 자리를 맞바꾼다. **전투 판정에서만 부른다.**
 ##
 ## 던진 쪽이 이미 죽었거나(낙사 등) 나가 버렸으면 아무 일도 일어나지 않는다.
 ## 살아 있지 않은 젤리를 옮기면 사망 연출이 엉뚱한 자리에서 끝난다.
@@ -672,15 +659,15 @@ func _find_jelly(peer_id: int) -> Node:
 func _swap_with_shooter(shooter: Node, target: Node) -> void:
 	var shooter_at: Vector2 = shooter.global_position
 	var target_at: Vector2 = target.global_position
-	shooter.server_teleport(target_at)
-	target.server_teleport(shooter_at)
+	shooter.teleport(target_at)
+	target.teleport(shooter_at)
 
 
 ## 빨간 표창이 자리를 바꿀 상대(쏜 사람)를 찾는다. 없으면 `null` 이다 —
 ## 이미 죽었거나(낙사 등) 나가 버린 경우다. 살아 있지 않은 젤리를 옮기면
 ## 사망 연출이 엉뚱한 자리에서 끝난다.
 func _swap_shooter() -> Node:
-	var shooter := _find_jelly(shooter_peer)
+	var shooter := _find_jelly(shooter_id)
 	if shooter == null or not shooter.alive:
 		return null
 	return shooter
@@ -697,20 +684,20 @@ func _explode() -> void:
 	# 자리가 곧 맞는 경계여야 하므로, 여기서 따로 계산하지 않고 같은 변수를 넘긴다.
 	exploded.emit(position, explosion_radius)
 	for jelly: Node in get_tree().get_nodes_in_group("jellies"):
-		if jelly.owner_peer_id == shooter_peer or not jelly.alive:
+		if jelly.player_id == shooter_id or not jelly.alive:
 			continue
 		if position.distance_to(jelly.global_position) <= explosion_radius:
-			jelly.server_apply_hit(damage, knockback, position.x, stun, SOURCE, knockback_speed)
+			jelly.apply_hit(damage, knockback, position.x, stun, SOURCE, knockback_speed)
 	_finish()
 
 
 func _on_body_entered(body: Node) -> void:
-	if not multiplayer.is_server() or _done:
+	if _done:
 		return
 
 	if body is Player:
-		var peer_id: int = body.owner_peer_id
-		if peer_id == shooter_peer or _hit_peers.has(peer_id) or not body.alive:
+		var player_id: int = body.player_id
+		if player_id == shooter_id or _hit_ids.has(player_id) or not body.alive:
 			return
 		# 폭탄은 닿으면 터진다 (문서: "피격하거나 일정 시간이 지나면").
 		if explosion_radius > 0.0:
@@ -722,7 +709,7 @@ func _on_body_entered(body: Node) -> void:
 		if _guarded_by(body):
 			_blocked(body)
 			return
-		_hit_peers[peer_id] = true
+		_hit_ids[player_id] = true
 		# 빨간 표창은 때린 **뒤에** 자리를 바꾼다. 예전에는 데미지가 0이라 때리기를
 		# 통째로 건너뛰었는데, 지금은 일반 표창과 같은 데미지가 들어간다.
 		#
@@ -737,7 +724,7 @@ func _on_body_entered(body: Node) -> void:
 				# 싣는 두 위치는 **바꾸기 전의** 것이라 지금 재는 것이 맞다 —
 				# 아래 `_swap_with_shooter()` 가 옮긴 뒤에는 둘 다 어긋난다.
 				swapped.emit(shooter.global_position, body.global_position)
-			body.server_apply_hit(_damage_at(position), knockback, _origin.x, stun, SOURCE, knockback_speed)
+			body.apply_hit(_damage_at(position), knockback, _origin.x, stun, SOURCE, knockback_speed)
 			# **쓰러졌으면 옮기지 않는다** — 그 표창이 끝낸 판에서 시체를 옮기는 꼴이 되고,
 			# 라운드 정리와 순간이동이 같은 순간에 겹친다. 연출은 위에서 이미 나갔으므로,
 			# 맞는 순간에 무슨 표창이었는지는 화면에 남는다.
@@ -745,7 +732,7 @@ func _on_body_entered(body: Node) -> void:
 				_swap_with_shooter(shooter, body)
 			_finish()
 			return
-		body.server_apply_hit(_damage_at(position), knockback, _origin.x, stun, SOURCE, knockback_speed)
+		body.apply_hit(_damage_at(position), knockback, _origin.x, stun, SOURCE, knockback_speed)
 		# 번개는 맞은 젤리의 **발밑**으로 떨어진다 (검 특수의 빛기둥과 같은 기준).
 		if hit_lightning:
 			struck.emit(body.global_position + Vector2(0.0, Player.BODY_BOTTOM))
@@ -759,7 +746,7 @@ func _on_body_entered(body: Node) -> void:
 		# 주울 수 있는 것(단검)은 맞힌 뒤에도 사라지지 않고 바닥으로 떨어진다.
 		# 안 그러면 한 번만 쓸 수 있는 무기가 된다.
 		if pickup_owner != 0:
-			homing_peer = 0
+			homing_id = 0
 			velocity = Vector2.ZERO
 			use_gravity = true
 			return
@@ -820,7 +807,7 @@ func _landed_on_top(body: Node) -> bool:
 ## 유도도 여기서 끊는다 — 안 끊으면 다음 프레임에 상대 쪽으로 방향을 다시 잡아
 ## 같은 벽을 계속 들이받는다.
 func _slip_off() -> void:
-	homing_peer = 0
+	homing_id = 0
 	position = _step_start
 	# 가로 속도까지 지운다. 벽을 타고 미끄러져 내려가야 하는데 가로로 남아 있으면
 	# 떨어지면서 다시 그 벽으로 파고든다.
@@ -851,10 +838,10 @@ func _guarded_by(jelly: Player) -> bool:
 ## 무기가 된다.
 func _blocked(jelly: Player) -> void:
 	if pickup_owner != 0:
-		homing_peer = 0
+		homing_id = 0
 		velocity = Vector2.ZERO
 		use_gravity = true
-		_hit_peers[jelly.owner_peer_id] = true   # 떨어지는 동안 다시 닿아도 조용하다
+		_hit_ids[jelly.player_id] = true   # 떨어지는 동안 다시 닿아도 조용하다
 		return
 	_finish()
 
@@ -864,7 +851,7 @@ func _blocked(jelly: Player) -> void:
 ## 이게 없으면 폭탄이 발판 밖 허공을 그대로 굴러간다. 떨어지다 아래 바닥에 닿으면
 ## `_on_body_entered`가 다시 굴리는데, 그때는 남은 속도가 더 작아 조금만 구른다.
 func _on_body_exited(body: Node) -> void:
-	if not multiplayer.is_server() or _done or not landed:
+	if _done or not landed:
 		return
 	if on_solid != "roll" or body is Player:
 		return

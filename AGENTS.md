@@ -4,65 +4,50 @@
 
 ## 게임 정보 (젤리 워즈)
 
-2기기 **1 VS 1 온라인 대전** 액션, **Godot 4.6 (GL Compatibility)**. 3조(스틱매너) 개발기획서 기반. `project.godot`의 `config/name`은 "Jelly Wars", 메인 씬은 `scenes/title.tscn`.
+한 기기 한 화면 **1 VS 1 로컬 대전** 액션, **Godot 4.6 (GL Compatibility)**. 3조(스틱매너) 개발기획서 기반. `project.godot`의 `config/name`은 "Jelly Wars", 메인 씬은 `scenes/title.tscn`.
 기획 핵심 루프(무기 선택 → 맵 → 전투 → 3점 선취 승리)가 **전부 돈다.**
 
-2026-07-28에 한 기기 2인 로컬에서 온라인 구조로 전환 중이다(로드맵 이슈 #32). 전용 헤드리스 서버가 권위를 갖고, 클라이언트 2대가 Tailscale로 접속한다. 서버 주소는 **저장소가 공개이므로 코드에 적지 않는다** — 접속 화면에서 입력받고 커밋되는 기본값은 `127.0.0.1`이다.
+**2026-09-10에 온라인 구조를 걷어내고 오프라인 한 화면 2인으로 되돌렸다**(이슈 #320). 없어진 것: `Network`·`Lobby` 오토로드, 접속 화면·방·포트, 관전 역할과 관전 빌드, `@rpc`·`MultiplayerSpawner`·`MultiplayerSynchronizer`, `run-server.bat`·`docs/server.md`. 한 프로세스가 젤리 둘을 다 굴리고, 판정 코드(`main.gd`)는 그대로 남았으며 복제만 사라졌다. **되살리지 말 것** — 필요해지면 이 이슈 이전 이력에서 꺼낸다.
 
-**방 하나 = 포트 하나 = 서버 프로세스 하나**다(이슈 #89). 방 2개를 쓰려면 `--port=`를 달리해 서버를 두 번 띄운다. 방끼리 완전히 독립적이고 한 방이 죽어도 다른 방은 멀쩡하다. 실행 명령·방화벽·문제 해결은 `docs/server.md`에 있다.
+**젤리마다 키가 따로 있다** — 1P는 `WASD`+왼쪽 `Shift`, 2P는 방향키+`Space`(액션 이름은 `p1_left`·`p2_left` …). 플레이어 번호는 1과 2이고 자리는 0·1이며 변환은 `GameState.id_at()`·`slot_of()`가 한다.
 
 `main` 브랜치는 2026-07-26에 새 구현(커밋 `e2a7dcb`)으로 교체되었다. 이전 구현(`autoload/game_manager.gd`, `scripts/weapons/`, `scenes/maps/` 등)은 `backup/main-before-reset` 브랜치에만 있고 현재 코드베이스에는 없다 — 그 경로를 참조하지 말 것.
 
-### 씬 흐름
 
-title(방을 고르고 서버 주소를 입력해 `StartButton`으로 접속) → select(대기실 겸 무기 선택, 둘 다 준비하면 서버가 시작 지시) → main(평지 전투, 서버가 플레이어 스폰) → **3점 선취 시 서버가 select로 되돌린다**(`Lobby.match_ended`). 전투 중 ESC(`ui_cancel`)로 접속 종료 후 title 복귀
-
-헤드리스로 실행되면 `Network`가 서버를 시작하고 title이 UI 없이 곧바로 main으로 넘어간다. **전용 서버는 select를 거치지 않고 계속 main에 머문다** — 대기실 상태는 씬이 아니라 `Lobby` 오토로드가 들고 있기 때문이다.
+title(`StartButton`으로 시작) → select(1P·2P가 각자 캐릭터를 고르고 `시작!`) → main(전투, 라운드마다 무기 카드가 1P → 2P 차례로 뜬다) → 3점 선취 시 select로 복귀. 전투 중 ESC로 title 복귀.
 
 ### 구조 요약
 
-- `scripts/network.gd` = 오토로드 싱글턴 `Network`: 연결 수립과 피어 알림만 담당(게임 로직 없음). `ROOMS`(1번 방 7777·2번 방 7778 — 서버컴 방화벽 UDP 규칙과 일치), **방 하나당** `MAX_CLIENTS = 2`, `DEFAULT_ADDRESS = "127.0.0.1"`. `should_run_as_server()`가 헤드리스 또는 `--server` 인자를 감지해 `_ready()`에서 자동으로 서버를 열고, 포트는 `port_from_cmdline()`이 `--port=7778` 인자에서 읽는다(없으면 첫 방). 시그널 `server_started`·`join_succeeded`·`join_failed`·`peer_joined`·`peer_left`.
-  - **방 구성은 `ROOMS`가 유일한 출처다** — 포트도 방 이름도 여기 말고 다른 곳에 적지 않는다. 줄을 추가하면 접속 화면 버튼도 따라 늘어나므로 씬은 손대지 않아도 된다(이슈 #90).
-  - **포트를 못 열면 `get_tree().quit(1)`로 프로세스를 끝낸다**(이슈 #90). 안 끝내면 `is_server`가 false인 채로 살아남아 클라이언트 취급을 받는데, 헤드리스라 화면도 없어서 "서버 떠 있음"으로 착각하게 된다. 같은 방을 두 번 띄우거나 2번 방을 `--port=` 없이 띄웠을 때 실제로 걸린다.
-- `scripts/lobby.gd` = 오토로드 싱글턴 `Lobby`: 대기실 상태를 **서버가 권위로** 보관한다. `order`(접속 순서, 먼저 들어온 쪽이 1P), `configs`(peer_id → character), `ready_flags`. 클라이언트는 `submit_config()`·`submit_ready()`으로 자기 값만 보내고, 서버가 `_receive_lobby`로 전체를 복제한다. **시작 판정은 서버에서만** 실행되어 양쪽이 같은 값을 갖는다. **맵은 대기실이 다루지 않는다** — 라운드마다 전투 화면의 서버가 뽑는다(`main.gd`의 `_start_round`). 클라이언트가 보낸 값은 `_sanitize()`로 목록에 있는 값인지 검사한다. 경기가 끝나면 서버가 `server_end_match()`로 준비를 풀고 양쪽을 대기실로 돌려보낸다(안 풀면 도착하자마자 다시 시작한다). 시그널 `lobby_changed`·`match_starting`·`match_ended`.
 - `scripts/game_state.gd` = 오토로드 싱글턴 `GameState`: 화면 간 선택 정보 전달. `CHARACTERS`(`Characters.names()` 5종 — 사본을 두지 않고 캐릭터 표에서 만든다), `WEAPONS`("랜덤" + `Weapons.names()` 17종 — 마찬가지), `MAPS`("랜덤" + `Maps.names()` 4종 — 마찬가지), `p1_config`/`p2_config`(weapon·character), `map_name`, `get_config(prefix)`.
-- `scenes/title.tscn` + `scripts/title.gd` = 타이틀 겸 접속 화면. **화면 전체가 표지 원화다**(요청) — `Cover`(TextureRect)가 `assets/ui/cover.png`를 바닥에 맞춰 덮고, 원화에 로고와 젤리가 이미 있으므로 `TitleLabel`·`JellyLeft`·`JellyRight`를 없앴다. 남은 조작은 로고를 피해 네 귀퉁이로 갔고(`StartButton`은 원화에 그려진 띠 자리), 글자는 흰색 + 진한 테두리다. `cover.png`는 경기 표지(`match_intro.tscn`)와 같이 쓴다.
-  - **방 버튼은 씬에 박아 두지 않고 `Network.ROOMS` 개수만큼 만든다**(이슈 #90). `RoomBox`(HBoxContainer) 아래 `RoomButton` 하나가 첫 방이자 나머지의 원본이고, `_setup_room_buttons()`가 `duplicate()`로 복제한다 — 스타일과 `ButtonGroup`이 그대로 딸려 오므로 라디오 동작과 모양이 자동으로 맞는다. 버튼은 `size_flags_horizontal = 3`이라 방이 몇 개든 같은 폭에 균등하게 나뉜다.
-  - `AddressEdit`에 `주소:포트`로 적으면 고른 방보다 그쪽을 우선한다.
-  - **방이 꽉 차면 ENet이 거절 신호를 보내지 않고 조용히 무시한다** — `connection_failed`조차 오지 않아 "접속 중..."에서 영원히 멈춘다. 그래서 `JOIN_TIMEOUT_SEC`(8초) 타이머로 직접 실패 처리한다. 이 타이머를 지우면 증상이 되살아난다.
-- `scenes/select.tscn` + `scripts/select.gd` = 대기실 겸 무기 선택. `P1Panel`/`P2Panel`은 흰 카드(`Card`) 위에 얹히며 `Lobby.order` 슬롯에 대응하고 **자기 슬롯만 조작 가능**하고 상대 패널은 서버가 보낸 값을 표시만 한다. `StatusLabel`에 "상대 대기 중" 또는 양쪽 준비 상태, `GoButton`은 준비 토글. **씬 전환은 클라이언트가 스스로 하지 않고 `Lobby.match_starting`(서버 지시)을 받아서 한다.** **가운데 칸이 아예 없다**(요청) — 화면은 `1P 패널 | StatusLabel + GoButton | 2P 패널` 세 칸이다. 꾸밈은 `Decor`(`scripts/select_decor.gd`)가 통째로 `_draw()`로 그린다(왼쪽 분홍·오른쪽 남색 그라데이션, 가운데 번개, 별·젤리 조각, 꽃밭, `VS`, `캐릭터 선택` 리본 — 자리는 `SEED`로 고정). 카드는 편마다 색이 다르고(`player_panel.gd`의 `accent`) `_apply_accent()`가 카드·버튼·별 배지를 거기서 만든다 — **스타일박스는 반드시 `duplicate()`** 해야 한다(씬의 `SubResource`는 인스턴스끼리 같은 객체를 나눠 써서, 복제하지 않으면 1P를 칠할 때 2P까지 바뀐다). 맵도 무기도 라운드가 시작될 때 전투 화면에서 정해지므로 여기서 고를 것이 없어 안내판 둘(`MapBox`·`WeaponBox`)을 치우고 그 자리에 `StatusLabel`·`GoButton`을 올렸다. 되살리지 말 것.
-- `scenes/player_panel.tscn` + `scripts/player_panel.gd` = 플레이어 1인 패널(양쪽 재사용). `mirrored`가 true면 아이콘 열을 오른쪽으로 옮긴다. 무기/캐릭터 버튼은 각각 목록을 순환하고, `RandomButton`은 전부 랜덤. 사용자 조작으로 값이 바뀌면 `config_changed`를 내보낸다. `set_interactive(false)`로 상대 패널을 잠그고, `apply_config()`로 서버가 보낸 값을 표시한다(이때는 시그널을 내보내지 않는다).
+- `scenes/title.tscn` + `scripts/title.gd` = 타이틀 화면. **화면 전체가 표지 원화다**(요청) — `Cover`(TextureRect)가 `assets/ui/cover.png`를 바닥에 맞춰 덮고, 원화에 로고와 젤리가 이미 있으므로 `TitleLabel`·`JellyLeft`·`JellyRight`를 없앴다. 남은 조작은 로고를 피해 네 귀퉁이로 갔고(`StartButton`은 원화에 그려진 띠 자리), 글자는 흰색 + 진한 테두리다. `cover.png`는 경기 표지(`match_intro.tscn`)와 같이 쓴다.
+- `scenes/select.tscn` + `scripts/select.gd` = 캐릭터 선택 창(두 패널 다 조작할 수 있다). `P1Panel`/`P2Panel`은 흰 카드(`Card`) 위에 얹히며 자리마다 하나씩이고 **둘 다 조작할 수 있다**(이슈 #320). `StatusLabel`에는 조작 안내를 적고, `GoButton`(`시작!`)을 누르면 곧바로 main 으로 넘어간다. **가운데 칸이 아예 없다**(요청) — 화면은 `1P 패널 | StatusLabel + GoButton | 2P 패널` 세 칸이다. 꾸밈은 `Decor`(`scripts/select_decor.gd`)가 통째로 `_draw()`로 그린다(왼쪽 분홍·오른쪽 남색 그라데이션, 가운데 번개, 별·젤리 조각, 꽃밭, `VS`, `캐릭터 선택` 리본 — 자리는 `SEED`로 고정). 카드는 편마다 색이 다르고(`player_panel.gd`의 `accent`) `_apply_accent()`가 카드·버튼·별 배지를 거기서 만든다 — **스타일박스는 반드시 `duplicate()`** 해야 한다(씬의 `SubResource`는 인스턴스끼리 같은 객체를 나눠 써서, 복제하지 않으면 1P를 칠할 때 2P까지 바뀐다). 맵도 무기도 라운드가 시작될 때 전투 화면에서 정해지므로 여기서 고를 것이 없어 안내판 둘(`MapBox`·`WeaponBox`)을 치우고 그 자리에 `StatusLabel`·`GoButton`을 올렸다. 되살리지 말 것.
+- `scenes/player_panel.tscn` + `scripts/player_panel.gd` = 플레이어 1인 패널(양쪽 재사용). `mirrored`가 true면 아이콘 열을 오른쪽으로 옮긴다. 무기/캐릭터 버튼은 각각 목록을 순환하고, `RandomButton`은 전부 랜덤. 사용자 조작으로 값이 바뀌면 `config_changed`를 내보낸다. `apply_config()` 는 들고 있던 값을 표시만 한다(이때는 시그널을 내보내지 않는다).
 - `scripts/weapon_preview.gd` = 라운드 시작 무기 선택 카드(`weapon_pick.tscn`)의 무기 그림 미리보기. 대기실에는 무기 칸이 없다. `jelly_preview.gd`와 같은 형태이고 `Art.content_rect()`로 여백을 뺀다. 그림이 있는 무기가 7종뿐이라 **없으면 아무것도 그리지 않고** 옆의 이름 라벨이 대신한다. 무기 원화는 세로로 긴 것(검 1:4.7)과 가로로 긴 것(전기톱·대포 총)이 섞여 있어 칸은 세로로 잡았다.
 - `scripts/jelly_preview.gd` = 젤리곰 미리보기. `character_id` setter가 `Characters.texture()`로 그림을 받아 `queue_redraw()`를 호출하고, `_draw()`가 비율을 지켜 가운데에 그린다.
-- `scripts/characters.gd`(`class_name Characters`) = **캐릭터 표 5종**(분홍·파랑·초록·노랑·빨강). 이름과 그림 경로의 유일한 출처이며 대기실 선택지·서버 검증·전투 화면 그림이 모두 여기서 나온다. 그림은 `assets/characters/`에 있고, 파일이 없으면 표의 몸통 색 단색으로 대신 그린다. 여백 측정은 `Art.content_rect()`가 한다.
-- `scenes/main.tscn` + `scripts/main.gd` = 전투 화면이자 **공격 판정의 주인**. 지형은 씬에 없고 `_ready()`가 `Lobby.map_name`으로 맵 씬을 `MapRoot` 아래에 붙인다(모든 피어에서, 스폰보다 먼저). 화면 글자는 전부 `UI/HUD` 아래 흰 카드 안에 있다 — 맨 위 가운데 `ScoreCard`(`P1Score`·`Divider`·`P2Score`, 라운드 포인트를 좌우 대칭으로, 1P 핑크·2P 라벤더)와 그 아래 관전자 전용 `ObserverCard`·`RoomSwitcher`. **화면 좌우 맨 위에는 아무것도 없다**(이슈 #317) — 체력은 맞은 순간 젤리 머리 위에 2초 뜨는 `scripts/health_bar.gd`가 내고, 이름·무기 카드(`P1Card`·`P2Card`)는 없앴다(이름은 젤리 머리 위 `NameLabel`, 무기는 손에 든 그림이 낸다). ESC로 접속 종료.
+- `scripts/characters.gd`(`class_name Characters`) = **캐릭터 표 5종**(분홍·파랑·초록·노랑·빨강). 이름과 그림 경로의 유일한 출처이며 선택 창 선택지·선택값 정리·전투 화면 그림이 모두 여기서 나온다. 그림은 `assets/characters/`에 있고, 파일이 없으면 표의 몸통 색 단색으로 대신 그린다. 여백 측정은 `Art.content_rect()`가 한다.
+- `scenes/main.tscn` + `scripts/main.gd` = 전투 화면이자 **공격 판정의 주인**. 지형은 씬에 없고 라운드가 열릴 때마다 `_pick_round_map()` 이 뽑아 `_load_map()` 이 `MapRoot` 아래에 붙인다(모든 피어에서, 스폰보다 먼저). 화면 글자는 전부 `UI/HUD` 아래 흰 카드 안에 있다 — 맨 위 가운데 `ScoreCard`(`P1Score`·`Divider`·`P2Score`, 라운드 포인트를 좌우 대칭으로, 1P 핑크·2P 라벤더)와 **화면 좌우 맨 위에는 아무것도 없다**(이슈 #317) — 체력은 맞은 순간 젤리 머리 위에 2초 뜨는 `scripts/health_bar.gd`가 내고, 이름·무기 카드(`P1Card`·`P2Card`)는 없앴다(이름은 젤리 머리 위 `NameLabel`, 무기는 손에 든 그림이 낸다). ESC로 접속 종료.
   - **UI는 `UI`(CanvasLayer) 아래에 둔다**(이슈 #82). 씬 루트가 `Node2D`라 Control을 거기에 바로 붙이면 앵커가 기준으로 삼을 부모 사각형이 0×0이 되어 `HUD`의 크기도 0이 된다 — 그러면 `anchor_left = 0.5`로 가운데를 잡은 것들이 전부 화면 왼쪽 끝(x=0)에 그려지고 화면을 덮는 판도 안 보인다. CanvasLayer 아래에서는 뷰포트 크기가 기준이 된다. 앵커를 쓰는 UI를 새로 넣을 때는 반드시 이 아래에 붙인다.
   - **글자는 맵 배경 위에 그냥 얹지 않고 흰 카드 안에 넣는다**(이슈 #112). 맵마다 배경 밝기가 정반대라서(평지 하늘 `(0.82, 0.93, 0.99)` ↔ 용암 `(0.42, 0.26, 0.38)`) 한 맵에 맞춘 글자색은 다른 맵에서 사라진다 — 진한 글자를 용암 배경에 얹으면 대비가 1.3:1이다. 카드를 깔면 배경이 무엇이든 10:1이 나오므로, 맵 위에 글자를 새로 얹을 일이 생기면 카드부터 만든다. 카드는 하늘 영역(y ≲ 190)에 둔다 — 점프 정점이 y≈340이라 지형·젤리와 겹치지 않는다.
   - 체력 숫자는 막대 **안**(`show_percentage`)이 아니라 카드 위 별도 라벨에 적는다. 막대 안에 그리면 채운 쪽과 빈 쪽의 밝기가 반대라 어느 색을 골라도 한쪽에서 묻힌다.
-  - **플레이어는 씬에 배치되어 있지 않고 서버가 런타임에 스폰한다** — `PlayerSpawner`(MultiplayerSpawner, `spawn_path = ../Players`)와 `Players` 노드가 담당. 클라이언트는 씬 준비 후 `_notify_ready()`를 서버로 RPC하고, 서버가 그때 `spawn()`한다(접속 직후 스폰하면 클라이언트가 씬 로드 전이라 놓칠 수 있다). 노드 이름은 `Player_<peer_id>`.
-  - 투사체도 같은 방식이다 — `ProjectileSpawner`(`spawn_path = ../Projectiles`). 서버에서 `queue_free()`하면 클라이언트에서도 같이 사라진다.
+  - **플레이어는 씬에 배치되어 있지 않고 `_spawn_players()` 가 씬이 열릴 때 세운다**(이슈 #320) — `PlayerSpawner`(MultiplayerSpawner, `spawn_path = ../Players`)와 `Players` 노드가 담당. `PLAYER_SCENE.instantiate()` 로 만들어 `Players` 아래에 붙인다. 노드 이름은 `Player_1`·`Player_2` 다.
   - `_physics_process()`가 `multiplayer.is_server()` 하나로 전투 틱 전체를 감싼다: `_check_basic_attacks()`(근접 접촉·원거리 자동 발사) → `_check_pending_specials()`(강제 이동 중 명중) → `_tick_bleeds()`(출혈) → `_tick_bursts()`(소총 연사) → `_check_falls()`(낙사) → `_tick_round()`(예약된 라운드 재시작·대기실 복귀). 특수 공격은 `Player.special_requested` 신호를 받아 `_execute_special()`에서 무기별로 분기한다.
-  - **포인트 진행도 여기가 주인이다.** `_on_player_died()`가 상대에게 1포인트를 주고, `Combat.POINTS_TO_WIN`(3포인트)에 닿으면 승리를 표시한 뒤 `Lobby.server_end_match()`로 양쪽을 대기실로 돌려보낸다. 아니면 `ROUND_RESTART_DELAY`(2초) 뒤 `_start_round()`가 투사체·서버 타이머를 비우고 `Player.server_reset()`으로 양쪽을 되살린다. 점수(`scores`)와 안내 문구(`banner`)는 서버가 정해 `_receive_round`로 복제하며 **클라이언트는 점수를 세지 않는다.**
+  - **포인트 진행도 여기가 주인이다.** `_on_player_died()`가 상대에게 1포인트를 주고, `Combat.POINTS_TO_WIN`(3포인트)에 닿으면 승리를 표시한 뒤 `_return_to_select()` 로 선택 창으로 돌아간다. 아니면 `ROUND_RESTART_DELAY`(2초) 뒤 `_start_round()`가 투사체·판정 타이머를 비우고 `Player.server_reset()`으로 양쪽을 되살린다. 점수(`scores`)와 안내 문구(`banner`)는 `main.gd` 가 정하고 `_update_round()` 가 HUD에 적는다.
   - **화면 문구는 "라운드 승패"가 아니라 "포인트 획득"으로 쓴다**(이슈 #76) — 배너는 `1P +1 포인트`, 마지막에 `1P 승리!  3포인트 달성`, HUD 점수는 `_score_text()`가 `●○○  1 / 3`처럼 동그라미와 숫자를 같이 낸다. 규칙은 그대로이고 표현만 통일한 것이다.
-  - **판은 `3 · 2 · 1 · START!` 를 세고 열린다**(요청) — `scenes/countdown.tscn` + `scripts/countdown.gd`. 무기를 고른 직후에 뜨고 그 동안 두 젤리는 자기 자리에 선 채로 얼어 있다. 한 칸 `Combat.COUNTDOWN_STEP`(0.42초) × 4 = `COUNTDOWN_TIME`(1.68초)이고 판마다 끼므로 빠른 쪽으로 잡았다. **얼음을 푸는 것은 서버다** — `_round_opens_at` 예약을 `_tick_round()`가 처리하고 `_open_round()`가 `server_reset()`을 한 번 더 불러 무적(`ROUND_START_GRACE`)을 새로 준다(세는 데 쓴 1.68초가 무적에서 먼저 흘러가 버리기 때문이다). 판이 접히면 이 예약을 버린다. 뒤에 막은 깔지 않고 글자를 크게·테두리를 굵게 해서 읽히게 한다.
-  - **포인트가 오를 때는 전용 장면이 뜬다**(이슈 #273) — `scenes/point_gain.tscn` + `scripts/point_gain.gd`. 띠가 왼쪽에서 쓸려 들어와 딴 사람의 젤리 얼굴·이름·포인트 칸 3개를 보여주고, 이번에 딴 칸에 흰 빛이 터지며 금색으로 채워진다. **띠 색은 보는 사람 기준이다** — 내가 땄으면 파랑, 상대가 땄으면 빨강, 관전자는 딴 사람 기준(파랑)이다. 서버의 `_play_point_gain`은 "누가 몇 점이 되었다"만 보내고 편을 가르는 것은 받는 쪽이다. 장면 길이는 `Combat.POINT_GAIN_TIME`(2.6초) 하나이고 `ROUND_RESTART_DELAY`(2.8초)는 그보다 길어야 한다. 마지막 포인트에서는 결과 화면을 `_result_at`으로 장면 뒤로 미룬다 — 겹치면 축하 장면 위에 승패 글자가 덮인다.
-  - **경기가 끝나면 피어마다 자기 기준으로 결과 화면을 띄운다**(이슈 #79) — 서버는 `_receive_match_result`로 **승자 peer만** 보내고, 각 클라이언트가 `HUD/ResultOverlay`(어둡게 덮는 `Dim` + `Jelly` 미리보기 + `ResultLabel` + `ScoreLabel`)에 트윈으로 승리(통통 튐 + 글자 팝업·맥동)와 패배(색 빠지며 주저앉음 + 글자가 위에서 내려옴) 연출을 만든다. 젤리는 `jelly_preview.gd`를 그대로 재사용하고 **그 화면 주인의 캐릭터**를 보여준다. `get_player(내 peer)`가 없는 피어(전용 서버)는 아무것도 띄우지 않는다. 결과 화면이 떠 있는 동안 `Banner`는 접힌다. 연출 트윈은 `_result_tweens`에 모아 두고 `_hide_result()`가 전부 끊는다.
-  - 전용 서버는 씬을 벗어나지 않으므로 경기가 끝나면 `_server_reset_match()`가 직접 판을 비운다 — 안 하면 다음 경기에 점수가 이어지고 플레이어가 다시 스폰되지 않는다.
-- `scenes/player.tscn` + `scripts/player.gd`(CharacterBody2D, `class_name Player`): **서버 권위 이동 + 서버 권위 전투**. `owner_peer_id`·`player_name`·`character_id`·`weapon_id` export. SPEED 320, JUMP_VELOCITY -560, FAST_FALL_MULTIPLIER 2.0, INTERPOLATION_SPEED 20.
-  - 클라이언트: `read_input()`(**`Input`을 읽는 유일한 지점**) → `_receive_move_input`(unreliable_ordered)·`_receive_jump`·`_receive_skill`(reliable, 엣지 입력이라 유실되면 안 됨)로 서버 전송. 물리를 계산하지 않고 `_receive_state`로 받은 위치로 lerp 보간만 한다.
-  - 서버: `apply_movement(input, delta)`로 위치를 정하고(`move_and_slide()`는 여기서만 호출) `_receive_state`(authority, unreliable_ordered)로 위치·속도·접지·`facing`을 복제한다.
-  - **권한 검증**: 입력 RPC 세 개가 모두 `_is_owner_input()`을 거친다 — `multiplayer.get_remote_sender_id() != owner_peer_id`이면 무시한다. 없으면 남의 플레이어를 조작할 수 있다.
-  - 전투 상태(`hp`·`alive`·`facing`·무적·기절·게이지·버프·강제 이동)는 **서버가 정하고** `server_*` 함수가 결과를 `@rpc("authority", "call_local", "reliable")`로 양쪽에 복제한다. 판정 자체는 여기가 아니라 `main.gd`에 있다.
-  - 방패의 짧게/길게는 **서버가 누른 시간을 잰다**(`_check_long_press()`) — 클라이언트는 눌렀다/뗐다만 보낸다.
-  - 몸은 `Body`(Sprite2D)에 캐릭터 그림을 붙인다. 원화가 정사각 캔버스에 여백을 두고 그려져 있어 `Characters.content_rect()`로 **투명 여백을 뺀 실제 그림 영역**을 재고, 그 높이를 `BODY_HEIGHT`(72px)에 맞춰 배율과 위치를 정해 발을 충돌 상자 바닥에 붙인다. 찌그러짐은 그 기본 배율에 곱하고, 좌우 반전은 복제된 `facing`으로 `flip_h`를 켜며 이때 여백 보정(`_body_offset_x`)의 부호도 뒤집는다.
-  - 젤리 찌그러짐은 복제된 속도·접지값으로 각 피어가 계산한다.
+  - **판은 `3 · 2 · 1 · START!` 를 세고 열린다**(요청) — `scenes/countdown.tscn` + `scripts/countdown.gd`. 무기를 고른 직후에 뜨고 그 동안 두 젤리는 자기 자리에 선 채로 얼어 있다. 한 칸 `Combat.COUNTDOWN_STEP`(0.42초) × 4 = `COUNTDOWN_TIME`(1.68초)이고 판마다 끼므로 빠른 쪽으로 잡았다. **얼음을 푸는 것은 카운트다운 화면이 아니다** — `_round_opens_at` 예약을 `_tick_round()`가 처리하고 `_open_round()`가 `server_reset()`을 한 번 더 불러 무적(`ROUND_START_GRACE`)을 새로 준다(세는 데 쓴 1.68초가 무적에서 먼저 흘러가 버리기 때문이다). 판이 접히면 이 예약을 버린다. 뒤에 막은 깔지 않고 글자를 크게·테두리를 굵게 해서 읽히게 한다.
+  - **포인트가 오를 때는 전용 장면이 뜬다**(이슈 #273) — `scenes/point_gain.tscn` + `scripts/point_gain.gd`. 띠가 왼쪽에서 쓸려 들어와 딴 사람의 젤리 얼굴·이름·포인트 칸 3개를 보여주고, 이번에 딴 칸에 흰 빛이 터지며 금색으로 채워진다. **띠 색은 보는 사람 기준이다** — 내가 땄으면 파랑, 상대가 땄으면 빨강. 띠 색은 한 화면이라 늘 딴 사람 기준(파랑)이다 (이슈 #320). 장면 길이는 `Combat.POINT_GAIN_TIME`(2.6초) 하나이고 `ROUND_RESTART_DELAY`(2.8초)는 그보다 길어야 한다. 마지막 포인트에서는 결과 화면을 `_result_at`으로 장면 뒤로 미룬다 — 겹치면 축하 장면 위에 승패 글자가 덮인다.
+  - **경기가 끝나면 이긴 쪽 기준으로 결과 화면을 한 번 띄운다**(이슈 #79·#320) — `_show_match_result(winner_id)` 가 `HUD/ResultOverlay` 에 승리 연출을 만들고 글자를 `1P 승리!` 로 바꾼다. 진 쪽 화면이 따로 없으므로 패배 연출은 지웠다.
+- `scenes/player.tscn` + `scripts/player.gd`(CharacterBody2D, `class_name Player`): 젤리 하나. `owner_peer_id`·`player_name`·`character_id`·`weapon_id` export. SPEED 320, JUMP_VELOCITY -560, FAST_FALL_MULTIPLIER 2.0, INTERPOLATION_SPEED 20.
+  - 전투 상태(`hp`·`alive`·`facing`·무적·기절·게이지·버프·강제 이동)는 **`main.gd` 의 판정이 정하고** 공개 함수(`apply_hit`·`set_frozen`·`reset_round` …)가 그 결과를 적는다. 입력은 `read_input()` 이 `GameState.action(player_id, ...)` 이름으로 자기 자리 키만 읽는다.
+  - 방패의 짧게/길게는 `_check_long_press()` 가 잰다(`_check_long_press()`) — 길게가 확정되는 순간 바로 발동한다.
+  - 몸은 `Body`(Sprite2D)에 캐릭터 그림을 붙인다. 원화가 정사각 캔버스에 여백을 두고 그려져 있어 `Characters.content_rect()`로 **투명 여백을 뺀 실제 그림 영역**을 재고, 그 높이를 `BODY_HEIGHT`(72px)에 맞춰 배율과 위치를 정해 발을 충돌 상자 바닥에 붙인다. 찌그러짐은 그 기본 배율에 곱하고, 좌우 반전은 `facing`으로 `flip_h`를 켜며 이때 여백 보정(`_body_offset_x`)의 부호도 뒤집는다.
+  - 젤리 찌그러짐은 속도·접지값에서 바로 나온다.
   - 무기는 그림이 있으면 `WeaponSprite`에 세워서 바라보는 쪽에 놓고(`WEAPON_HEIGHT` 56px), 쿨타임 상태는 밝기로 나타낸다. 그림이 없는 10종은 여전히 `WeaponShape` 임시 막대이며 길이가 사거리·색이 쿨타임 상태다. 어느 쪽을 쓸지는 `_apply_weapon()`이 정한다.
-- `scripts/weapons.gd`(`class_name Weapons`) = **무기 표 17종**. 이름·기본/특수 데미지·쿨타임·넉백 등 모든 무기 수치의 유일한 출처. `RANDOM` 상수와 `resolve()`(서버 전용 랜덤 확정)도 여기 있다. 그림이 있는 7종은 `file` 필드를 갖고 `texture()`가 `assets/weapons/`에서 꺼내 온다 — 없으면 null이고 부르는 쪽이 막대로 대신한다.
-- `scripts/maps.gd`(`class_name Maps`) = **맵 표 4종**(평지·바다·용암·벽돌). 이름과 씬 경로의 유일한 출처. `RANDOM` 상수와 `resolve()`(서버 전용 랜덤 확정)가 무기 표와 같은 형태다. **맵 씬 계약**: 루트 `Node2D`, `Spawns/Spawn1`·`Spawn2`(Marker2D, 순서가 1P·2P), 지형은 `StaticBody2D` + `CollisionShape2D`, 즉사 구역은 `Hazard`(Area2D), 배경도 맵이 그린다. 좌우 벽이 없는 맵은 화면 밖으로 나가면 낙사한다.
+- `scripts/weapons.gd`(`class_name Weapons`) = **무기 표 17종**. 이름·기본/특수 데미지·쿨타임·넉백 등 모든 무기 수치의 유일한 출처. `RANDOM` 상수와 `resolve()`(랜덤 확정)도 여기 있다. 그림이 있는 7종은 `file` 필드를 갖고 `texture()`가 `assets/weapons/`에서 꺼내 온다 — 없으면 null이고 부르는 쪽이 막대로 대신한다.
+- `scripts/maps.gd`(`class_name Maps`) = **맵 표 4종**(평지·바다·용암·벽돌). 이름과 씬 경로의 유일한 출처. `RANDOM` 상수와 `resolve()`(랜덤 확정)가 무기 표와 같은 형태다. **맵 씬 계약**: 루트 `Node2D`, `Spawns/Spawn1`·`Spawn2`(Marker2D, 순서가 1P·2P), 지형은 `StaticBody2D` + `CollisionShape2D`, 즉사 구역은 `Hazard`(Area2D), 배경도 맵이 그린다. 좌우 벽이 없는 맵은 화면 밖으로 나가면 낙사한다.
   - 바다·용암에는 `Hazard`가 있어 닿으면 즉사한다. 평지·벽돌은 좌우 벽이 있고 `Hazard`도 없어 낙사가 일어나지 않는다.
 - `scripts/art.gd`(`class_name Art`) = 그림 공통 처리. `content_rect()`가 **투명 여백을 뺀 실제 그림 영역**을 잰다. 캐릭터·무기 원화가 모두 정사각 캔버스에 여백을 두고 그려져 있어 크기와 위치를 잡을 때 항상 이 값을 기준으로 한다.
 - `scripts/combat.gd`(`class_name Combat`) = 전투 공통 수치. MAX_HP 100, INVULNERABLE_TIME 0.1, MELEE_HIT_INTERVAL 0.6, ROUND_START_GRACE 2.0, POINTS_TO_WIN 3, ROUND_RESTART_DELAY 2.0, MATCH_END_DELAY 4.0, 넉백 3단계(200/400/700), PROJECTILE_SPEED 1120, 낙사 경계 `is_out_of_bounds()`.
-- `scenes/projectile.tscn` + `scripts/projectile.gd`(Area2D, `class_name Projectile`) = 허공을 나는 것(화살·총알·표창·던진 단검·폭탄). 이동·판정은 서버만 하고 위치는 `MultiplayerSynchronizer`로 복제된다. 상대 무기에 막히지 않고 공유 무적도 타지 않는다.
+- `scenes/projectile.tscn` + `scripts/projectile.gd`(Area2D, `class_name Projectile`) = 허공을 나는 것(화살·총알·표창·던진 단검·폭탄). 이동도 판정도 스스로 하고, 만들고 없애는 것은 `main.gd` 다. 상대 무기에 막히지 않고 공유 무적도 타지 않는다.
 - `docs/weapon-system.md` = 무기 추가·수정 방법과 지켜야 할 계약. `docs/무기_수치_초안.md` = 수치가 정해진 근거와 미확정 항목.
 - `assets/fonts/BlackHanSans-Regular.ttf` = 화면 글꼴(요청, Google Fonts·SIL OFL 1.1). `resources/display_font.tres`(FontVariation)가 이것을 감싸고 테마가 그것을 가리킨다 — `fallbacks`에 `korean_font.tres`를 물려 둔 것이 핵심이다(이 글꼴에는 이모지가 없어서 폴백이 없으면 `랜덤 🎲`의 주사위가 네모로 나온다).
 - `resources/korean_font.tres` = 한글 계통 폰트 리소스 (SystemFont). 이제 폴백으로만 쓰인다.
@@ -72,10 +57,9 @@ title(방을 고르고 서버 주소를 입력해 `StartButton`으로 접속) �
   - 체력 막대는 트랙 `(0.9, 0.86, 0.9)`에 2px 테두리 `(0.76, 0.7, 0.78)`가 있다. 흰 카드 위에 트랙만 얹으면 막대가 **어디서 끝나는지** 안 보여서 남은 비율을 읽을 수 없다.
   - 예외적으로 씬에 남긴 `theme_override`는 **화면마다 하나뿐인 주 동작 버튼**(타이틀 `StartButton`·대기실 `GoButton`은 핑크, `RandomButton`은 라벤더)과 글자 크기·색 같은 개별 값이다. 새 버튼은 기본 흰 카드 모양을 그대로 쓰는 것이 원칙이다.
 
-### 조작 (project.godot `[input]`)
 
-기기당 1명이므로 **액션은 `move_left`·`move_right`·`jump`·`fast_fall`·`skill` 5개뿐**이며, 각 액션에 두 벌이 함께 바인딩되어 있어 어느 쪽을 눌러도 동작한다(이동·점프·낙하는 WASD와 방향키, `skill`은 Shift와 Space). 전투 중 ESC(`ui_cancel`)로 접속 종료.
-**기본 공격에는 입력이 없다** — 근접은 닿으면, 원거리는 간격마다 서버가 자동으로 판정한다. `skill`은 특수 공격 전용이다. 옛 `p1_/p2_` 8개 액션은 온라인 전환(#33)으로 제거되었다.
+**자리마다 한 벌씩, 액션이 모두 10개다**(이슈 #320): `p1_left`·`p1_right`·`p1_jump`·`p1_fast_fall`·`p1_skill`, `p2_…`. 1P는 `A`/`D`·`W`·`S`·왼쪽 `Shift`, 2P는 `←`/`→`·`↑`·`↓`·`Space`다. 읽는 곳은 `Player.read_input()` 하나이고 이름은 `GameState.action(player_id, name)` 이 만든다. 전투 중 ESC(`ui_cancel`)로 title 복귀.
+**기본 공격에는 입력이 없다** — 근접은 닿으면, 원거리는 간격마다 `main.gd` 가 자동으로 판정한다.
 
 ### 미구현 (로드맵 #32 기준)
 
@@ -85,7 +69,7 @@ title(방을 고르고 서버 주소를 입력해 `StartButton`으로 접속) �
 무기별로 남은 것(표창의 파란 표창, 삼지창 회수 연출, 미확정 수치)은 `docs/weapon-system.md`의 "아직 안 된 것"에 정리되어 있다.
 지연 보상(prediction·rollback)은 로드맵 Non-goal이라 입력 지연이 왕복 시간만큼 발생한다.
 
-무기·전투(4단계)는 #46에서 공동작업자(@Kadsa-MXZI)의 `feat/online-multiplayer-and-weapons` 브랜치에서 이식했다. 그 브랜치에는 독자적인 네트워크·대기실 구현(`net.gd`, 자체 `lobby.gd`, `server/` 도커)도 들어 있지만 **가져오지 않았다** — 이쪽 `main`의 서버 권위 구조를 유지한다.
+무기·전투(4단계)는 #46에서 공동작업자(@Kadsa-MXZI)의 `feat/online-multiplayer-and-weapons` 브랜치에서 이식했다. 그 브랜치에는 독자적인 네트워크·대기실 구현(`net.gd`, 자체 `lobby.gd`, `server/` 도커)도 들어 있지만 **가져오지 않았다.**
 
 ### 개발 시 주의
 
@@ -95,10 +79,10 @@ title(방을 고르고 서버 주소를 입력해 `StartButton`으로 접속) �
   timeout 20s "<godot>" --headless --path . 2>&1 | grep -E "SCRIPT ERROR|\.gd:|Parse Error|Compile Error"
   ```
 
-  헤드리스로 뜨면 서버가 시작되어 계속 떠 있으므로 `timeout`으로 끊는다. 끊을 때 나오는
+  헤드리스로도 게임이 그대로 도므로 `timeout`으로 끊는다. 끊을 때 나오는
   `BUG: Unreferenced static string ...`은 엔진 종료 잡음이니 무시하고, 위 필터에 걸리는 것만 본다.
   경로·상수 대조 같은 정적 확인만으로는 **타입 추론 실패·타입 불일치가 잡히지 않는다**(이슈 #66·#69에서 두 번 놓쳤다).
-  `--check-only --script`는 오토로드를 안 올려서 `Lobby` 같은 식별자를 못 찾는다고 헛짚으니 쓰지 말 것.
+  `--check-only --script`는 오토로드를 안 올려서 `GameState` 같은 식별자를 못 찾는다고 헛짚으니 쓰지 말 것.
 - 그래도 **화면으로 봐야 아는 것**(색·배치·발판 높이·조작감)은 사용자 F5 확인이 필요하다. 헤드리스 실행은 오류 유무만 알려준다.
 - `_ready()`에서 `change_scene_to_file()`을 바로 부르면 "Parent node is busy" 오류가 난다 — `call_deferred`로 미룬다.
 - 배포본(export)이 아직 없고 `export_presets.cfg`도 없다. 유저 실행용 빌드는 별도 이슈로 진행 예정.

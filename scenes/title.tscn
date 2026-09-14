@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3 uid="uid://jellytitle001"]
+[gd_scene load_steps=6 format=3 uid="uid://jellytitle001"]
 
 [ext_resource type="Script" path="res://scripts/title.gd" id="1_title"]
 [ext_resource type="Texture2D" path="res://assets/ui/cover.png" id="2_cover"]
@@ -39,38 +39,6 @@ corner_radius_bottom_right = 22
 corner_radius_bottom_left = 22
 corner_detail = 14
 
-[sub_resource type="ButtonGroup" id="ButtonGroup_room"]
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_room"]
-bg_color = Color(1, 1, 1, 1)
-border_width_bottom = 4
-border_color = Color(0.86, 0.81, 0.86, 1)
-corner_radius_top_left = 14
-corner_radius_top_right = 14
-corner_radius_bottom_right = 14
-corner_radius_bottom_left = 14
-corner_detail = 12
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_room_hover"]
-bg_color = Color(0.99, 0.96, 0.99, 1)
-border_width_bottom = 4
-border_color = Color(0.62, 0.17, 0.4, 1)
-corner_radius_top_left = 14
-corner_radius_top_right = 14
-corner_radius_bottom_right = 14
-corner_radius_bottom_left = 14
-corner_detail = 12
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_room_on"]
-bg_color = Color(0.8, 0.29, 0.56, 1)
-border_width_bottom = 4
-border_color = Color(0.62, 0.17, 0.4, 1)
-corner_radius_top_left = 14
-corner_radius_top_right = 14
-corner_radius_bottom_right = 14
-corner_radius_bottom_left = 14
-corner_detail = 12
-
 [node name="Title" type="Control"]
 anchor_right = 1.0
 anchor_bottom = 1.0
@@ -108,68 +76,6 @@ theme_override_constants/outline_size = 8
 theme_override_font_sizes/font_size = 18
 text = "JELLY WARS  —  스틱매너"
 
-[node name="AddressLabel" type="Label" parent="."]
-offset_left = 16.0
-offset_top = 10.0
-offset_right = 316.0
-offset_bottom = 34.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_outline_color = Color(0.24, 0.14, 0.3, 1)
-theme_override_constants/outline_size = 8
-theme_override_font_sizes/font_size = 18
-text = "서버 주소"
-
-[node name="AddressValue" type="Label" parent="."]
-offset_left = 16.0
-offset_top = 34.0
-offset_right = 416.0
-offset_bottom = 64.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_outline_color = Color(0.24, 0.14, 0.3, 1)
-theme_override_constants/outline_size = 9
-theme_override_font_sizes/font_size = 22
-text = "100.102.216.35"
-vertical_alignment = 1
-
-[node name="RoomLabel" type="Label" parent="."]
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -360.0
-offset_top = 10.0
-offset_right = -16.0
-offset_bottom = 34.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_outline_color = Color(0.24, 0.14, 0.3, 1)
-theme_override_constants/outline_size = 8
-theme_override_font_sizes/font_size = 18
-text = "방 선택"
-horizontal_alignment = 2
-
-[node name="RoomBox" type="HBoxContainer" parent="."]
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -360.0
-offset_top = 36.0
-offset_right = -16.0
-offset_bottom = 76.0
-theme_override_constants/separation = 16
-
-[node name="RoomButton" type="Button" parent="RoomBox"]
-layout_mode = 2
-size_flags_horizontal = 3
-toggle_mode = true
-button_group = SubResource("ButtonGroup_room")
-theme_override_colors/font_color = Color(0.44, 0.39, 0.48, 1)
-theme_override_colors/font_hover_color = Color(0.72, 0.2, 0.48, 1)
-theme_override_colors/font_pressed_color = Color(1, 1, 1, 1)
-theme_override_colors/font_hover_pressed_color = Color(1, 1, 1, 1)
-theme_override_font_sizes/font_size = 24
-theme_override_styles/normal = SubResource("StyleBoxFlat_room")
-theme_override_styles/hover = SubResource("StyleBoxFlat_room_hover")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_room_on")
-theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_room_on")
-text = "1번 방"
-
 [node name="StartButton" type="Button" parent="."]
 anchor_left = 0.5
 anchor_right = 0.5
@@ -184,7 +90,7 @@ theme_override_font_sizes/font_size = 34
 theme_override_styles/normal = SubResource("StyleBoxFlat_start")
 theme_override_styles/hover = SubResource("StyleBoxFlat_start_hover")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_start_pressed")
-text = "접속"
+text = "시작"
 
 [node name="StatusLabel" type="Label" parent="."]
 anchor_left = 0.5

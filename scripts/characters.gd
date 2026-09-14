@@ -2,11 +2,11 @@ class_name Characters
 extends RefCounted
 ## 젤리곰 캐릭터 표. 이름과 그림 경로의 유일한 출처.
 ##
-## **캐릭터를 추가·변경하려면 이 LIST만 고친다** — 대기실 선택지(`GameState.CHARACTERS`),
-## 서버 검증(`Lobby._sanitize`), 전투 화면 그림(`Player`)이 모두 여기서 나온다.
+## **캐릭터를 추가·변경하려면 이 LIST만 고친다** — 선택 창 선택지(`GameState.CHARACTERS`),
+## 선택값 정리(`GameState.set_config`), 전투 화면 그림(`Player`)이 모두 여기서 나온다.
 ##
 ## 필드
-##   name       대기실에 보이는 이름이자 네트워크로 오가는 id
+##   name       선택 창에 보이는 이름이자 화면 사이로 오가는 id
 ##   file       DIR 아래의 그림 파일 이름 (평소 모습)
 ##   win_file   포인트를 얻은 순간의 승리 포즈 (없으면 file 로 되돌아간다)
 ##   lose_file  죽은 순간의 패배 포즈 (없으면 file 로 되돌아간다)
@@ -15,7 +15,7 @@ extends RefCounted
 const DIR := "res://assets/characters/"
 
 ## 포즈 이름. 전투 중에는 평소 모습이고, 죽는 순간 양쪽이 패배·승리로 갈린다 (#176).
-## 네트워크로 오가는 값이므로 문자열을 바꾸면 양쪽 클라이언트를 같이 고쳐야 한다.
+## 선택 창이 적고 전투 화면이 읽는 값이라, 문자열을 바꾸면 저장된 선택이 기본값으로 떨어진다.
 const POSE_IDLE := ""
 const POSE_WIN := "win"
 const POSE_LOSE := "lose"

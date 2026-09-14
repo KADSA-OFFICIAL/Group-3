@@ -2,19 +2,28 @@ extends Control
 ## 라운드가 시작될 때 뜨는 무기 선택 카드 (#205).
 ##
 ## 카드는 **보여주고 누르는 일만** 한다 — 후보를 뽑는 것도, 고른 결과를 확정하는 것도
-## 서버(`main.gd`)다. 여기서 하는 판단은 "이미 골랐는가" 하나뿐이고, 그것도 두 번
-## 보내지 않으려는 것일 뿐 진짜 검증은 서버가 다시 한다.
+## `main.gd`다. 여기서 하는 판단은 "이미 골랐는가" 하나뿐이고, 그것도 한 번 더
+## 눌리는 것을 막으려는 것일 뿐이다.
+##
+## **한 화면에서 차례로 고른다** (#320). 창은 한 벌이고 `open()`이 받은 번호가 지금
+## 고르는 사람이다 — 1P가 고르면 `main.gd`가 곧바로 2P 몫으로 다시 연다.
+## 마우스로 눌러도 되고 **그 사람 키로 골라도 된다**: 좌우로 카드를 옮기고
+## 특수(`skill`)나 점프로 정한다. 키보드 앞에 둘이 앉아 있으므로 마우스 하나를
+## 주고받게 하지 않는다.
 ##
 ## 카드에 들어가는 이름·그림·설명은 전부 무기 표에서 꺼낸다 —
-## 이름은 `Weapons.names()`의 그 이름, 그림은 `Weapons.preview_texture()`(대기실과 같은 그림),
+## 이름은 `Weapons.names()`의 그 이름, 그림은 `Weapons.preview_texture()`(선택 창과 같은 그림),
 ## 설명은 `Weapons.description()`("무기 증강 설명 리스트" 문서의 문구)다.
 
-## 카드를 눌렀다. 넘기는 값은 서버가 보낸 후보 배열에서의 자리다 —
-## 무기 이름을 보내면 클라이언트가 후보에 없는 무기를 적어 보낼 수 있다.
+## 카드를 눌렀다. 넘기는 값은 `main.gd` 가 뽑아 준 후보 배열에서의 자리다 —
+## 무기 이름으로 주고받으면 후보에 없는 무기가 확정될 수 있다.
 signal weapon_chosen(index: int)
 
 ## 안 고른 카드를 얼마나 어둡게 두는가.
 const FADED := Color(0.45, 0.45, 0.5, 1.0)
+## 키보드 자리가 아닌 카드의 옅기. `FADED`보다 옅게 둔다 — 저쪽은 "고르지 않은 것"이고
+## 이쪽은 "아직 고를 수 있는 것"이라, 같은 짙기면 이미 고른 화면처럼 보인다.
+const UNFOCUSED := Color(0.74, 0.74, 0.8, 1.0)
 
 ## ── 등장 연출 (#263) ──
 ## 카드 한 장이 떠오르는 데 걸리는 시간(초). 빛이 타올랐다 가라앉는 것까지 포함이다.
@@ -46,7 +55,12 @@ var _intro_started_at := -1.0
 
 ## 아직 고를 수 있는가. 한 번 고르면 꺼지고 그 뒤로는 눌러도 아무 일도 없다.
 var _armed := false
-## 남은 시간을 세는 기준 시각. 0이면 세지 않는다 (관전자도 세지만 표시뿐이다).
+## 지금 고르는 사람 (1P는 1, 2P는 2). 0이면 열려 있지 않다 —
+## **어느 쪽 키를 읽을지도 이 번호가 정한다**.
+var _picker := 0
+## 키보드로 짚고 있는 카드 자리. 마우스로 누르면 그 자리로 따라간다.
+var _cursor := 0
+## 남은 시간을 세는 기준 시각. 0이면 세지 않는다.
 var _ends_at := 0.0
 
 
@@ -59,16 +73,15 @@ func _ready() -> void:
 
 ## 남은 시간 표시와 등장 연출.
 ##
-## **시계가 멈춰 있어도 연출은 돈다** — 관전자 화면에는 카드가 없고(`open_watching`)
-## 어둡기만 깔리는데, 그것도 등장 연출의 일부다.
+## **시계가 멈춰 있어도 연출은 돈다** — 어둡기가 깔리는 것도 등장 연출의 일부다.
 func _process(_delta: float) -> void:
 	if not visible:
 		return
 	_tick_intro()
 	if _ends_at <= 0.0:
 		return
-	# 진짜 마감은 서버가 재고 여기서는 보여주기만 한다 — 시계가 0에서 멈춰 있어도
-	# 서버가 자동 선택을 넣어 라운드를 연다.
+	# 진짜 마감은 `main.gd` 가 재고 여기서는 보여주기만 한다 — 시계가 0에서 멈춰 있어도
+	# 그쪽이 대신 뽑아 라운드를 연다.
 	var left := maxf(_ends_at - _now(), 0.0)
 	_timer_label.text = "%d초" % ceili(left)
 
@@ -138,9 +151,12 @@ func _start_intro() -> void:
 	_shine.refresh(zeros)
 
 
-## 고를 수 있는 상태로 연다. `choices`는 서버가 이 기기 몫으로 뽑아 준 무기 이름들이다.
-func open(choices: Array, seconds: float) -> void:
+## 고를 수 있는 상태로 연다. `choices`는 `main.gd`가 이 사람 몫으로 뽑아 준 무기 이름들이고
+## `player_id`는 지금 고를 차례인 사람이다.
+func open(choices: Array, seconds: float, player_id: int) -> void:
 	_armed = true
+	_picker = player_id
+	_cursor = 0
 	_ends_at = _now() + seconds
 	_card_box.visible = true
 	for index in _cards.size():
@@ -155,22 +171,59 @@ func open(choices: Array, seconds: float) -> void:
 		card.get_node("Art").weapon_id = weapon_name
 		(card.get_node("Name") as Label).text = weapon_name
 		(card.get_node("Desc") as Label).text = Weapons.description(weapon_name)
-	_status.text = "이번 라운드에 들 무기를 고르세요"
+	_status.text = "%dP 차례 — 이번 라운드에 들 무기를 고르세요" % _picker
 	visible = true
+	_refresh_cursor()
 	# 카드 내용을 다 채운 **뒤에** 연출을 건다 (#263) — 먼저 걸면 빈 카드가 떠오른다.
 	_start_intro()
 
 
-## 고를 것이 없는 화면 (관전자). 카드를 잠그는 대신 아예 치운다 —
-## 대기실에서 관전자를 다루는 방식과 같다 (이슈 #184).
-func open_watching(seconds: float) -> void:
-	_armed = false
-	_ends_at = _now() + seconds
-	_card_box.visible = false
-	_status.text = "두 사람이 무기를 고르는 중..."
-	visible = true
-	# 카드가 없어도 어둡기는 깔린다 — 관전자에게도 라운드가 넘어간 것이 보여야 한다.
-	_start_intro()
+## 키보드로 짚은 자리를 옮긴다. 양 끝에서 멈추지 않고 돌아간다 — 카드가 셋뿐이라
+## 끝에서 막히면 되돌아가는 동안 잘못 짚기 쉽다.
+func _move_cursor(step: int) -> void:
+	var count := _visible_card_count()
+	if count <= 0:
+		return
+	_cursor = (_cursor + step + count) % count
+	_refresh_cursor()
+
+
+## 짚은 카드만 밝게 둔다.
+func _refresh_cursor() -> void:
+	if not _armed:
+		return
+	for i in _cards.size():
+		var card: Button = _cards[i]
+		if not card.visible:
+			continue
+		card.modulate = Color.WHITE if i == _cursor else UNFOCUSED
+
+
+func _visible_card_count() -> int:
+	var count := 0
+	for card: Button in _cards:
+		if card.visible:
+			count += 1
+	return count
+
+
+## 고르는 사람의 키만 받는다 (#320). 좌우로 짚고 특수·점프로 정한다.
+##
+## `_unhandled_input`이라 카드를 마우스로 누르는 것과 부딪히지 않는다 — 버튼이 먼저
+## 가져간 이벤트는 여기까지 오지 않는다.
+func _unhandled_input(event: InputEvent) -> void:
+	if not _armed or _picker == 0 or not visible:
+		return
+	if event.is_action_pressed(GameState.action(_picker, "right")):
+		_move_cursor(1)
+	elif event.is_action_pressed(GameState.action(_picker, "left")):
+		_move_cursor(-1)
+	elif event.is_action_pressed(GameState.action(_picker, "skill")) \
+			or event.is_action_pressed(GameState.action(_picker, "jump")):
+		_on_card_pressed(_cursor)
+	else:
+		return
+	get_viewport().set_input_as_handled()
 
 
 ## 고른 뒤의 화면. 고른 카드만 남기고 나머지는 어둡게 둔다 —
@@ -183,12 +236,9 @@ func mark_chosen(index: int) -> void:
 		card.modulate = Color.WHITE if i == index else FADED
 
 
-func set_status(text: String) -> void:
-	_status.text = text
-
-
 func close() -> void:
 	_armed = false
+	_picker = 0
 	_ends_at = 0.0
 	visible = false
 	# 도는 중이던 연출을 끝내고 화면을 평소 값으로 돌려놓는다 (#263) — 안 돌려놓으면
@@ -199,8 +249,9 @@ func close() -> void:
 func _on_card_pressed(index: int) -> void:
 	if not _armed:
 		return
+	_cursor = index
 	mark_chosen(index)
-	_status.text = "상대를 기다리는 중..."
+	_status.text = "%dP 선택 완료" % _picker
 	weapon_chosen.emit(index)
 
 

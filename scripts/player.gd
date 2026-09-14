@@ -1,40 +1,39 @@
 class_name Player
 extends CharacterBody2D
-## 젤리 플레이어. 이동도 전투도 **서버 권위**다.
+## 젤리 플레이어. **한 화면에서 둘이 논다** (#320).
 ##
-## 클라이언트는 입력만 서버로 보내고 물리를 직접 계산하지 않는다.
-## 서버가 apply_movement()로 위치를 정하고 결과를 양쪽에 복제하며,
-## 클라이언트는 받은 위치로 보간해 표시한다.
+## 젤리마다 자기 키가 있다 — 1P는 `WASD`+왼쪽 `Shift`, 2P는 방향키+`Space`이고
+## 이름은 `GameState.action()`이 자리에 맞춰 만든다(`p1_left`·`p2_left` …).
+## 이 노드는 **자기 번호로 만든 이름만** 읽으므로 한 키보드를 둘이 나눠 써도
+## 서로 간섭하지 않는다.
 ##
-## 체력·피격·상태이상·버프도 서버가 단독으로 판정하고 결과만 내려준다.
-## 실제 공격 판정(누가 누구를 언제 때리는가)은 main.gd가 들고 있고,
-## 여기 있는 server_* 함수들이 그 결과를 받는 창구다.
+## 판정도 그림도 한 프로세스 안에서 돈다. 이동은 apply_movement()가 계산하고
+## 체력·피격·상태이상·버프는 아래 공개 함수들이 바꾼다 — 실제 공격 판정(누가 누구를
+## 언제 때리는가)은 main.gd가 들고 있고, 여기 있는 함수들이 그 결과를 받는 창구다.
 ## 무기 수치는 scripts/weapons.gd, 공통 수치는 scripts/combat.gd에 있다.
 
-## 서버에서만 발생한다. 인자는 죽은 플레이어의 peer id.
+## 인자는 죽은 플레이어의 번호(1P는 1, 2P는 2).
 signal died(peer_id: int)
-## 서버에서만 발생한다. 이 플레이어가 특수 공격(Shift)을 요청했다.
+## 이 플레이어가 특수 공격(`skill` 키)을 요청했다.
 ## long_press는 LONG_PRESS_TIME 이상 눌렀는지 (방패의 짧게/길게 구분용).
 signal special_requested(peer_id: int, long_press: bool)
-## 서버에서만 발생한다. 강제 낙하(양날 도끼)가 땅에 닿았다 — 인자는 떨어진 자리 (#167).
+## 강제 낙하(양날 도끼)가 땅에 닿았다 — 인자는 떨어진 자리 (#167).
 ## 그 주변을 때리는 판정은 main.gd 가 한다.
 signal landed_forced(peer_id: int, at: Vector2)
-## 이 플레이어를 조작하는 클라이언트의 peer id. 스폰할 때 서버가 정한다.
-@export var owner_peer_id := 0
+## 이 젤리가 1P(1)인지 2P(2)인지 (#320). 읽을 입력 이름도 이 번호에서 나온다.
+@export var player_id := 0
 @export var player_name: String = "1P"
-## 대기실에서 고른 캐릭터 이름 (예: "분홍"). 그림은 Characters 표에서 꺼낸다.
+## 선택 창에서 고른 캐릭터 이름 (예: "분홍"). 그림은 Characters 표에서 꺼낸다.
 @export var character_id: String = ""
-## 대기실에서 서버가 확정한 무기 이름 (예: "광선검", "망치").
+## 이번 라운드에 든 무기 이름 (예: "광선검", "망치").
 ## 수치는 Weapons.get_weapon()으로 꺼내 쓴다 — 통합 가이드: docs/weapon-system.md
 @export var weapon_id: String = ""
 
 const SPEED := 320.0
 const JUMP_VELOCITY := -560.0
 const FAST_FALL_MULTIPLIER := 2.0
-## 클라이언트가 서버 위치를 따라가는 속도. 클수록 즉각적이고 작을수록 부드럽다.
-const INTERPOLATION_SPEED := 20.0
 
-## 방패의 짧게/길게를 가르는 시간. 서버가 잰다.
+## 방패의 짧게/길게를 가르는 시간.
 const LONG_PRESS_TIME := 0.3
 ## 강제 이동(전기톱 돌진, 양날 도끼 상승·낙하) 속도 — 일반 점프의 두 배.
 const FORCED_SPEED := absf(JUMP_VELOCITY) * 2.0
@@ -119,20 +118,18 @@ const TRAIL_COLOR := PIERCE_COLOR
 
 ## 넉백 직후 좌우 입력이 속도를 덮어쓰지 못하는 시간.
 ##
-## 서버가 매 프레임 velocity.x를 입력값으로 덮어쓰기 때문에, 이 잠금이 없으면
+## 매 프레임 velocity.x를 입력값으로 덮어쓰기 때문에, 이 잠금이 없으면
 ## 이동 속도(320)보다 약한 넉백(약 200·중 400의 감속 구간)이 다음 프레임에
 ## 그대로 지워져서 밀리는 것이 보이지 않는다.
 const KNOCKBACK_CONTROL_LOCK := 0.2
 
-## 전투 상태. 서버가 정하고 RPC로 양쪽에 복제된다.
+## 전투 상태. 전투 판정이 정한다.
 var hp := Combat.MAX_HP
 var alive := true
 ## 마지막으로 피해를 입은 시각(초)과 그 **직전** 체력. 머리 위 체력 바(`health_bar.gd`)가
 ## 언제 뜰지와 이번에 얼마나 깎였는지를 여기서 읽는다 (이슈 #317).
 ##
-## **복제하지 않는다.** 값을 정하는 `_receive_hit`·`_receive_dot` 자체가 `call_local` 이라
-## 두 기기가 같은 순간에 각자 같은 값을 적는다 — 복제 목록에 넣으면 같은 것을 한 번 더
-## 실어 보내는 셈이고, 늦게 도착한 쪽이 바를 두 번 켠다.
+## 값을 적는 곳은 `_mark_hurt()` 하나다 — 데미지가 들어가는 길이 전부 그리로 모인다.
 var hurt_at := -1.0
 var hurt_from_hp := Combat.MAX_HP
 ## 바라보는 방향 (1 오른쪽 / -1 왼쪽). 특수 공격은 이 방향으로 나간다.
@@ -143,16 +140,16 @@ var facing := 1
 var pose := Characters.POSE_IDLE
 ## 너클 게이지. 내가 맞을 때 충전된다.
 var gauge := 0.0
-## 특수 공격을 쓸 수 있는가. 서버가 쿨타임을 재고 이 값만 내려준다 (무기 도형 색에 쓴다).
+## 특수 공격을 쓸 수 있는가. `main.gd` 가 쿨타임을 재고 이 값만 적어 준다 (무기 도형 색에 쓴다).
 var special_ready := true
 ## 강제 이동 상태. ""이면 평소, "spin"·"dash"(전기톱) / "rise"·"hover"·"fall"(양날 도끼).
 var forced_mode := ""
 ## 다음에 던질 것이 **강화**인가 (#134). 폭탄(데미지·넉백 증가)과 표창(빨간 표창,
 ## 위치 교환)이 이 값을 쓴다 — 무엇으로 바뀌는지는 무기 표의 `empowered_*`가 정한다.
 ##
-## 던지는 순간에 뽑으면 손에 들고 보여줄 수가 없어서, 서버가 미리 뽑아 복제한다.
+## 던지는 순간에 뽑으면 손에 들고 보여줄 수가 없어서, `main.gd` 가 미리 뽑아 둔다.
 ## 첫 스폰값은 스폰 데이터로 들어오고(`main.gd._spawn_player`), 그 뒤로는
-## `server_set_empowered()`가 갱신한다 — 라운드 시작과 던진 직후다.
+## `set_empowered()`가 갱신한다 — 라운드 시작과 던진 직후다.
 var empowered_ready := false
 
 ## 무기 선택 중인가 (#205). 라운드는 무기 선택으로 열리는데, 그동안 두 젤리가
@@ -174,7 +171,7 @@ var _pierce_until := 0.0
 ## **위의 `_stun_until` 과 반대 방향이다.** 그쪽은 "내가 굳어 있는" 시간이고 이쪽은
 ## "내가 굳히는" 능력이다 — 이름이 비슷해 헷갈리기 쉬우니 여기 적어 둔다.
 var _stun_grant_until := 0.0
-## 그때 얹히는 기절의 길이(초). 무기 표의 `stun_duration` 이 `_receive_buff` 로 실려 온다.
+## 그때 얹히는 기절의 길이(초). 무기 표의 `stun_duration` 이 `apply_buff` 로 실려 온다.
 var _stun_grant := 0.0
 ## 지난 프레임에 관통 빛을 그렸는가. 꺼진 프레임에 한 번 더 다시 그려 지우려고 들고 있다.
 var _aura_shown := false
@@ -185,11 +182,11 @@ var _size_until := 0.0
 var _forced_deadline := 0.0
 var _knockback_until := 0.0
 
-## 서버가 보관하는 최신 입력 (클라이언트에서 RPC로 갱신된다)
+## 이번 프레임에 읽어 둔 입력 (`_read_input()`이 채우고 `_take_input()`이 꺼낸다).
 var _input_direction := 0.0
 var _input_fast_fall := false
 var _jump_queued := false
-## 서버가 재는 Shift 누른 시각. 음수면 안 누르고 있다.
+## 특수 키를 누르기 시작한 시각. 음수면 안 누르고 있다.
 var _skill_held_since := -1.0
 
 ## 그림을 BODY_HEIGHT에 맞추는 배율. 찌그러짐은 여기에 곱해진다.
@@ -223,7 +220,7 @@ var _weapon_has_art := false
 var _weapon_faces_left := false
 
 ## 내려베기를 시작한 시각 (#247). 음수면 휘두르는 중이 아니다.
-## 서버가 시작을 정해 `_receive_swing`으로 복제하고, 두 화면이 각자 그린다 —
+## `main.gd` 가 시작을 정해 `start_swing` 으로 알리고 그림은 여기서 그린다 —
 ## **표시용이다.** 데미지가 언제 들어가는지는 main.gd 가 자기 시계로 따로 잰다.
 var _swing_started_at := -1.0
 var _swing_windup := 0.0
@@ -233,16 +230,13 @@ var _swing_swing := 0.0
 ##
 ## **제자리 회전에서 돌진으로 넘어갈 때 다시 잡지 않는다** — 강제 이동 상태는 바뀌지만
 ## 톱은 계속 같은 속도로 돌고 있으므로, 넘어가는 프레임에 각도가 0으로 튀면 톱이 한 번
-## 되감긴 것으로 보인다. `_receive_forced()`가 그 규칙을 지킨다.
+## 되감긴 것으로 보인다. `_set_forced()`가 그 규칙을 지킨다.
 ##
-## 시각 하나만 들고 각도는 각 피어가 자기 시계로 계산한다 — 내려베기(`_swing_started_at`)와
+## 시각 하나만 들고 각도는 화면이 자기 시계로 계산한다 — 내려베기(`_swing_started_at`)와
 ## 같은 방식이라 매 프레임 각도를 보내지 않는다.
 var _spin_started_at := -1.0
 
-## 클라이언트가 서버로부터 받은 표시용 상태
-var _target_position := Vector2.ZERO
-var _remote_on_floor := false
-## 클라이언트가 Shift 엣지를 잡기 위해 들고 있는 직전 상태
+## 특수 키의 눌림·뗌이 바뀌는 순간을 잡기 위해 들고 있는 직전 상태
 var _skill_was_pressed := false
 
 
@@ -250,37 +244,30 @@ func _ready() -> void:
 	_apply_character()
 	_apply_weapon()
 	$NameLabel.text = player_name
-	_target_position = global_position
 	# 투사체가 사거리 안의 젤리를 찾을 때 쓴다.
 	add_to_group("jellies")
-	if multiplayer.is_server():
-		# 스폰 직후 바로 맞지 않도록 잠깐 무적을 준다.
-		var grace := _now() + Combat.ROUND_START_GRACE
-		_invuln_until = {"basic": grace, "special": grace}
-		# 전투 화면에 있는 피어에게만 보인다 (이슈 #182). 이 필터가 스폰 전달까지 정하므로
-		# 경기 도중에 들어온 관전자는 viewer 가 되는 순간 이 젤리를 받는다.
-		$Sync.add_visibility_filter(Lobby.can_view)
+	# 스폰 직후 바로 맞지 않도록 잠깐 무적을 준다.
+	var grace := _now() + Combat.ROUND_START_GRACE
+	_invuln_until = {"basic": grace, "special": grace}
 	_update_weapon_shape(0.0)
 
 
-## 이 기기가 조작하는 플레이어인지.
-func is_local_player() -> bool:
-	return owner_peer_id == multiplayer.get_unique_id()
+## 이 젤리 몫의 입력 이름 (#320). 이름 앞에 자리가 붙어 있어 한 키보드에서 둘이 갈린다.
+func _action(name: String) -> String:
+	return GameState.action(player_id, name)
 
 
-## 입력을 읽는 유일한 지점. 자기 플레이어가 아니면 빈 입력을 돌려준다.
+## 입력을 읽는 유일한 지점. **자기 자리의 키만** 본다.
 func read_input() -> Dictionary:
-	if not is_local_player():
-		return {"direction": 0.0, "jump": false, "fast_fall": false, "skill": false}
 	return {
-		"direction": Input.get_axis("move_left", "move_right"),
-		"jump": Input.is_action_just_pressed("jump"),
-		"fast_fall": Input.is_action_pressed("fast_fall"),
-		"skill": Input.is_action_pressed("skill"),
+		"direction": Input.get_axis(_action("left"), _action("right")),
+		"jump": Input.is_action_just_pressed(_action("jump")),
+		"fast_fall": Input.is_action_pressed(_action("fast_fall")),
+		"skill": Input.is_action_pressed(_action("skill")),
 	}
 
 
-## 이동 적용. Input을 직접 읽지 않고 인자만 받는다 — 서버에서만 호출된다.
+## 이동 적용. Input을 직접 읽지 않고 인자만 받는다 — `_physics_process()`가 읽어서 넘긴다.
 func apply_movement(input: Dictionary, delta: float) -> void:
 	# 강제 이동 중에는 조작이 전부 불가하다. 동작이 끝날 때까지 몸이 알아서 움직인다.
 	if forced_mode != "":
@@ -316,7 +303,7 @@ func apply_movement(input: Dictionary, delta: float) -> void:
 	move_and_slide()
 
 
-## 강제 이동. 서버에서만 호출된다.
+## 강제 이동.
 ##
 ## 무기 표에 `special_air_control`이 있으면 **공중에 뜬 동안 좌우 입력을 받는다**
 ## (양날 도끼, #167). 상승 0.25초 + 정점 0.2초 + 낙하로 1초 가까이 조작이 잠기는데
@@ -339,7 +326,7 @@ func _apply_forced(input: Dictionary, delta: float) -> void:
 			# 다 돌면 지금까지와 똑같은 돌진으로 이어진다. 데미지는 돌진 구간에서만
 			# 들어가므로(`_special_pending`의 `modes`) 여기까지는 아무도 안 맞는다.
 			if _now() >= _forced_deadline:
-				_receive_forced.rpc("dash", dash_time())
+				_set_forced("dash", dash_time())
 		"dash":
 			velocity.x = facing * FORCED_SPEED
 			if not is_on_floor():
@@ -347,7 +334,7 @@ func _apply_forced(input: Dictionary, delta: float) -> void:
 			move_and_slide()
 			# 벽에 부딪히거나 안전장치 시간이 지나면 끝난다.
 			if is_on_wall() or _now() >= _forced_deadline:
-				server_end_forced()
+				end_forced()
 		"rise":
 			velocity.y = -FORCED_SPEED
 			_steer(input)
@@ -357,9 +344,9 @@ func _apply_forced(input: Dictionary, delta: float) -> void:
 			if _now() >= _forced_deadline:
 				var hover: float = Weapons.get_weapon(weapon_id).get("hover_time", 0.0)
 				if hover > 0.0:
-					_receive_forced.rpc("hover", hover)
+					_set_forced("hover", hover)
 				else:
-					_receive_forced.rpc("fall", 0.0)
+					_set_forced("fall", 0.0)
 		"hover":
 			# 정점에서 멈춘다. **속도를 0으로 덮으므로 중력을 받지 않는다** —
 			# 안 그러면 머무는 시간 동안 스르르 떨어져서 "멈췄다"로 안 보인다.
@@ -368,7 +355,7 @@ func _apply_forced(input: Dictionary, delta: float) -> void:
 			_steer(input)
 			move_and_slide()
 			if _now() >= _forced_deadline:
-				_receive_forced.rpc("fall", 0.0)
+				_set_forced("fall", 0.0)
 		"fall":
 			velocity.x = 0.0
 			_steer(input)
@@ -377,9 +364,8 @@ func _apply_forced(input: Dictionary, delta: float) -> void:
 			if is_on_floor():
 				# 착지 판정은 여기서 하지 않는다 (#167) — "어디에 떨어졌다"만 알리고
 				# 누구를 때리는지는 main.gd 가 정한다(전투 판정의 주인은 거기다).
-				if multiplayer.is_server():
-					landed_forced.emit(owner_peer_id, global_position)
-				server_end_forced()
+				landed_forced.emit(player_id, global_position)
+				end_forced()
 
 
 ## 공중 조종 (#167). 무기 표가 허락한 무기만 좌우 입력으로 가로 속도를 잡는다.
@@ -454,7 +440,7 @@ func _place_body() -> void:
 	sprite.position = Vector2(offset.x, BODY_BOTTOM + offset.y)
 
 
-## 젤리 찌그러짐 연출. 서버·클라이언트 모두 복제된 속도·접지값으로 계산한다.
+## 젤리 찌그러짐 연출. 속도와 접지값에서 바로 나온다.
 ## 그림마다 원본 크기가 달라 찌그러짐은 기본 배율에 곱해서 쓴다.
 func _update_squash(grounded: bool, delta: float) -> void:
 	var target_scale := Vector2.ONE
@@ -470,7 +456,7 @@ func _update_squash(grounded: bool, delta: float) -> void:
 ## 평소와 다른 그림을 들어야 하는 상태면 그 **파일 이름**, 아니면 빈 문자열 (#134).
 ##
 ## 계기가 둘이고 무기마다 하나만 쓴다:
-##   `empowered_file` — 서버가 미리 뽑아 둔 강화 (폭탄의 강화 폭탄, 표창의 빨간 표창)
+##   `empowered_file` — `main.gd` 가 미리 뽑아 둔 강화 (폭탄의 강화 폭탄, 표창의 빨간 표창)
 ##   `ready_file`     — 특수 쿨타임이 끝나 쓸 수 있는 상태 (양날 도끼의 빨간 도끼)
 ##
 ## 뽑기가 없는 무기는 `empowered_ready`가 항상 false이고, `ready_file`이 없는 무기는
@@ -558,7 +544,7 @@ func _update_pierce_aura() -> void:
 ## 자식 노드(`Body`)보다 **먼저** 그려져서 젤리 뒤에 깔린다 — 그래서 별도 노드가 필요 없다.
 ## 씬 루트에 걸린 가산 혼합은 이 그리기에만 적용되고 자식 스프라이트에는 영향이 없다.
 ##
-## `_pierce_until`이 `_receive_buff`로 양쪽 피어에 복제되므로 두 화면에 똑같이 뜬다.
+## `_pierce_until`이 `apply_buff`로 그대로 화면에 뜬다.
 func _draw() -> void:
 	# 게이지 오라가 먼저다 — 관통과 겹칠 수 있고(광선검은 게이지가 없으니 지금은 안 겹친다),
 	# 겹칠 때 관통 빛이 위에 오는 편이 무엇이 켜졌는지 읽기 쉽다.
@@ -584,7 +570,7 @@ func _draw() -> void:
 ## 몸을 따라 오르는 조각이 붙는다. 가만히 있는 빛은 "켜졌다"로만 읽히는데, 이쪽은
 ## "차올라 있다"로 읽혀야 해서 움직이는 것을 넣었다.
 ##
-## `gauge`가 `_receive_hit`·`_receive_gauge`로 복제되므로 두 화면에 똑같이 뜬다.
+## `gauge`가 `_receive_hit`·`set_gauge`로 그대로 화면에 뜬다.
 func _draw_charge_aura() -> void:
 	var t := _now()
 	var pulse := 0.7 + 0.3 * sin(t * 6.0)
@@ -621,8 +607,8 @@ func _draw_charge_aura() -> void:
 ## 덩어리 수는 두 경우 다 무기 표의 `smoke_puffs`다
 ## (표창 5, 양날 도끼 9 — 센 무기일수록 크게 경고한다. 폭탄 4는 도화선 굵기다).
 ##
-## 계기가 되는 `empowered_ready`·`special_ready` 둘 다 RPC로 복제되므로 두 화면에 똑같이
-## 뜬다 — 젤리 찌그러짐처럼 각 피어가 복제된 값으로 알아서 그린다.
+## 계기가 되는 것은 `empowered_ready`·`special_ready` 둘뿐이라, 젤리 찌그러짐처럼
+## 그 값만 보고 그린다.
 ##
 ## 연기는 무기 그림 자리에서 난다. 여백 보정(`_weapon_offset`)까지 맞추지는 않는다 —
 ## 그림이 없는 무기에도 붙을 수 있어야 하고, 몇 px 차이는 연기에서 보이지 않는다.
@@ -650,8 +636,7 @@ func _update_weapon_smoke() -> void:
 ## 다른 무기가 쓰고 싶으면 표에 줄만 더하면 된다. 그림이 없는 무기(임시 막대)는 남길 날이
 ## 없으므로 제외한다.
 ##
-## 자리는 이미 복제되는 `position`·`facing`에서 나오므로 각 피어가 자기 화면 값으로
-## 알아서 그린다 — RPC를 더하지 않는다(버전 악수 #228에 영향이 없다).
+## 자리는 `position`·`facing`에서 그대로 나오므로 따로 들고 있을 상태가 없다.
 ##
 ## 문턱값(움직여야 하는 거리)은 여기가 아니라 `WeaponTrail.sample()`이 본다. 두 곳에
 ## 나누면 "얼마나 움직여야 남는가"가 갈라진다.
@@ -680,8 +665,7 @@ func _update_weapon_trail() -> void:
 ## 이유: 잔상은 **무기의 생김새**라 무기마다 다르지만, 전격은 **"스킬이 켜졌다"는 표시**라
 ## 어느 무기든 같은 뜻이다.
 ##
-## 자리는 이미 복제되는 `position`·버프 시각에서 나오므로 각 피어가 자기 화면 값으로
-## 알아서 그린다 — RPC를 더하지 않는다(잔상·연기와 같은 방식, 버전 악수 #228에 영향 없음).
+## 자리는 `position`·버프 시각에서 그대로 나온다 — 잔상·연기와 같은 방식이다.
 func _update_skill_arcs() -> void:
 	var arcs: SkillArcs = $Arcs
 	# 죽은 젤리에는 켜지 않는다 — 버프가 남은 채로 죽으면 시체에서 번개가 튄다.
@@ -754,7 +738,7 @@ func is_spinning() -> bool:
 ## 톱이 지금 돌아간 각(라디안). 바라보는 쪽으로 굴러가는 바퀴처럼 돈다 —
 ## 오른쪽을 보면 시계방향(화면 좌표는 y가 아래라 양수가 시계방향)이다.
 ##
-## 시작 시각 하나에서 나오고 그 값이 복제되므로 두 화면이 같은 자세를 그린다.
+## 시작 시각 하나에서 나오고 그 값 하나로 자세가 정해진다.
 func _spin_angle() -> float:
 	if _spin_started_at < 0.0:
 		return 0.0
@@ -820,8 +804,7 @@ func is_swinging() -> bool:
 ## **내려베기**는 반대로 갈수록 빨라져 데미지가 들어가는 순간에 가장 빠르다.
 ## 남은 **되돌리기**는 부드럽게 평소 자세로 온다.
 ##
-## 시간은 `_swing_started_at` 하나에서 나오고 그 값이 복제되므로 두 화면이 같은
-## 자세를 그린다. 판정 시각은 여기가 아니라 main.gd 가 재는 것이라, 몇 프레임
+## 시간은 `_swing_started_at` 하나에서 나온다. 판정 시각은 여기가 아니라 main.gd 가 재는 것이라, 몇 프레임
 ## 어긋나도 맞는 시점은 흔들리지 않는다.
 func _swing_pose() -> Dictionary:
 	var raised := -deg_to_rad(SWING_RAISE_DEGREES)
@@ -882,7 +865,7 @@ func _place_swinging_weapon(sprite: Sprite2D, flipped: bool, pose: Dictionary,
 ## 받을 수 있으므로 조건 없이 늘리면 검이 고무처럼 자란다.
 ##
 ## 목표값으로 툭 바뀌지 않고 부드럽게 따라간다 — 한 프레임에 1.6배가 되면 길어진 것이
-## 아니라 다른 무기로 바뀐 것처럼 보인다. 목표는 복제된 `_reach_multiplier`에서 나오므로
+## 아니라 다른 무기로 바뀐 것처럼 보인다. 목표는 `_reach_multiplier`에서 나오므로
 ## 두 화면이 같은 길이로 모인다(가는 도중 몇 프레임 차이는 판정과 무관하다).
 ##
 ## `reach_multiplier`(표에 적힌 무기 고유 사거리)가 아니라 **버프 배율**을 쓴다.
@@ -909,7 +892,7 @@ func _art_stretch(delta: float) -> float:
 ## 4초 동안 사거리만 조용히 2배가 되고 화면에는 아무 표시도 남지 않는다 — 장대가
 ## 겪은 것과 같은 일이고 `art_grows_with_reach`가 그림 쪽에서 되살린 것도 같다.
 ##
-## 목표가 복제된 `_size_multiplier`에서 나오므로 두 화면이 같은 크기로 모인다.
+## 목표가 `_size_multiplier`에서 나오므로 크기가 한 값으로 모인다.
 func _art_growth(delta: float) -> float:
 	var target := 1.0
 	if Weapons.get_weapon(weapon_id).get("art_grows_with_size", false):
@@ -1021,18 +1004,10 @@ func current_reach() -> float:
 
 
 func _physics_process(delta: float) -> void:
-	if is_local_player():
-		_send_input()
-
-	if multiplayer.is_server():
-		_check_long_press()
-		apply_movement(_take_input(), delta)
-		_send_state()
-		_update_squash(is_on_floor(), delta)
-	else:
-		# 클라이언트는 물리를 계산하지 않고 서버가 보낸 위치로 따라간다
-		global_position = global_position.lerp(_target_position, minf(INTERPOLATION_SPEED * delta, 1.0))
-		_update_squash(_remote_on_floor, delta)
+	_read_input()
+	_check_long_press()
+	apply_movement(_take_input(), delta)
+	_update_squash(is_on_floor(), delta)
 
 	_expire_buffs()
 	_update_pierce_aura()
@@ -1043,36 +1018,36 @@ func _physics_process(delta: float) -> void:
 	# 도는 톱의 원도 무기 자세가 정해진 **뒤에** 잰다 — 잔상과 같은 이유다.
 	_update_chainsaw_whirl()
 	_update_skill_arcs()
-	# 바라보는 방향으로 그림을 뒤집는다. facing은 서버가 정해 양쪽에 복제된다.
+	# 바라보는 방향으로 그림을 뒤집는다. facing은 판정이 정한다.
 	# 여백 보정의 부호는 _place_body()가 flip_h를 보고 맞춘다.
 	$Body.flip_h = facing < 0
 	_place_body()
 
 
-## 위치·속도를 **전투 화면에 있는 피어에게만** 보낸다 (서버 전용, 매 프레임).
+## 이번 프레임의 입력을 읽어 둔다 (#320).
 ##
-## 브로드캐스트(`rpc()`)로 보내면 대기실에 앉아 있는 피어에게도 날아간다 — 그쪽에는 이 노드가
-## 없으니 받을 수 없고 "Node not found" 오류만 초당 60번 쌓인다. 관전이 생기면서
-## 전투 화면 밖에 있는 피어가 정상 상태가 되었으므로(이슈 #167) 대상을 골라 보낸다.
-func _send_state() -> void:
-	for peer in Lobby.viewers:
-		_receive_state.rpc_id(peer, global_position, velocity, is_on_floor(), facing)
-
-
-## 자기 입력을 서버로 보낸다.
-## 점프와 Shift는 한 프레임짜리 엣지라 별도 reliable RPC로 보낸다.
-func _send_input() -> void:
+## **눌린 순간이 한 프레임짜리인 것**(점프·특수)이 여기서 걸린다. 점프는 눌림을 예약해
+## 두었다가 `_take_input()`이 한 번만 꺼내 쓰고, 특수는 눌림과 뗌이 **바뀌는 순간**에만
+## 시간을 재기 시작하거나 발동한다 — 매 프레임 눌려 있음을 그대로 흘려보내면
+## 짧게/길게 구분(`LONG_PRESS_TIME`)이 서지 않는다.
+func _read_input() -> void:
 	var input := read_input()
-	_receive_move_input.rpc_id(1, input["direction"], input["fast_fall"])
+	_input_direction = clampf(input["direction"], -1.0, 1.0)
+	_input_fast_fall = input["fast_fall"]
 	if input["jump"]:
-		_receive_jump.rpc_id(1)
+		_jump_queued = true
 	var skill: bool = input["skill"]
-	if skill != _skill_was_pressed:
-		_skill_was_pressed = skill
-		_receive_skill.rpc_id(1, skill)
+	if skill == _skill_was_pressed:
+		return
+	_skill_was_pressed = skill
+	if skill:
+		_skill_held_since = _now()
+	elif _skill_held_since >= 0.0:
+		_skill_held_since = -1.0
+		special_requested.emit(player_id, false)
 
 
-## 서버가 보관 중인 입력을 꺼낸다. 점프는 한 번만 소비된다.
+## 읽어 둔 입력을 꺼낸다. 점프는 한 번만 소비된다.
 func _take_input() -> Dictionary:
 	var input := {
 		"direction": _input_direction,
@@ -1084,61 +1059,12 @@ func _take_input() -> Dictionary:
 
 
 ## 길게 누른 것이 확정되는 순간 바로 발동한다 (뗄 때까지 기다리지 않는다).
-## 서버 전용 — 누른 시간을 서버가 재야 클라이언트가 길게/짧게를 속일 수 없다.
 func _check_long_press() -> void:
 	if _skill_held_since < 0.0:
 		return
 	if _now() - _skill_held_since >= LONG_PRESS_TIME:
 		_skill_held_since = -1.0
-		special_requested.emit(owner_peer_id, true)
-
-
-# ─────────────────────────── 입력 수신 (서버 전용) ───────────────────────────
-
-## 이동 입력 수신. 매 프레임 덮어써지므로 유실을 허용한다.
-@rpc("any_peer", "call_remote", "unreliable_ordered")
-func _receive_move_input(direction: float, fast_fall: bool) -> void:
-	if not _is_owner_input():
-		return
-	_input_direction = clampf(direction, -1.0, 1.0)
-	_input_fast_fall = fast_fall
-
-
-## 점프 입력 수신. 유실되면 점프가 씹히므로 reliable로 받는다.
-@rpc("any_peer", "call_remote", "reliable")
-func _receive_jump() -> void:
-	if not _is_owner_input():
-		return
-	_jump_queued = true
-
-
-## Shift 누름·뗌 수신. 엣지라 유실되면 안 되므로 reliable로 받는다.
-@rpc("any_peer", "call_remote", "reliable")
-func _receive_skill(pressed: bool) -> void:
-	if not _is_owner_input():
-		return
-	if pressed:
-		_skill_held_since = _now()
-	elif _skill_held_since >= 0.0:
-		_skill_held_since = -1.0
-		special_requested.emit(owner_peer_id, false)
-
-
-## 서버가 받은 입력 RPC가 이 플레이어의 주인이 보낸 것인지.
-## 없으면 남의 플레이어를 조작할 수 있다.
-func _is_owner_input() -> bool:
-	if not multiplayer.is_server():
-		return false
-	return multiplayer.get_remote_sender_id() == owner_peer_id
-
-
-## 서버가 정한 상태 수신 (클라이언트 전용).
-@rpc("authority", "call_remote", "unreliable_ordered")
-func _receive_state(server_position: Vector2, server_velocity: Vector2, on_floor: bool, server_facing: int) -> void:
-	_target_position = server_position
-	velocity = server_velocity
-	_remote_on_floor = on_floor
-	facing = server_facing
+		special_requested.emit(player_id, true)
 
 
 # ─────────────────────────── 상태 조회 ───────────────────────────
@@ -1159,7 +1085,7 @@ func is_piercing() -> bool:
 ## 지금 내 기본 공격에 얹히는 기절 길이(초). 망치 특수가 켜져 있지 않으면 0 이다.
 ##
 ## **켜졌는지 묻는 함수와 값을 주는 함수를 나누지 않았다** — 0 이 곧 "안 켜졌다"이고,
-## `server_apply_hit` 에 그대로 넘길 수 있어서 부르는 쪽에 조건문이 필요 없다.
+## `apply_hit` 에 그대로 넘길 수 있어서 부르는 쪽에 조건문이 필요 없다.
 func stun_bonus() -> float:
 	return _stun_grant if _now() < _stun_grant_until else 0.0
 
@@ -1173,7 +1099,7 @@ func stun_bonus() -> float:
 ## 근접 막기는 여기서 따로 하지 않는다 — 크기 버프가 `current_reach()`를 2배로 늘려서
 ## `Main.is_blocked()`의 "상대 사거리 > 내 사거리"가 이미 참이 된다.
 ##
-## `_size_multiplier`는 `_receive_buff`로 두 피어에 복제되므로 양쪽이 같은 판단을 한다.
+## `_size_multiplier`는 `apply_buff`로 한 값이라 판단이 갈리지 않는다.
 ## 무기 표를 함께 보는 이유는 크기 버프를 다른 무기가 받게 되어도 그쪽이 막는 자세가
 ## 되지는 않아야 하기 때문이다.
 func is_guarding() -> bool:
@@ -1223,19 +1149,22 @@ func _expire_buffs() -> void:
 		_size_multiplier = 1.0
 
 
-# ─────────────────────────── 피격·상태 (서버 판정) ───────────────────────────
-# server_* 함수는 서버에서만 호출한다. 결과를 authority RPC로 양쪽에 복제한다.
+# ─────────────────────────── 피격·상태 ───────────────────────────
+# ─────────────────── 상태 변경 (main.gd 의 전투 판정이 부른다) ───────────────────
+# 아래 공개 함수들은 **판정 결과를 젤리에 적어 넣는 창구다.** 예전에는 판정을 부르는
+# `server_*` 한 겹과 그 결과를 두 기기에 나눠 주는 `@rpc` 한 겹으로 갈려 있었는데,
+# 한 화면에서는 나눠 줄 곳이 없어 두 겹이 한 겹이 되었다 (#320).
 
-## 데미지를 적용하고 결과를 전원에게 내려준다.
+## 데미지를 적용한다.
 ##
 ## source 는 "basic" / "special" / "projectile".
 ## 기본과 특수는 무적 타이머가 따로 돌아가고,
 ## 허공을 나는 것("projectile")은 공유 무적을 아예 타지 않는다 —
 ## 활 특수 3발처럼 같은 순간에 도착하는 것도 전부 들어간다.
 ## `knockback_speed`가 0보다 크면 단계 대신 그 속도로 민다 (대포 총 미사일, #121).
-func server_apply_hit(damage: float, knockback_level: int, from_x: float,
+func apply_hit(damage: float, knockback_level: int, from_x: float,
 		stun := 0.0, source := "basic", knockback_speed := 0.0) -> void:
-	if not multiplayer.is_server() or not alive:
+	if not alive:
 		return
 	if source != "projectile" and is_invulnerable(source):
 		return
@@ -1245,20 +1174,29 @@ func server_apply_hit(damage: float, knockback_level: int, from_x: float,
 		direction = 1.0
 	# 너클은 내가 맞을 때 게이지가 찬다. **받은 데미지에 비례한다** (#225).
 	var new_gauge := _gauge_after(damage)
-	_receive_hit.rpc(new_hp, knockback_level, direction, stun, source, new_gauge, knockback_speed)
+	_mark_hurt(new_hp)
+	hp = new_hp
+	gauge = new_gauge
+	if source != "projectile":
+		_invuln_until[source] = _now() + Combat.INVULNERABLE_TIME
+	if stun > 0.0:
+		_stun_until = _now() + stun
+	velocity = Combat.knockback_velocity(knockback_level, direction, knockback_speed)
+	_knockback_until = _now() + KNOCKBACK_CONTROL_LOCK
+	_check_death()
 
 
 ## 출혈 같은 지속 데미지. 무적 시간을 무시하고 들어가고, 넉백도 없다.
-func server_apply_dot(damage: float) -> void:
-	if not multiplayer.is_server() or not alive:
+func apply_dot(damage: float) -> void:
+	if not alive:
 		return
-	_receive_dot.rpc(maxf(hp - damage, 0.0))
+	_set_hp(maxf(hp - damage, 0.0))
 	# 출혈도 "받은 데미지"다 (#225) — 너클 게이지는 여기서도 찬다.
-	# `_receive_dot` 의 인자를 늘리지 않고 따로 보내는 것은, 게이지를 쓰지 않는 무기에는
-	# 보낼 것이 없어서다(아래 비교에서 걸러진다).
+	# 체력과 따로 적는 것은 게이지를 쓰지 않는 무기에는 적을 것이 없어서다
+	# (아래 비교에서 걸러진다).
 	var filled := _gauge_after(damage)
 	if not is_equal_approx(filled, gauge):
-		server_set_gauge(filled)
+		set_gauge(filled)
 
 
 ## 이만큼 데미지를 받은 뒤의 게이지 (#225).
@@ -1276,37 +1214,24 @@ func _gauge_after(damage: float) -> float:
 
 
 ## 데미지 없는 사망 (낙사 등).
-func server_kill() -> void:
-	if not multiplayer.is_server() or not alive:
+func kill() -> void:
+	if not alive:
 		return
-	_receive_dot.rpc(0.0)
+	_set_hp(0.0)
 
 
-## 다음 라운드를 위해 되살린다. 위치·방향은 맵의 스폰 지점을 서버가 정해서 넘긴다.
-func server_reset(spawn_position: Vector2, spawn_facing: int) -> void:
-	if not multiplayer.is_server():
-		return
-	_receive_reset.rpc(spawn_position, spawn_facing)
+## 체력을 적고 죽었는지 본다. 출혈과 낙사가 함께 쓴다 — 무적도 넉백도 건드리지 않는다.
+func _set_hp(new_hp: float) -> void:
+	_mark_hurt(new_hp)
+	hp = new_hp
+	_check_death()
 
 
 ## 순간이동 (빨간 표창의 1P·2P 위치 교환).
 ##
-## **`_receive_state`(unreliable)로는 안 된다.** 그쪽은 클라이언트가 `_target_position`을
-## 향해 부드럽게 따라가는 값이라, 화면 반대편으로 던져 넣으면 젤리가 맵을 가로질러
-## **미끄러져 간다.** 라운드 초기화(`_receive_reset`)와 같이 위치와 목표를 함께 박아야
-## 그 자리에서 사라졌다 나타난다.
-##
 ## 속도는 건드리지 않는다 — 뛰던 사람은 뛰던 기세 그대로 상대 자리에 선다.
-func server_teleport(to: Vector2) -> void:
-	if not multiplayer.is_server():
-		return
-	_receive_teleport.rpc(to)
-
-
-@rpc("authority", "call_local", "reliable")
-func _receive_teleport(to: Vector2) -> void:
+func teleport(to: Vector2) -> void:
 	global_position = to
-	_target_position = to
 	# 옛 자리의 잔상을 버린다 (#253) — 안 버리면 두 자리를 잇는 줄이 한 번 그려진다.
 	# `WeaponTrail`의 거리 문턱도 같은 것을 막지만, 자리가 바뀌는 것을 아는 곳이 여기다.
 	$Trail.clear()
@@ -1315,114 +1240,20 @@ func _receive_teleport(to: Vector2) -> void:
 	$Whirl.clear()
 
 
-## 사거리·크기·관통 버프.
-func server_apply_buff(kind: String, value: float, duration: float) -> void:
-	if not multiplayer.is_server():
-		return
-	_receive_buff.rpc(kind, value, duration)
+## 강제 이동 시작 · 끝. 실제로 상태를 바꾸는 것은 `_set_forced()` 하나다.
+func start_forced(mode: String, duration: float) -> void:
+	_set_forced(mode, duration)
 
 
-## 다음 폭탄이 강화인지를 서버가 정해 양쪽에 알린다 (#134).
+func end_forced() -> void:
+	_set_forced("", 0.0)
+
+
+## 손에 든 폭탄이 강화로 바뀐다 (#134). 그림만 갈아 끼우므로 판정과는 무관하다.
 ##
 ## **뽑기는 main.gd가 한다** — 전투 판정의 주인이 거기이고, 라운드 시작과 던진 직후라는
-## 시점도 거기가 안다. 여기는 결과를 복제하고 그림을 갈아 끼우는 일만 한다.
-func server_set_empowered(value: bool) -> void:
-	if not multiplayer.is_server():
-		return
-	_receive_empowered.rpc(value)
-
-
-## 이번 라운드에 들 무기를 갈아 끼운다 (#205). 서버가 선택 결과를 확정한 뒤 부른다.
-##
-## 무기는 스폰할 때 한 번 박히는 값이었는데(대기실에서 고른 것), 라운드마다 새로
-## 고르게 되면서 경기 중에 바뀌는 값이 되었다. 판정에 쓰는 수치도 그림도 전부
-## `weapon_id` 하나에서 나오므로(`Weapons.get_weapon`) 이 값만 바꾸면 둘 다 따라온다.
-func server_set_weapon(new_weapon: String) -> void:
-	if not multiplayer.is_server():
-		return
-	_receive_weapon.rpc(new_weapon)
-
-
-## 무기 선택 중 조작 잠금 (#205).
-func server_set_frozen(value: bool) -> void:
-	if not multiplayer.is_server() or frozen == value:
-		return
-	_receive_frozen.rpc(value)
-
-
-## 승리·패배 포즈 (#176). 판정은 main.gd가 한다 — 누가 점수를 얻었는지 아는 곳이 거기다.
-##
-## **패배 포즈는 여기를 거치지 않는다** — `_check_death()`가 이미 모든 피어에서 돌아가므로
-## 죽음과 함께 저절로 복제된다. 라운드 대기 중에 남은 쪽이 또 떨어져도(그때
-## `_on_player_died()`는 일찍 돌아온다) 패배 포즈가 빠지지 않는 이유다.
-func server_set_pose(value: String) -> void:
-	if not multiplayer.is_server() or pose == value:
-		return
-	_receive_pose.rpc(value)
-
-
-## 너클 게이지는 특수 공격을 쓰면 전부 소모된다.
-func server_set_gauge(value: float) -> void:
-	if not multiplayer.is_server():
-		return
-	_receive_gauge.rpc(value)
-
-
-## 특수 공격 쿨타임 상태. 무기 도형 색에 쓰고, `ready_file`이 있는 무기(양날 도끼)는
-## 이 값으로 손에 든 **그림 자체**가 바뀐다 — `_receive_special_ready()` 참고.
-func server_set_special_ready(value: bool) -> void:
-	if not multiplayer.is_server() or special_ready == value:
-		return
-	_receive_special_ready.rpc(value)
-
-
-## 검을 들어 올렸다 내려베는 동작을 시작한다 (#247).
-##
-## **그림만 움직인다.** 데미지는 main.gd 가 같은 시간을 재서 다 내려온 순간에 넣는다 —
-## 판정을 여기로 가져오면 무기 표를 읽고 상대를 고르는 일이 두 곳으로 갈라진다.
-## 강제 이동(`server_start_forced`)과 달리 조작을 막지 않는다: 벤 뒤 제자리로
-## 돌아오는 동안까지 멈춰 세우면 0.5초 넘게 굳어 버린다.
-func server_start_swing(windup: float, swing: float) -> void:
-	if not multiplayer.is_server():
-		return
-	_receive_swing.rpc(windup, swing)
-
-
-## 강제 이동 시작.
-func server_start_forced(mode: String, duration: float) -> void:
-	if not multiplayer.is_server():
-		return
-	_receive_forced.rpc(mode, duration)
-
-
-func server_end_forced() -> void:
-	if not multiplayer.is_server():
-		return
-	_receive_forced.rpc("", 0.0)
-
-
-# ─────────────────────────── 결과 수신 (서버 → 전원) ───────────────────────────
-
-@rpc("authority", "call_local", "reliable")
-func _receive_hit(new_hp: float, knockback_level: int, direction: float,
-		stun: float, source: String, new_gauge: float, knockback_speed := 0.0) -> void:
-	_mark_hurt(new_hp)
-	hp = new_hp
-	gauge = new_gauge
-	if source != "projectile":
-		_invuln_until[source] = _now() + Combat.INVULNERABLE_TIME
-	if stun > 0.0:
-		_stun_until = _now() + stun
-	# 넉백은 물리를 계산하는 서버에서만 적용한다.
-	if multiplayer.is_server() and direction != 0.0:
-		velocity = Combat.knockback_velocity(knockback_level, direction, knockback_speed)
-		_knockback_until = _now() + KNOCKBACK_CONTROL_LOCK
-	_check_death()
-
-
-## 손에 든 폭탄이 바뀐다 (#134). 그림만 갈아 끼우므로 판정과는 무관하다.
-@rpc("authority", "call_local", "reliable")
-func _receive_empowered(value: bool) -> void:
+## 시점도 거기가 안다. 여기는 그림을 갈아 끼우는 일만 한다.
+func set_empowered(value: bool) -> void:
 	if empowered_ready == value:
 		return
 	empowered_ready = value
@@ -1432,9 +1263,8 @@ func _receive_empowered(value: bool) -> void:
 ## 무기가 바뀐다 (#205). 그림을 갈아 끼우고 무기 도형도 새 사거리로 다시 잰다.
 ##
 ## 지난 무기가 남긴 상태(강화 뽑기·쿨타임)는 여기서 안 지운다 — 라운드 시작이
-## `server_reset()` 과 `server_set_empowered()` 로 이미 정리하고 있어서다.
-@rpc("authority", "call_local", "reliable")
-func _receive_weapon(new_weapon: String) -> void:
+## `reset_round()` 과 `set_empowered()` 로 이미 정리하고 있어서다.
+func set_weapon(new_weapon: String) -> void:
 	if weapon_id == new_weapon:
 		return
 	weapon_id = new_weapon
@@ -1448,10 +1278,11 @@ func _receive_weapon(new_weapon: String) -> void:
 	_update_weapon_shape(0.0)
 
 
-## 조작 잠금 (#205). 판정은 `can_act()` 를 보는 쪽들이 알아서 하고 여기는 값만 복제한다.
+## 조작 잠금 (#205). 판정은 `can_act()` 를 보는 쪽들이 알아서 하고 여기는 값만 적는다.
 ## 잠그는 순간 서 있던 자리에서 멈춘다 — 밀리던 기세가 남으면 카드를 읽는 동안 미끄러진다.
-@rpc("authority", "call_local", "reliable")
-func _receive_frozen(value: bool) -> void:
+func set_frozen(value: bool) -> void:
+	if frozen == value:
+		return
 	frozen = value
 	if not frozen:
 		return
@@ -1465,25 +1296,17 @@ func _receive_frozen(value: bool) -> void:
 
 
 ## 포즈만 바꾼다 (#176). 판정과는 무관하고 그림을 갈아 끼우는 일만 한다.
-@rpc("authority", "call_local", "reliable")
-func _receive_pose(value: String) -> void:
+func set_pose(value: String) -> void:
 	if pose == value:
 		return
 	pose = value
 	_apply_character()
 
 
-@rpc("authority", "call_local", "reliable")
-func _receive_dot(new_hp: float) -> void:
-	_mark_hurt(new_hp)
-	hp = new_hp
-	_check_death()
-
-
 ## 머리 위 체력 바를 띄울 순간을 적어 둔다 (이슈 #317). `hp` 를 덮어쓰기 **전에** 부른다 —
 ## 직전 체력이 있어야 이번에 깎인 몫을 흰 자국으로 보여줄 수 있다.
 ##
-## **줄어들 때만 적는다.** 데미지 없는 사망(`server_kill` 의 낙사)은 이미 0인 체력을 다시
+## **줄어들 때만 적는다.** 데미지 없는 사망(`kill` 의 낙사)은 이미 0인 체력을 다시
 ## 0으로 적으므로 여기에 걸리지 않고, 그래서 떨어져 죽은 젤리 위에 빈 바가 뜨지 않는다.
 func _mark_hurt(new_hp: float) -> void:
 	if new_hp >= hp:
@@ -1492,8 +1315,8 @@ func _mark_hurt(new_hp: float) -> void:
 	hurt_from_hp = hp
 
 
-## 이 함수는 모든 피어에서 돌아간다 (_receive_hit·_receive_dot이 복제되므로).
-## 그래서 패배 포즈는 여기서 걸어도 따로 RPC를 보내지 않아도 양쪽에 같이 뜬다.
+## 데미지가 들어가는 길(`apply_hit`·`_set_hp`)이 전부 여기를 지난다 — 패배 포즈를
+## 여기 한 곳에서만 거는 이유다.
 func _check_death() -> void:
 	if hp > 0.0 or not alive:
 		return
@@ -1508,14 +1331,14 @@ func _check_death() -> void:
 	modulate.a = 1.0
 	pose = Characters.POSE_LOSE
 	_apply_character()
-	if multiplayer.is_server():
-		died.emit(owner_peer_id)
+	died.emit(player_id)
 
 
-## 라운드 초기화. 전투 중에 붙는 상태를 **하나도 남기지 않고** 되돌린다 —
+## 라운드 초기화. 위치·방향은 main.gd 가 맵의 스폰 지점에서 정해 넘긴다.
+##
+## 전투 중에 붙는 상태를 **하나도 남기지 않고** 되돌린다 —
 ## 여기서 빠뜨린 값은 다음 라운드로 새어 나간다(기절인 채로 시작, 버프 유지 등).
-@rpc("authority", "call_local", "reliable")
-func _receive_reset(spawn_position: Vector2, spawn_facing: int) -> void:
+func reset_round(spawn_position: Vector2, spawn_facing: int) -> void:
 	hp = Combat.MAX_HP
 	alive = true
 	# 지난 라운드의 마지막 일격이 남긴 체력 바를 지운다 (이슈 #317) — 안 지우면 새 라운드가
@@ -1532,9 +1355,7 @@ func _receive_reset(spawn_position: Vector2, spawn_facing: int) -> void:
 	_apply_character()
 
 	global_position = spawn_position
-	_target_position = spawn_position
 	velocity = Vector2.ZERO
-	_remote_on_floor = false
 
 	var grace := _now() + Combat.ROUND_START_GRACE
 	_invuln_until = {"basic": grace, "special": grace}
@@ -1573,8 +1394,7 @@ func _receive_reset(spawn_position: Vector2, spawn_facing: int) -> void:
 	_skill_was_pressed = false
 
 
-@rpc("authority", "call_local", "reliable")
-func _receive_special_ready(value: bool) -> void:
+func set_special_ready(value: bool) -> void:
 	if special_ready == value:
 		return
 	special_ready = value
@@ -1583,13 +1403,12 @@ func _receive_special_ready(value: bool) -> void:
 	_apply_weapon()
 
 
-@rpc("authority", "call_local", "reliable")
-func _receive_gauge(value: float) -> void:
+## 너클 게이지. 특수 공격을 쓰면 전부 소모된다.
+func set_gauge(value: float) -> void:
 	gauge = value
 
 
-@rpc("authority", "call_local", "reliable")
-func _receive_forced(mode: String, duration: float) -> void:
+func _set_forced(mode: String, duration: float) -> void:
 	forced_mode = mode
 	_forced_deadline = _now() + duration
 	# 톱이 도는 시각 (#260). 회전에서 **시작**하고, 돌진으로 넘어갈 때는 건드리지 않는다 —
@@ -1607,15 +1426,14 @@ func _receive_forced(mode: String, duration: float) -> void:
 
 ## 내려베기 시작 (#247). 시각을 받아 두면 두 화면이 각자 같은 자세를 그린다 —
 ## 매 프레임 각도를 보내지 않는 것은 0.5초짜리 동작이라 시작 하나면 충분해서다.
-@rpc("authority", "call_local", "reliable")
-func _receive_swing(windup: float, swing: float) -> void:
+func start_swing(windup: float, swing: float) -> void:
 	_swing_started_at = _now()
 	_swing_windup = windup
 	_swing_swing = swing
 
 
-@rpc("authority", "call_local", "reliable")
-func _receive_buff(kind: String, value: float, duration: float) -> void:
+## 사거리·크기·관통 버프.
+func apply_buff(kind: String, value: float, duration: float) -> void:
 	match kind:
 		"reach":
 			_reach_multiplier = value
