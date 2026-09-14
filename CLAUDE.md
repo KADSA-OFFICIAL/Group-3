@@ -11,7 +11,7 @@
 
 **한 프로세스가 젤리 둘을 다 굴린다.** 판정 코드는 그대로 남았고 복제만 사라졌다 — `main.gd`가 여전히 공격·점수·라운드의 주인이고, `Player`의 공개 함수(`apply_hit`·`set_frozen`·`reset_round` …)가 그 결과를 받는 창구다. 예전의 `server_*` 한 겹과 `@rpc` 한 겹이 한 겹으로 합쳐졌다.
 
-**젤리마다 키가 따로 있다** — 1P는 `WASD`+왼쪽 `Shift`, 2P는 방향키+`Space`다. 액션 이름은 `p1_left`·`p2_left`처럼 자리가 앞에 붙고, `Player`는 `GameState.action(player_id, ...)`로 만든 이름만 읽는다. 이 배치는 온라인 전환(#33) 이전에 쓰던 것과 같다.
+**조작은 화면 위의 조이스틱 2개 + 궁극기 버튼 2개다**(이슈 #322) — 플랫폼이 모바일이고, 한 기기를 가로로 놓고 둘이 마주 잡는다. 왼쪽이 1P, 오른쪽이 2P다. **키보드도 그대로 살아 있다** — PC 에서 F5 로 확인할 길을 없애지 않기 위해서다. 1P는 `WASD`+왼쪽 `Shift`, 2P는 방향키+`Space`다. 액션 이름은 `p1_left`·`p2_left`처럼 자리가 앞에 붙고, `Player`는 `GameState.action(player_id, ...)`로 만든 이름만 읽는다. 이 배치는 온라인 전환(#33) 이전에 쓰던 것과 같다.
 
 **플레이어 번호는 1과 2다.** 자리(slot)는 0·1이고 `번호 = 자리 + 1`이며, 변환은 `GameState.id_at()`·`slot_of()`만 쓴다. 전투 화면의 표(점수·쿨타임·출혈)가 전부 이 번호를 열쇠로 쓰고, 노드 이름도 `Player_1`·`Player_2`다.
 
@@ -81,6 +81,15 @@ title(`StartButton`으로 시작 — 고를 것이 없다) → select(1P·2P가 
     - `UI/HUD` 안에서 `Banner` 다음, `ResultOverlay` **앞**에 둔다 — HUD 카드와 배너는 덮어야 하고(장면이 화면을 가져가는 것으로) 결과 화면·무기 선택 카드에는 덮여야 한다.
   - **경기가 끝나면 이긴 쪽 기준으로 결과 화면을 한 번 띄운다**(이슈 #79·#320) — `_show_match_result(winner_id)`가 `HUD/ResultOverlay`(어둡게 덮는 `Dim` + `Jelly` 미리보기 + `ResultLabel` + `ScoreLabel`)에 트윈으로 승리 연출(통통 튐 + 글자 팝업·맥동)을 만들고 글자만 `1P 승리!`로 바꾼다. 젤리는 `jelly_preview.gd`를 재사용하고 **이긴 사람의 캐릭터**를 승리 포즈로 보여준다(이슈 #178) — 방금 전투 화면에서 보고 있던 포즈가 그대로 이어진다. 두 기기 시절에는 진 쪽이 패배 연출을 봤지만 한 화면에서는 갈라 놓을 곳이 없어 `_play_lose()`를 지웠다. 결과 화면이 떠 있는 동안 `Banner`는 접힌다. 연출 트윈은 `_result_tweens`에 모아 두고 `_hide_result()`가 전부 끊는다.
   - **판이 접히는 길은 없다**(이슈 #320) — 사람이 빠질 수 없으므로 `_abandon_match()`·`_tick_abandon()`·`_fighter_count()`를 지웠다. 경기가 끝나면 `_return_at`이 되어 `_return_to_select()`가 씬을 갈아탄다.
+- `scenes/touch_controls.tscn` + `scripts/touch_controls.gd`·`virtual_stick.gd`·`skill_button.gd` = **화면 터치 조작물**(이슈 #322). `main.tscn` 의 `UI/HUD` 아래에 있고, 왼쪽 아래에 1P 조이스틱 + 궁극기 버튼, 오른쪽 아래에 2P 것이 대칭으로 놓인다.
+  - **게임 로직은 이것을 모른다** — 손가락 위치를 보고 `Input.parse_input_event()` 로 `p1_left`·`p2_jump` 같은 **액션을 흉내 내기만** 한다. 그래서 `Player.read_input()` 도 `WeaponPick._unhandled_input()` 도 한 줄 안 고쳤고 키보드도 그대로 동작한다. 조작물을 더 만들 때도 같은 방식으로 붙인다.
+  - **손가락을 받는 곳은 `touch_controls.gd` 하나다.** `Button`·`_gui_input` 은 마우스 에뮬레이션으로 올라오는 **손가락 하나만** 받아서, 조작물마다 따로 받게 두면 두 번째 손가락이 통째로 없는 것이 되어 한쪽이 미는 동안 다른 쪽이 굳는다. 손가락 번호(`InputEventScreenTouch.index`)를 볼 수 있는 곳이 `_input()` 하나뿐이라 받는 곳을 모으고 조작물에는 `press()`·`drag()`·`release()` 로 나눠만 준다. **두 사람이 동시에 미는 것이 이 게임의 전부라 이 구조를 되돌리지 말 것.**
+  - **조이스틱 하나가 이동·점프·급강하를 다 맡는다** — 좌우 = 이동, 위 = 점프, 아래 = 급강하. 문턱은 가로가 낮고(`MOVE_THRESHOLD` 0.32) 세로가 높다(`JUMP_THRESHOLD` 0.58) — 걷다가 손가락이 조금 올라갔다고 뛰면 안 되기 때문이다.
+  - **세기는 늘 1.0 이다(아날로그가 아니다)** — `Player.apply_movement()` 이 `Input.get_axis()` 값을 속도에 그대로 곱하므로, 반쯤 민 손가락을 반쯤 걷는 것으로 넘기면 키보드와 이동 속도가 달라진다. 그것은 전투 수치를 건드리는 것과 같다.
+  - **궁극기 버튼은 뗄 때까지 눌린 상태로 둔다** — 방패가 짧게/길게를 누른 길이로 가르고(`Player._check_long_press()`), 한 프레임만 눌린 것으로 내보내면 긴 누름이 영영 안 나온다.
+  - **덮는 화면이 뜨면 접히고, 접을 때 잡고 있던 것을 놓는다**(`covers`). 안 놓으면 밀던 방향이 눌린 채로 남아 무기를 고르는 동안 젤리가 계속 달린다. 지금 목록은 `WeaponPick`·`ResultOverlay`·`MatchIntro` 이고, **목록으로 둔 것은 덮는 연출이 늘어도 씬에서 한 줄 더하면 끝나게 하기 위해서다.**
+  - **조작물은 젤리가 서는 자리와 겹친다** — 바닥 윗면이 `y≈597` 인데 조작물은 `y 468~626` 을 쓴다. 화면이 그것밖에 없어 피할 수 없으므로 **반투명(알파 0.34)으로 둔다.** 진하게 만들면 발이 사라진다.
+  - 자리는 씬에 offset 으로 박혀 있다(1P 조이스틱 가운데 `(118, 540)`, 궁극기 `(268, 578)`, 2P 는 좌우 대칭). 뷰포트는 `1152x648` 이고 화면은 가로 고정이다(`project.godot` 의 `window/handheld/orientation`).
 - `scenes/player.tscn` + `scripts/player.gd`(CharacterBody2D, `class_name Player`): 젤리 하나. `player_id`(1·2)·`player_name`·`character_id`·`weapon_id` export. SPEED 320, JUMP_VELOCITY -560, FAST_FALL_MULTIPLIER 2.0.
   - **자기 자리의 키만 읽는다**(이슈 #320) — `read_input()`이 `GameState.action(player_id, ...)`로 만든 이름(`p1_left`·`p2_skill` …)만 보므로 한 키보드에서 둘이 서로 간섭하지 않는다. `_read_input()`이 매 프레임 그것을 읽어 두고 `_take_input()`이 꺼내 쓴다 — 점프는 눌림을 한 번만 소비하고, 특수는 눌림·뗌이 **바뀌는 순간**에만 시간을 재기 시작하거나 발동한다(그 엣지를 흘리면 `LONG_PRESS_TIME` 구분이 서지 않는다).
   - `_physics_process()`가 `_read_input()` → `_check_long_press()` → `apply_movement()` → 그림 갱신 순서로 돈다. `move_and_slide()`는 `apply_movement()` 안에서만 부른다. 보간도 상태 수신도 없다 — 계산하는 곳과 그리는 곳이 같다.
@@ -123,7 +132,7 @@ title(`StartButton`으로 시작 — 고를 것이 없다) → select(1P·2P가 
   - 예외적으로 씬에 남긴 `theme_override`는 **화면마다 하나뿐인 주 동작 버튼**(타이틀 `StartButton`·선택 창 `GoButton`은 핑크, `RandomButton`은 라벤더)과 글자 크기·색 같은 개별 값이다. 새 버튼은 기본 흰 카드 모양을 그대로 쓰는 것이 원칙이다.
 
 
-**한 화면에 둘이 앉으므로 액션이 자리마다 한 벌씩, 모두 10개다**(이슈 #320): `p1_left`·`p1_right`·`p1_jump`·`p1_fast_fall`·`p1_skill`, `p2_…`. 1P는 `A`/`D`·`W`·`S`·왼쪽 `Shift`, 2P는 `←`/`→`·`↑`·`↓`·`Space`다 — 온라인 전환(#33) 이전에 쓰던 배치를 그대로 되살렸다. 읽는 곳은 `Player.read_input()` 하나이고 이름은 `GameState.action(player_id, name)`이 만든다. 전투 중 ESC(`ui_cancel`)로 title 복귀.
+**한 화면에 둘이 앉으므로 액션이 자리마다 한 벌씩, 모두 10개다**(이슈 #320): `p1_left`·`p1_right`·`p1_jump`·`p1_fast_fall`·`p1_skill`, `p2_…`. 1P는 `A`/`D`·`W`·`S`·왼쪽 `Shift`, 2P는 `←`/`→`·`↑`·`↓`·`Space`다 — 온라인 전환(#33) 이전에 쓰던 배치를 그대로 되살렸다. 읽는 곳은 `Player.read_input()` 하나이고 이름은 `GameState.action(player_id, name)`이 만든다. **화면 조작물은 이 액션을 흉내 내기만 한다**(이슈 #322) — 손가락 위치를 보고 `Input.parse_input_event()` 로 `InputEventAction` 을 넣으므로, 읽는 쪽은 키보드인지 손가락인지 모른다. 그래서 터치를 붙이면서 `read_input()` 도 `WeaponPick._unhandled_input()` 도 한 줄 고치지 않았다 — 조작물을 더 만들 일이 생겨도 같은 방식으로 붙인다. 전투 중 ESC(`ui_cancel`)로 title 복귀.
 **기본 공격에는 입력이 없다** — 근접은 닿으면, 원거리는 간격마다 `main.gd`가 자동으로 판정한다. `skill`은 특수 공격 전용이고, 무기 선택 카드에서는 좌우 이동 키와 함께 카드를 고르는 데도 쓴다.
 
 ### 미구현 (로드맵 #32 기준)
