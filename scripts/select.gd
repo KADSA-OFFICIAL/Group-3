@@ -9,11 +9,7 @@ extends Control
 ##
 ## 고른 값은 `GameState`에 적히고 전투 화면이 그것을 읽어 젤리를 세운다.
 
-## 조작 안내. 타이틀 화면과 같은 글이다 — 시작 직전에 한 번 더 보여준다.
-const CONTROLS_TEXT := "1P   W A S D  ·  Shift          2P   ← ↑ ↓ →  ·  Space"
-
 @onready var panels := [$P1Panel, $P2Panel]
-@onready var status_label: Label = $StatusLabel
 @onready var go_button: Button = $GoButton
 
 
@@ -24,13 +20,13 @@ func _ready() -> void:
 	# **가운데 두 칸(맵·무기)이 아예 없다** (요청). 맵도 무기도 라운드가 시작될 때 전투
 	# 화면에서 정해지므로(`main.gd`의 `_start_round`·`_begin_pick_phase`) 이 화면에서는
 	# 고를 것이 없었고, 남아 있던 것은 "라운드마다 정해집니다"라고만 적힌 안내판 둘이었다.
-	# 안내판을 치우고 그 자리에 `StatusLabel`·`GoButton`을 올려 1P | 시작 | 2P 로 만들었다.
+	# 안내판을 치우고 그 자리에 `GoButton`을 올려 1P | 시작 | 2P 로 만들었다.
+	# 키보드 안내(`StatusLabel`)도 없앴다 (이슈 #325) — 조작이 화면 위의 조이스틱과
+	# 궁극기 버튼이 된 뒤로(#322) 기기에 없는 키를 시작 직전에 알려 주고 있었다.
 	for slot in panels.size():
 		var panel: Control = panels[slot]
 		panel.apply_config(GameState.config_for(GameState.id_at(slot)))
 		panel.config_changed.connect(_on_config_changed.bind(slot))
-
-	status_label.text = CONTROLS_TEXT
 
 
 func _on_config_changed(slot: int) -> void:

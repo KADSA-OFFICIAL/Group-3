@@ -90,19 +90,6 @@ mirrored = true
 default_character = 1
 accent = Color(0.56, 0.59, 0.91, 1)
 
-[node name="StatusLabel" type="Label" parent="." unique_id=658804455]
-layout_mode = 0
-offset_left = 356.0
-offset_top = 400.0
-offset_right = 796.0
-offset_bottom = 436.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_outline_color = Color(0.24, 0.14, 0.3, 1)
-theme_override_constants/outline_size = 8
-theme_override_font_sizes/font_size = 22
-text = ""
-horizontal_alignment = 1
-
 [node name="GoButton" type="Button" parent="." unique_id=402992325]
 layout_mode = 0
 offset_left = 456.0
