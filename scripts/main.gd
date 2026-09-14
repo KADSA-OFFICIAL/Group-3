@@ -168,6 +168,8 @@ const WIN_COLOR := Color(0.96, 0.55, 0.78)
 @onready var point_gain = $UI/HUD/PointGain
 ## countdown.gd도 class_name이 없어 타입을 붙이지 않는다 (위와 같은 방식).
 @onready var countdown = $UI/HUD/Countdown
+## touch_controls.gd도 class_name이 없어 타입을 붙이지 않는다 (위와 같은 방식).
+@onready var touch_controls = $UI/HUD/TouchControls
 ## jelly_preview.gd는 class_name이 없어 타입을 붙이지 않는다 (player_panel.gd와 같은 방식).
 @onready var result_jelly = $UI/HUD/ResultOverlay/Jelly
 @onready var result_label: Label = $UI/HUD/ResultOverlay/ResultLabel
@@ -752,11 +754,21 @@ func _physics_process(_delta: float) -> void:
 	_tick_round()
 
 
-## 쿨타임 상태를 무기 도형 색에 쓰도록 내려준다.
+## 쿨타임 상태를 무기 도형 색과 궁극기 버튼에 쓰도록 내려준다.
+##
+## **남은 시간을 아는 곳은 여기 하나다** — `_special_ready_at` 이 전투 판정의 상태이고,
+## 젤리도 버튼도 그 결과를 받아 그리기만 한다 (#334). 조작물이 스스로 시간을 재면
+## 판정과 화면이 각각 따로 세게 되어 조용히 어긋난다.
 func _sync_special_ready() -> void:
 	var now := _now()
 	for player: Player in players_root.get_children():
-		player.set_special_ready(now >= _special_ready_at.get(player.player_id, 0.0))
+		var ready_at: float = _special_ready_at.get(player.player_id, 0.0)
+		player.set_special_ready(now >= ready_at)
+		# 전체 쿨타임은 지금 든 무기에서 가져온다 — 라운드마다 무기가 갈리므로(#205)
+		# 버튼이 들고 있으면 무기가 바뀐 판에서 엉뚱한 비율로 찬다.
+		var weapon := Weapons.get_weapon(player.weapon_id)
+		var total: float = weapon.get("special_cooldown", 0.0)
+		touch_controls.set_cooldown(player.player_id, ready_at - now, total)
 
 
 ## 기본 공격은 조작 없이 자동으로 들어간다 — 근접은 닿으면, 원거리는 간격마다.

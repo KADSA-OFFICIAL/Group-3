@@ -31,6 +31,10 @@ const MOUSE_FINGER := -1
 	$P1Stick, $P1Skill, $P2Stick, $P2Skill,
 ]
 
+## 플레이어 번호 → 그 사람의 궁극기 버튼 (#334). 쿨타임을 넘겨줄 곳을 바로 찾는다 —
+## `_pads` 를 훑어 `player_id` 를 보는 것보다 씬 구조가 그대로 드러난다.
+@onready var _skills := {1: $P1Skill, 2: $P2Skill}
+
 ## 손가락 번호 → 그 손가락이 잡고 있는 조작물.
 var _fingers := {}
 
@@ -56,6 +60,18 @@ func _refresh() -> void:
 	visible = not blocked
 	if blocked:
 		_release_everything()
+
+
+## 궁극기 버튼에 쿨타임을 넘긴다 (#334). `main.gd` 의 `_sync_special_ready()` 가 부른다 —
+## 남은 시간을 아는 것은 전투 판정의 주인인 거기이고, 여기는 나눠 주기만 한다
+## (손가락을 나눠 주는 것과 같은 자리라 창구를 하나로 둔다).
+##
+## **접혀 있어도 받아 둔다** — 무기 카드가 떠 있는 동안에도 쿨타임은 흐르므로,
+## 다시 펴질 때 이미 맞는 값을 들고 있어야 한 프레임 동안 옛 칸이 보이지 않는다.
+func set_cooldown(player_id: int, remaining: float, total: float) -> void:
+	var skill: Control = _skills.get(player_id)
+	if skill != null:
+		skill.set_cooldown(remaining, total)
 
 
 func _release_everything() -> void:
