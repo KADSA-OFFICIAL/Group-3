@@ -74,6 +74,15 @@ func set_cooldown(player_id: int, remaining: float, total: float) -> void:
 		skill.set_cooldown(remaining, total)
 
 
+## 궁극기 버튼에 지금 든 무기 그림을 넘긴다 (#334). `main.gd`가 라운드마다
+## 무기를 정한 직후(`set_weapon()` 뒤) 한 번만 부른다 — 쿨타임과 달리 매 틱 바뀌는
+## 값이 아니다.
+func set_weapon(player_id: int, weapon_id: String) -> void:
+	var skill: Control = _skills.get(player_id)
+	if skill != null:
+		skill.weapon_id = weapon_id
+
+
 func _release_everything() -> void:
 	_fingers.clear()
 	for pad in _pads:

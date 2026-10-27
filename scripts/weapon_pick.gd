@@ -42,6 +42,7 @@ const DIM_TIME := 0.28
 
 @onready var _cards: Array = [$Cards/Card0, $Cards/Card1, $Cards/Card2]
 @onready var _card_box: HBoxContainer = $Cards
+@onready var _title: Label = $Title
 @onready var _timer_label: Label = $Timer
 @onready var _status: Label = $Status
 @onready var _dim: ColorRect = $Dim
@@ -158,6 +159,7 @@ func open(choices: Array, seconds: float, player_id: int) -> void:
 	_picker = player_id
 	_cursor = 0
 	_ends_at = _now() + seconds
+	_title.text = "%dP 무기 선택" % _picker
 	_card_box.visible = true
 	for index in _cards.size():
 		var card: Button = _cards[index]

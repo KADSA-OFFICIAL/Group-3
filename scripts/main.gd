@@ -428,6 +428,9 @@ func _finish_pick_phase() -> void:
 		var choices: Array = _pick_options[player_id]
 		var chosen: String = _pick_choices.get(player_id, choices.pick_random())
 		player.set_weapon(chosen)
+		# 궁극기 버튼에도 이번 라운드 무기 그림을 보여준다 (#334) — 쿨타임과 달리
+		# 라운드마다 한 번만 바뀌는 값이라 여기서 한 번만 넘긴다.
+		touch_controls.set_weapon(player_id, chosen)
 		# 뽑기는 무기를 바꾼 **뒤에** 한다 (#134) — 지난 무기로 뽑으면 폭탄·표창이
 		# 아닌 무기에서는 늘 false가 되어 강화가 영영 안 나온다.
 		player.set_empowered(_roll_empowered(chosen))
