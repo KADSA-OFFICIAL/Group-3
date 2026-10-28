@@ -25,6 +25,14 @@ const FADED := Color(0.45, 0.45, 0.5, 1.0)
 ## 이쪽은 "아직 고를 수 있는 것"이라, 같은 짙기면 이미 고른 화면처럼 보인다.
 const UNFOCUSED := Color(0.74, 0.74, 0.8, 1.0)
 
+## 고르는 사람의 색 (#344). 선택 창 패널·점수 카드와 같은 1P 핑크·2P 라벤더다 —
+## 한 화면에서 차례로 고르므로 **지금 누구 차례인지가 이 색 하나로 드러나야 한다.**
+## 파스텔이지만 어두운 바탕 위에 진한 외곽선을 둘러 쓰므로 대비는 외곽선이 받친다.
+const PICKER_COLORS := {
+	1: Color(0.96, 0.55, 0.78, 1.0),
+	2: Color(0.56, 0.59, 0.91, 1.0),
+}
+
 ## ── 등장 연출 (#263) ──
 ## 카드 한 장이 떠오르는 데 걸리는 시간(초). 빛이 타올랐다 가라앉는 것까지 포함이다.
 const INTRO_TIME := 0.62
@@ -42,6 +50,7 @@ const DIM_TIME := 0.28
 
 @onready var _cards: Array = [$Cards/Card0, $Cards/Card1, $Cards/Card2]
 @onready var _card_box: HBoxContainer = $Cards
+@onready var _title: Label = $Title
 @onready var _timer_label: Label = $Timer
 @onready var _status: Label = $Status
 @onready var _dim: ColorRect = $Dim
@@ -62,11 +71,19 @@ var _picker := 0
 var _cursor := 0
 ## 남은 시간을 세는 기준 시각. 0이면 세지 않는다.
 var _ends_at := 0.0
+## 키보드로 짚은 카드의 테두리 (#344). 씬의 hover 모양을 복제해 테두리만 고르는 사람의
+## 색으로 칠한다 — 다른 카드는 씬의 평소 모양 그대로다.
+var _cursor_style: StyleBoxFlat
+## 씬에 적힌 카드의 평소 모양. 짚었던 카드를 되돌릴 때 쓴다 — 덮어쓴 것을 지우기만 하면
+## 씬의 모양까지 같이 지워져 테마 기본 버튼으로 돌아간다.
+var _card_style: StyleBox
 
 
 func _ready() -> void:
 	for index in _cards.size():
 		_cards[index].pressed.connect(_on_card_pressed.bind(index))
+	_card_style = (_cards[0] as Button).get_theme_stylebox("normal")
+	_cursor_style = (_cards[0] as Button).get_theme_stylebox("hover").duplicate()
 	_dim_alpha = _dim.color.a
 	_shine.cards = _cards
 
@@ -172,10 +189,24 @@ func open(choices: Array, seconds: float, player_id: int) -> void:
 		(card.get_node("Name") as Label).text = weapon_name
 		(card.get_node("Desc") as Label).text = Weapons.description(weapon_name)
 	_status.text = "%dP 차례 — 이번 라운드에 들 무기를 고르세요" % _picker
+	_paint_picker()
 	visible = true
 	_refresh_cursor()
 	# 카드 내용을 다 채운 **뒤에** 연출을 건다 (#263) — 먼저 걸면 빈 카드가 떠오른다.
 	_start_intro()
+
+
+## 제목·안내 문구·짚은 카드 테두리를 고르는 사람의 색으로 칠한다 (#344).
+##
+## 예전에는 차례가 맨 아래의 작은 옅은 글자 한 줄에만 있어 누구 차례인지 알아보기
+## 어려웠다. 제목 자체를 "1P 무기 선택"으로 바꿔 화면에서 가장 큰 글자가 차례를 말한다.
+func _paint_picker() -> void:
+	var color: Color = PICKER_COLORS.get(_picker, Color.WHITE)
+	_title.text = "%dP 무기 선택" % _picker
+	_title.add_theme_color_override("font_color", color)
+	_status.add_theme_color_override("font_color", color)
+	_cursor_style.border_color = color
+	_cursor_style.shadow_color = Color(color, 0.5)
 
 
 ## 키보드로 짚은 자리를 옮긴다. 양 끝에서 멈추지 않고 돌아간다 — 카드가 셋뿐이라
@@ -188,7 +219,7 @@ func _move_cursor(step: int) -> void:
 	_refresh_cursor()
 
 
-## 짚은 카드만 밝게 둔다.
+## 짚은 카드만 밝게 두고 테두리를 고르는 사람의 색으로 두른다.
 func _refresh_cursor() -> void:
 	if not _armed:
 		return
@@ -197,6 +228,7 @@ func _refresh_cursor() -> void:
 		if not card.visible:
 			continue
 		card.modulate = Color.WHITE if i == _cursor else UNFOCUSED
+		card.add_theme_stylebox_override("normal", _cursor_style if i == _cursor else _card_style)
 
 
 func _visible_card_count() -> int:
