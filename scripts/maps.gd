@@ -25,11 +25,12 @@ extends RefCounted
 ## - `Spawns` 아래에 `Spawn1`·`Spawn2` (Marker2D). 순서가 1P·2P이고 서로 마주 본다.
 ## - 지형은 `StaticBody2D` + `CollisionShape2D`.
 ## - 즉사 구역(물·용암)이 있으면 `Hazard`(Area2D). 닿으면 `main.gd` 가 죽인다.
+## - 튀어오르는 물고기(`LeapingFish`)가 있으면 `Fish`. 닿은 젤리를 `main.gd` 가 밀쳐낸다 (#338).
 ## - 배경까지 맵이 그린다. 맵마다 하늘색이 다르다.
 ##
 ## ## 배경 원화를 쓰는 맵
 ##
-## 화산·협곡·오두막·투기장은 `ColorRect` 대신 `assets/maps/`의 원화 한 장을
+## 화산·협곡·오두막·투기장·노을 바다는 `ColorRect` 대신 `assets/maps/`의 원화 한 장을
 ## `Background`(Sprite2D)로 깐다. 원화는 1920x1080이고 게임 좌표는 1152x648이라
 ## **`position = (576, 324)` + `scale = 0.6`**이면 화면에 정확히 들어맞는다 —
 ## 원화 픽셀에 0.6을 곱한 값이 곧 충돌 상자 좌표다.
@@ -75,6 +76,7 @@ const LIST: Array[Dictionary] = [
 	{"name": "협곡", "file": "canyon.tscn"},
 	{"name": "오두막", "file": "cottage.tscn"},
 	{"name": "투기장", "file": "arena.tscn"},
+	{"name": "노을 바다", "file": "sunset.tscn"},
 ]
 
 

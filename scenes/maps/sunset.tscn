@@ -1,0 +1,106 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" path="res://assets/maps/sunset.png" id="1_bg"]
+[ext_resource type="Texture2D" path="res://assets/maps/sunset_front.png" id="2_front"]
+[ext_resource type="Texture2D" path="res://assets/maps/fish.png" id="3_fish"]
+[ext_resource type="Script" path="res://scripts/leaping_fish.gd" id="4_fish"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_fish"]
+radius = 34.0
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_left_top"]
+size = Vector2(201, 90)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_left_trunk"]
+size = Vector2(126, 235)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_mid_top"]
+size = Vector2(190, 72)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_mid_trunk"]
+size = Vector2(140, 110)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_right_top"]
+size = Vector2(189, 115)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_right_trunk"]
+size = Vector2(147, 210)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_sea"]
+size = Vector2(1952, 205)
+
+[node name="Sunset" type="Node2D"]
+
+[node name="Background" type="Sprite2D" parent="."]
+position = Vector2(576, 324)
+scale = Vector2(0.6, 0.6)
+texture = ExtResource("1_bg")
+
+[node name="Fish" type="Area2D" parent="." node_paths=PackedStringArray("splash")]
+position = Vector2(60, 650)
+script = ExtResource("4_fish")
+splash = NodePath("../Splash")
+
+[node name="Sprite2D" type="Sprite2D" parent="Fish"]
+scale = Vector2(0.4, 0.4)
+texture = ExtResource("3_fish")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Fish"]
+shape = SubResource("CircleShape2D_fish")
+
+[node name="Front" type="Sprite2D" parent="."]
+position = Vector2(576, 324)
+scale = Vector2(0.6, 0.6)
+texture = ExtResource("2_front")
+
+[node name="Splash" type="Node2D" parent="."]
+
+[node name="RockLeftTop" type="StaticBody2D" parent="."]
+position = Vector2(290.5, 320)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RockLeftTop"]
+shape = SubResource("RectangleShape2D_left_top")
+
+[node name="RockLeftTrunk" type="StaticBody2D" parent="."]
+position = Vector2(309, 482.5)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RockLeftTrunk"]
+shape = SubResource("RectangleShape2D_left_trunk")
+
+[node name="RockMidTop" type="StaticBody2D" parent="."]
+position = Vector2(575, 454)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RockMidTop"]
+shape = SubResource("RectangleShape2D_mid_top")
+
+[node name="RockMidTrunk" type="StaticBody2D" parent="."]
+position = Vector2(580, 545)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RockMidTrunk"]
+shape = SubResource("RectangleShape2D_mid_trunk")
+
+[node name="RockRightTop" type="StaticBody2D" parent="."]
+position = Vector2(842.5, 332.5)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RockRightTop"]
+shape = SubResource("RectangleShape2D_right_top")
+
+[node name="RockRightTrunk" type="StaticBody2D" parent="."]
+position = Vector2(841.5, 495)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="RockRightTrunk"]
+shape = SubResource("RectangleShape2D_right_trunk")
+
+[node name="Hazard" type="Area2D" parent="."]
+position = Vector2(576, 697.5)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hazard"]
+shape = SubResource("RectangleShape2D_sea")
+
+[node name="Spawns" type="Node2D" parent="."]
+
+[node name="Spawn1" type="Marker2D" parent="Spawns"]
+position = Vector2(290, 230)
+
+[node name="Spawn2" type="Marker2D" parent="Spawns"]
+position = Vector2(842, 230)
