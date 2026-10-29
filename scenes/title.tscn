@@ -1,7 +1,18 @@
-[gd_scene load_steps=6 format=3 uid="uid://jellytitle001"]
+[gd_scene load_steps=9 format=3 uid="uid://jellytitle001"]
 
 [ext_resource type="Script" path="res://scripts/title.gd" id="1_title"]
 [ext_resource type="Texture2D" path="res://assets/ui/cover.png" id="2_cover"]
+[ext_resource type="Shader" path="res://resources/cover_side.gdshader" id="3_side"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_side_l"]
+shader = ExtResource("3_side")
+shader_parameter/art = ExtResource("2_cover")
+shader_parameter/right_side = false
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_side_r"]
+shader = ExtResource("3_side")
+shader_parameter/art = ExtResource("2_cover")
+shader_parameter/right_side = true
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_start"]
 bg_color = Color(0.8, 0.29, 0.56, 1)
@@ -79,27 +90,21 @@ texture = ExtResource("2_cover")
 expand_mode = 1
 stretch_mode = 6
 
-[node name="MirrorL" type="TextureRect" parent="Cover"]
+[node name="SideL" type="ColorRect" parent="Cover"]
+material = SubResource("ShaderMaterial_side_l")
 layout_mode = 0
-offset_left = -1152.0
+offset_left = -288.0
 offset_right = 0.0
 offset_bottom = 768.0
 mouse_filter = 2
-texture = ExtResource("2_cover")
-expand_mode = 1
-stretch_mode = 6
-flip_h = true
 
-[node name="MirrorR" type="TextureRect" parent="Cover"]
+[node name="SideR" type="ColorRect" parent="Cover"]
+material = SubResource("ShaderMaterial_side_r")
 layout_mode = 0
 offset_left = 1152.0
-offset_right = 2304.0
+offset_right = 1440.0
 offset_bottom = 768.0
 mouse_filter = 2
-texture = ExtResource("2_cover")
-expand_mode = 1
-stretch_mode = 6
-flip_h = true
 
 [node name="SubLabel" type="Label" parent="."]
 anchor_top = 1.0
