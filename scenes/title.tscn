@@ -79,6 +79,28 @@ texture = ExtResource("2_cover")
 expand_mode = 1
 stretch_mode = 6
 
+[node name="MirrorL" type="TextureRect" parent="Cover"]
+layout_mode = 0
+offset_left = -1152.0
+offset_right = 0.0
+offset_bottom = 768.0
+mouse_filter = 2
+texture = ExtResource("2_cover")
+expand_mode = 1
+stretch_mode = 6
+flip_h = true
+
+[node name="MirrorR" type="TextureRect" parent="Cover"]
+layout_mode = 0
+offset_left = 1152.0
+offset_right = 2304.0
+offset_bottom = 768.0
+mouse_filter = 2
+texture = ExtResource("2_cover")
+expand_mode = 1
+stretch_mode = 6
+flip_h = true
+
 [node name="SubLabel" type="Label" parent="."]
 anchor_top = 1.0
 anchor_bottom = 1.0
