@@ -16,22 +16,39 @@ const RADIUS := 48.0
 ## 조이스틱과 같은 옅기다. 눌린 동안에만 진해져서 들어간 것이 보인다.
 const BASE_COLOR := Color(0.16, 0.14, 0.22, 0.34)
 const RIM_COLOR := Color(0.99, 0.95, 0.92, 0.46)
-const PRESSED_COLOR := Color(0.8, 0.29, 0.56, 0.78)
-## 누르고 있을 때와 **다 찼을 때** 쓰는 밝은 테두리 (#334). 칸이 가득 찬 것과
-## 거의 찬 것이 한눈에 갈린다 — 마지막 몇 px 는 눈으로 재기 어렵다.
-const PRESSED_RIM_COLOR := Color(0.99, 0.95, 0.92, 0.86)
 
-## 차오른 만큼을 덮는 색 (#334). 눌렸을 때(0.78)보다 옅어서 "찼다"와 "누르고 있다"가
-## 구분되고, 조작물이 젤리가 서는 자리와 겹치므로(#322) 발이 사라질 만큼 진하지 않다.
-const CHARGE_COLOR := Color(0.8, 0.29, 0.56, 0.44)
+## 선택 창 캐릭터 패널과 같은 배색이다 (`select.tscn`의 `P1Panel`/`P2Panel` `accent`) —
+## 1P·2P를 가르는 색을 이 게임에서 이미 정해 둔 자리라 여기서 새로 고르지 않는다.
+const ACCENTS := {1: Color(0.96, 0.55, 0.78), 2: Color(0.56, 0.59, 0.91)}
 
 ## 차오른 칸의 테두리를 그릴 때 쓰는 꼭짓점 수. 원의 일부라 40 이면 매끄럽다.
 const CHARGE_STEPS := 40
+## 무기 그림이 원 밖으로 삐져나오지 않도록 두는 안전 비율 — 원에 내접하는
+## 정사각형(둘레의 약 0.707배)보다 조금 더 작게 잡는다.
+const ART_FILL := 0.68
 
 ## 쿨타임이 없는 상태(다 참)를 나타내는 값.
 const READY := 1.0
 
-@export var player_id: int = 1
+@export var player_id: int = 1:
+	set(value):
+		player_id = value
+		_accent = ACCENTS.get(value, ACCENTS[1])
+		queue_redraw()
+
+## 지금 든 무기 (#334). `main.gd`가 라운드마다 무기를 정한 직후 넘겨준다 — 그림이 있는
+## 무기(7종)는 궁극기 버튼에도 그 무기가 보여야 어느 무기를 들었는지 손끝만 보고 안다.
+## 그림이 없는 무기는 `weapon_preview.gd`와 같은 이유로 아무것도 그리지 않는다 —
+## 글자(`_label`)가 대신 알려준다.
+@export var weapon_id := "":
+	set(value):
+		weapon_id = value
+		_art = Weapons.preview_texture(value)
+		queue_redraw()
+
+## 1P는 분홍, 2P는 인디고 — `player_id`가 바뀌는 순간 그 값으로 다시 잡힌다.
+var _accent := ACCENTS[1]
+var _art: Texture2D = null
 
 var _pressed := false
 
@@ -70,13 +87,32 @@ func set_cooldown(remaining: float, total: float) -> void:
 
 func _draw() -> void:
 	var center := size * 0.5
-	draw_circle(center, RADIUS, PRESSED_COLOR if _pressed else BASE_COLOR)
+	var pressed_color := Color(_accent.r, _accent.g, _accent.b, 0.78)
+	draw_circle(center, RADIUS, pressed_color if _pressed else BASE_COLOR)
+	if _art != null:
+		_draw_art(center)
 	# **누르고 있는 동안에도 그린다** — 쿨타임이 도는 중에 눌러 보는 것은 흔한 일이고,
 	# 그때 칸을 숨기면 버튼이 가득 찬 것처럼 보여 쓸 수 있다고 읽힌다.
 	if _charge > 0.0:
 		_draw_charge(center)
+	# 누르고 있을 때와 **다 찼을 때** 쓰는 밝은 테두리 (#334). 칸이 가득 찬 것과
+	# 거의 찬 것이 한눈에 갈린다 — 마지막 몇 px 는 눈으로 재기 어렵다.
+	var pressed_rim_color := _accent.lerp(Color.WHITE, 0.25)
+	pressed_rim_color.a = 0.9
 	draw_arc(center, RADIUS, 0.0, TAU, 40,
-			PRESSED_RIM_COLOR if _pressed or _charge >= READY else RIM_COLOR, 3.0, true)
+			pressed_rim_color if _pressed or _charge >= READY else RIM_COLOR, 3.0, true)
+
+
+## 들고 있는 무기 그림을 가운데에 그린다. `weapon_preview.gd`와 같은 방식(`Art.content_rect()`로
+## 투명 여백을 뺀 뒤 칸에 맞춰 키운다)이지만 칸이 네모가 아니라 원이라 `ART_FILL`로 더 좁힌다.
+func _draw_art(center: Vector2) -> void:
+	var region := Art.content_rect(_art)
+	if region.size.x <= 0.0 or region.size.y <= 0.0:
+		return
+	var box := RADIUS * 2.0
+	var fit := minf(box / region.size.x, box / region.size.y) * ART_FILL
+	var draw_size := region.size * fit
+	draw_texture_rect_region(_art, Rect2(center - draw_size * 0.5, draw_size), region)
 
 
 ## 차오른 만큼을 **왼쪽에서 오른쪽으로** 덮는다 (#334).
@@ -89,15 +125,18 @@ func _draw() -> void:
 ## 그 세로선이 원과 만나는 곳이 `±acos(t)` 이고, 왼쪽 조각은 그 둘 사이를 **π 를 지나며**
 ## 잇는 호다.
 func _draw_charge(center: Vector2) -> void:
+	# 눌렸을 때(0.78)보다 옅어서 "찼다"와 "누르고 있다"가 구분되고, 조작물이 젤리가
+	# 서는 자리와 겹치므로(#322) 발이 사라질 만큼 진하지 않다.
+	var charge_color := Color(_accent.r, _accent.g, _accent.b, 0.44)
 	if _charge >= READY:
-		draw_circle(center, RADIUS, CHARGE_COLOR)
+		draw_circle(center, RADIUS, charge_color)
 		return
 	var edge := acos(clampf(_charge * 2.0 - 1.0, -1.0, 1.0))
 	var points := PackedVector2Array()
 	for i in CHARGE_STEPS + 1:
 		var angle := lerpf(edge, TAU - edge, float(i) / float(CHARGE_STEPS))
 		points.append(center + Vector2(cos(angle), sin(angle)) * RADIUS)
-	draw_colored_polygon(points, CHARGE_COLOR)
+	draw_colored_polygon(points, charge_color)
 
 
 func press(_global_pos: Vector2) -> void:

@@ -175,6 +175,7 @@ func open(choices: Array, seconds: float, player_id: int) -> void:
 	_picker = player_id
 	_cursor = 0
 	_ends_at = _now() + seconds
+	_title.text = "%dP 무기 선택" % _picker
 	_card_box.visible = true
 	for index in _cards.size():
 		var card: Button = _cards[index]
