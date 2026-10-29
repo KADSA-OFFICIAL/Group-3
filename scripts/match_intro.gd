@@ -37,6 +37,8 @@ const SCALE_OUT := 1.12
 const DIM_ALPHA := 0.72
 
 @onready var _dim: ColorRect = $Dim
+## 넓어진 양옆을 채우는 같은 원화 (#351). `_art`와 같은 크기·옅기로 움직인다.
+@onready var _back: TextureRect = $Back
 @onready var _art: TextureRect = $Art
 
 ## 시작한 뒤 흐른 시간(초). 음수면 돌고 있지 않다.
@@ -59,6 +61,7 @@ func play() -> void:
 	# 3:2 원화가 16:9 화면보다 세로로 길어졌고, 위로 넘치는 만큼 칸이 화면 위로 나가
 	# 있다 — 칸의 가운데를 축으로 잡으면 그림이 화면 가운데가 아닌 곳에서 튀어나온다.
 	_art.pivot_offset = size * 0.5 - _art.position
+	_back.pivot_offset = size * 0.5 - _back.position
 	_apply(0.0)
 
 
@@ -94,6 +97,8 @@ func _apply(t: float) -> void:
 		alpha = 1.0 - r
 	_art.scale = Vector2.ONE * scale_now
 	_art.modulate.a = alpha
+	_back.scale = Vector2.ONE * scale_now
+	_back.modulate.a = alpha
 	# 어둠은 그림보다 **먼저 차고 먼저 빠진다** — 같이 움직이면 그림이 사라지는 동안
 	# 뒤가 훤히 드러나 전투 화면이 먼저 보인다.
 	_dim.color.a = DIM_ALPHA * minf(alpha * 1.4, 1.0)
