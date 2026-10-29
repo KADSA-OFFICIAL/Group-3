@@ -680,10 +680,35 @@ func _load_map(map_name: String) -> void:
 	_map = scene.instantiate() as Node2D
 	map_root.add_child(_map)
 	_hazard = _map.get_node_or_null("Hazard") as Area2D
+	# 튀어오르는 물고기가 있는 맵(노을 바다, #338). 옛 맵은 위에서 통째로 버렸으므로
+	# 연결을 따로 끊을 일이 없다.
+	var fish := _map.get_node_or_null("Fish") as LeapingFish
+	if fish != null:
+		fish.struck.connect(_on_fish_struck)
 	# 맵은 1152x648 한 칸에만 그려지므로(#264) 화면이 그보다 넓거나 높으면 자리가 남는다.
 	# 칸을 가운데로 옮기고(#329), 남는 자리는 이 맵의 배경으로 채운다 — 지형은 안 건드린다.
 	_center_map()
 	map_backdrop.show_map(_map)
+
+
+## 물고기에 닿은 젤리를 물고기가 가던 쪽으로 밀어낸다 (#338). 데미지는 없다.
+##
+## **판이 도는 동안에만** 민다(`_round_live`) — 무기를 고르는 동안이나 판이 끝난 뒤에
+## 밀리면 얼어 있는 젤리가 바다로 떨어져 아무도 모르는 포인트가 난다. 물고기는 바위도
+## 스치므로 젤리가 아닌 몸체는 여기서 거른다.
+##
+## `"projectile"`로 넣어 무적 시간을 타지 않게 한다 — 방금 칼에 맞은 젤리도 물고기는
+## 비켜 가지 않는다. 같은 점프에 두 번 맞는 일은 `LeapingFish`가 막는다.
+func _on_fish_struck(body: Node2D, direction: float) -> void:
+	if not _round_live or _match_over:
+		return
+	var player := body as Player
+	if player == null or not player.alive:
+		return
+	# apply_hit()은 때린 자리의 x를 받아 그 반대쪽으로 민다 — 젤리 바로 뒤를 넘겨
+	# 물고기가 가던 쪽으로 밀리게 한다.
+	player.apply_hit(0.0, Combat.Knockback.MEDIUM, player.global_position.x - direction,
+			0.0, "projectile")
 
 
 ## 맵 칸을 화면 가운데에 놓는다 (#329).
