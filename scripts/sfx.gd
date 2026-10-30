@@ -4,6 +4,10 @@ extends Node
 ## **무기 소리만 난다** (#379, 사용자 요청) — 젤리 몸(걸음·점프·피격·사망 …), 판 진행·화면
 ## (카운트다운·포인트·승리·카드·버튼), 무기끼리 부딪침 소리는 들어 본 뒤 뺐다. 되살리려면
 ## #373~#376 이력의 `tools/gen_sfx.py` 와 호출부를 본다.
+## 예외로 경기의 큰 마디 넷은 사용자 요청으로 다시 붙였다(#400, 예전 소리가 아니라 새로 만든 것):
+## `match_start`(경기 표지, `main._play_match_intro`) · `weapon_pick`(카드를 고른 기기,
+## `WeaponPick._on_card_pressed`) · `victory`/`defeat`(결과 화면, `main._show_match_result` —
+## 온라인에서 진 기기만 `defeat`, 오프라인 한 화면은 늘 `victory`). 모두 `play()` 다.
 ##
 ## 소리는 `assets/sfx/<이름>.wav` 이고 `tools/gen_sfx.py` 가 합성해서 만든다 — 소리를
 ## 고치려면 그 스크립트의 숫자를 바꿔 다시 돌린다. 파일이 없는 이름은 **조용히** 넘어간다
