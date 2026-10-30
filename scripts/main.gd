@@ -10,6 +10,11 @@ extends Node2D
 ## 통합 가이드: docs/weapon-system.md
 ##
 ## 포인트 진행(쓰러뜨리면 1포인트·3포인트 선취)도 여기가 주인이다.
+##
+## **온라인(#361)에서는 전용 서버가 이 씬을 돌리고 판정한다.** 클라이언트도 같은 씬을 열지만
+## 전투 틱을 돌리지 않는다 — 젤리·투사체는 스포너로 받고, 맵·점수·연출·무기 선택은 서버가
+## `call_local` RPC로 보낸다. 오프라인에서는 그 RPC가 그냥 로컬 호출이라 지금까지와 같다.
+## 판정을 할지는 `Network.has_authority()`(오프라인이거나 온라인 서버)가 정한다.
 
 const PLAYER_SCENE := preload("res://scenes/player.tscn")
 const PROJECTILE_SCENE := preload("res://scenes/projectile.tscn")
@@ -50,6 +55,9 @@ const WEAPON_PICK_TIME := 20.0
 ## 어긋나면 그림이 덜 사라진 채로 카드가 뜨거나(이 값이 짧을 때) 빈 화면을 본다(길 때).
 const MATCH_INTRO_TIME := 2.0
 
+## 온라인 경기가 끝난 뒤 서버가 이 씬을 다시 열기까지 기다리는 시간(초, #361).
+const SERVER_RELOAD_DELAY := 1.0
+
 ## 아래 상태는 전부 전투 판정이 쓴다.
 ## "공격자>피격자" -> 다음 기본 공격이 들어갈 수 있는 시각
 var _next_hit_at := {}
@@ -84,6 +92,8 @@ var _pick_opens_at := 0.0
 var _intro_shown := false
 ## 경기가 끝났으면 더 이상 라운드를 시작하지 않는다.
 var _match_over := false
+## 온라인 경기를 이미 접었는가 (서버, #361). 접는 길이 둘이라(끝까지 했다·상대가 나갔다) 한 번만 지나게 한다.
+var _match_closed := false
 
 ## **지금 판이 돌고 있는가.** 포인트가 나갈 수 있는 유일한 구간이다.
 ##
@@ -159,6 +169,10 @@ const WIN_COLOR := Color(0.96, 0.55, 0.78)
 @onready var players_root: Node2D = $Players
 @onready var projectiles_root: Node2D = $Projectiles
 @onready var effects_root: Node2D = $Effects
+## 젤리와 투사체는 스포너로 만든다 (#361). 오프라인에서도 같은 길을 지난다 — 스포너는
+## 오프라인이면 그 자리에서 만들어 붙이기만 한다.
+@onready var player_spawner: MultiplayerSpawner = $PlayerSpawner
+@onready var projectile_spawner: MultiplayerSpawner = $ProjectileSpawner
 @onready var result_overlay: Control = $UI/HUD/ResultOverlay
 ## weapon_pick.gd는 class_name이 없어 타입을 붙이지 않는다 (jelly_preview.gd와 같은 방식).
 @onready var weapon_pick = $UI/HUD/WeaponPick
@@ -184,12 +198,38 @@ func _ready() -> void:
 	# 그래도 하나는 깔아 둔다. 씬이 열리고 첫 라운드가 열리기까지의 몇 프레임 동안
 	# 빈 화면을 보이지 않기 위해서다.
 	_load_map(Maps.default_name())
-	# 라운드마다 뜨는 무기 선택 카드 (#205). 한 화면에서 1P·2P가 차례로 고른다.
+	# 스폰 함수는 **모든 기기에서** 등록되어야 한다 (#361) — 온라인 클라이언트는 서버가
+	# 보낸 스폰 데이터로 같은 함수를 지나 젤리·투사체를 만든다.
+	player_spawner.spawn_function = _spawn_player
+	projectile_spawner.spawn_function = _make_projectile
+	# 라운드마다 뜨는 무기 선택 카드 (#205). 오프라인은 1P·2P가 차례로, 온라인은 각자 고른다.
 	weapon_pick.weapon_chosen.connect(_on_weapon_chosen)
+
+	if Network.is_client():
+		# 경기가 끝나면 서버 지시로 대기실에 돌아가고, 끊기면 타이틀로 나간다.
+		Lobby.match_ended.connect(_on_match_ended)
+		Network.join_failed.connect(_on_disconnected)
+		# 기기 앞에는 한 사람뿐이다 — 조작물도 한 벌만 내 색으로 남긴다.
+		touch_controls.set_online_seat(Lobby.my_player_id())
+		# 씬이 준비된 뒤에 서버에 알린다. 먼저 스폰하면 이 씬을 열기 전이라 놓친다.
+		_notify_ready.rpc_id(1)
+		return
+	if Network.is_server():
+		# 전용 서버는 두 사람이 이 씬을 다 열 때까지 기다린다 (`_notify_ready`).
+		Lobby.player_left.connect(_on_peer_left)
+		Lobby.server_arena_ready()
+		return
 	_spawn_players()
 
 
-## 젤리 둘을 세운다 (#320). 씬이 열리자마자 부른다 — 기다릴 접속이 없다.
+func _exit_tree() -> void:
+	# 온라인 클라이언트가 밀어 둔 화면을 되돌린다 (`_center_map`). 뷰포트는 다음 화면도
+	# 같이 쓰므로, 안 되돌리면 대기실·타이틀이 통째로 옆으로 밀린 채 열린다.
+	get_viewport().canvas_transform = Transform2D()
+
+
+## 젤리 둘을 세운다 (#320). 오프라인은 씬이 열리자마자, 온라인 서버는 두 사람이
+## 전투 화면을 다 열었을 때(`_notify_ready`) 부른다.
 func _spawn_players() -> void:
 	for player_id: int in GameState.PLAYER_IDS:
 		_add_player(player_id)
@@ -199,33 +239,107 @@ func _spawn_players() -> void:
 	_start_round()
 
 
-## 젤리 하나를 세운다. 자리와 캐릭터는 선택 창이 `GameState`에 적어 둔 것을 그대로 쓴다.
+## 젤리 하나를 세운다. 자리와 캐릭터는 오프라인이면 선택 창이 `GameState`에 적어 둔 것,
+## 온라인이면 대기실에서 서버가 확정한 것(`Lobby`)이다.
 func _add_player(player_id: int) -> void:
 	if players_root.has_node("Player_%d" % player_id):
 		return
 	var index := GameState.slot_of(player_id)
 	var config := GameState.config_for(player_id)
+	var owner_peer := 0
+	if Network.is_server():
+		owner_peer = Lobby.order[index]
+		config = Lobby.config_for(owner_peer)
 	# **빈손으로 세운다** (#205). 무기는 선택 창이 아니라 라운드 시작의 선택이 정하므로
 	# 이 시점에는 아직 아무것도 안 들었다 — `Weapons.get_weapon("")`이 빈 표를 돌려주어
 	# 판정도 그림도 없는 상태가 된다. 곧바로 선택이 열리므로 오래 가는 상태는 아니다.
 	# 강화 뽑기(#134)도 무기가 정해진 뒤라야 뜻이 있어서 `_finish_pick_phase()`로 옮겼다.
-	var player := PLAYER_SCENE.instantiate() as Player
-	player.name = "Player_%d" % player_id
-	player.player_id = player_id
-	player.player_name = "%dP" % player_id
-	player.weapon_id = ""
-	player.character_id = config["character"]
-	player.empowered_ready = false
-	player.position = _spawn_position(index)
-	player.facing = _spawn_facing(index)
-	players_root.add_child(player)
-	# 특수 공격 요청과 사망은 이 화면이 받아 판정한다.
+	var player := player_spawner.spawn({
+		"player_id": player_id,
+		"owner_peer": owner_peer,
+		"character": config["character"],
+		"index": index,
+	}) as Player
+	if player == null:
+		return
+	# 특수 공격 요청과 사망은 판정하는 쪽이 받는다 — 이 함수가 판정하는 쪽에서만 돈다.
 	player.special_requested.connect(_on_special_requested)
 	player.died.connect(_on_player_died)
 	# 강제 낙하(양날 도끼)가 땅에 닿는 순간도 여기서 받는다 (#167).
 	player.landed_forced.connect(_on_forced_landed)
 	_dagger_held[player_id] = true
 	scores[player_id] = 0
+
+
+## 스폰 데이터로 젤리 노드를 만든다. **모든 기기에서** 같은 데이터로 불려 같은 젤리가 선다
+## (`MultiplayerSpawner.spawn_function`). 반환한 노드는 스포너가 `Players` 아래에 붙인다.
+func _spawn_player(data: Dictionary) -> Node:
+	var player_id: int = data["player_id"]
+	var index: int = data["index"]
+	var character: String = data["character"]
+	var player := PLAYER_SCENE.instantiate() as Player
+	player.name = "Player_%d" % player_id
+	player.player_id = player_id
+	player.owner_peer = data["owner_peer"]
+	player.player_name = "%dP" % player_id
+	player.weapon_id = ""
+	player.character_id = character
+	player.empowered_ready = false
+	player.position = _spawn_position(index)
+	player.facing = _spawn_facing(index)
+	return player
+
+
+# ─────────────────────────── 온라인 (#361) ───────────────────────────
+
+## 클라이언트가 전투 화면을 열었다 (**서버가 받는다**). 둘 다 열면 젤리를 세우고 판을 연다.
+@rpc("any_peer", "call_remote", "reliable")
+func _notify_ready() -> void:
+	if not Network.is_server():
+		return
+	var sender := multiplayer.get_remote_sender_id()
+	if not Lobby.in_match or Lobby.slot_of(sender) < 0:
+		return
+	# 이 씬에 들어온 피어만 전투 노드의 RPC·스폰 대상이 된다 (`Lobby.can_view`).
+	Lobby.server_add_viewer(sender)
+	for peer_id in Lobby.order:
+		if not Lobby.viewers.has(peer_id):
+			return
+	if players_root.get_child_count() == 0:
+		_spawn_players()
+
+
+## 싸우던 사람이 나갔다 (서버). 1 VS 1 이 성립하지 않으니 판을 접고 남은 사람을 대기실로 보낸다.
+func _on_peer_left(_peer_id: int) -> void:
+	if Lobby.in_match:
+		_end_online_match("상대가 나가서 경기를 끝냈습니다.")
+
+
+## 온라인 경기를 끝낸다 (서버). 클라이언트를 대기실로 돌려보내고 이 씬을 새로 연다 —
+## 전용 서버는 화면을 옮겨 다니지 않으므로, 다음 경기를 깨끗한 표로 받으려면 씬을 다시
+## 여는 것이 가장 확실하다(#320 이전의 `_server_reset_match()` 가 손으로 비우던 것을 대신한다).
+func _end_online_match(reason: String) -> void:
+	if _match_closed:
+		return
+	_match_closed = true
+	Lobby.server_end_match(reason)
+	# 판을 멈춰 두고 **조금 뒤에** 다시 연다. 클라이언트가 대기실로 넘어가는 동안에도 입력은
+	# 날아오는데, 바로 다시 열면 그것이 사라진 젤리로 가서 "Node not found"가 쌓인다. 멈춘
+	# 노드도 RPC 는 받으므로 그 사이의 입력은 조용히 버려진다.
+	process_mode = Node.PROCESS_MODE_DISABLED
+	get_tree().create_timer(SERVER_RELOAD_DELAY).timeout.connect(get_tree().reload_current_scene)
+
+
+## 서버가 경기를 끝냈다 (클라이언트). 대기실로 돌아간다.
+func _on_match_ended(_reason: String) -> void:
+	if is_inside_tree():
+		get_tree().change_scene_to_file("res://scenes/select.tscn")
+
+
+## 서버와 끊겼다 (클라이언트). 사유는 `Network.last_failure` 에 남아 타이틀이 보여준다.
+func _on_disconnected(_reason: String) -> void:
+	if is_inside_tree():
+		get_tree().change_scene_to_file("res://scenes/title.tscn")
 
 
 # ─────────────────────────── 라운드 진행 ───────────────────────────
@@ -272,7 +386,7 @@ func _on_player_died(player_id: int) -> void:
 
 	# 장면은 점수를 적은 뒤에 띄운다 — 장면이 걷힌 뒤에 드러나는 HUD 카드의 동그라미가
 	# 이미 새 점수여야 한다. 반대 순서면 장면이 3점을 축하한 직후에 카드가 2점을 적고 있다.
-	_play_point_gain(id, total, final_point)
+	_play_point_gain.rpc(id, total, final_point)
 
 
 ## 양쪽을 되살리고 판을 깨끗이 만든다. 여기서 안 지운 값은 다음 라운드로 새어 나간다.
@@ -291,13 +405,13 @@ func _start_round() -> void:
 	# 지형만 갈아 버려, 젤리가 허공이나 벽 속에서 판을 시작한다.
 	#
 	# 뽑는 방식은 `_pick_round_map()` 이 정한다 — **판마다 반드시 다른 맵**이다 (#310).
-	_load_map(_pick_round_map())
+	_receive_round_map.rpc(_pick_round_map())
 
 	for projectile in projectiles_root.get_children():
 		projectile.queue_free()
 
 	_next_hit_at.clear()
-	_special_ready_at.clear()
+	_clear_cooldowns.rpc()
 	_special_pending.clear()
 	_punch_pending.clear()
 	_sword_swings.clear()
@@ -320,7 +434,7 @@ func _start_round() -> void:
 	# 매 판 끼면 3점 경기에서 열 번 넘게 보게 된다.
 	if not _intro_shown:
 		_intro_shown = true
-		_play_match_intro()
+		_play_match_intro.rpc()
 		# **그동안 움직이지 못하게 얼린다.** 젤리는 바로 위에서 이미 스폰됐고, 카드를
 		# 여는 `_begin_pick_phase()`가 얼리는 일까지 하는데 그것이 2초 뒤로 밀렸다 —
 		# 안 얼리면 그림 뒤에서 빈손으로 2초 동안 서로 밀치고 있게 된다.
@@ -358,6 +472,14 @@ func _begin_pick_phase() -> void:
 		return
 
 	_picking = true
+	if Network.is_server():
+		# **온라인은 둘이 동시에 각자 기기에서 고른다** (#361). 화면이 둘이라 차례를 기다릴
+		# 이유가 없고, 각자 자기 몫만 받으므로 상대 패도 안 보인다.
+		_pick_deadline = _now() + WEAPON_PICK_TIME
+		for player: Player in players_root.get_children():
+			_receive_pick_start.rpc_id(player.owner_peer,
+					_pick_options[player.player_id], WEAPON_PICK_TIME, player.player_id)
+		return
 	_open_pick_turn(_next_picker())
 
 
@@ -398,9 +520,37 @@ func _take_pick(index: int) -> void:
 	_open_pick_turn(next_picker)
 
 
-## 카드를 눌렀다 (`weapon_pick.gd`의 신호). 확정은 여기서 한다.
+## 카드를 눌렀다 (`weapon_pick.gd`의 신호). 확정은 판정하는 쪽이 한다 —
+## 온라인 클라이언트는 고른 자리만 서버로 보낸다.
 func _on_weapon_chosen(index: int) -> void:
+	if Network.is_client():
+		_receive_pick.rpc_id(1, index)
+		return
 	_take_pick(index)
+
+
+## 온라인 무기 선택이 열렸다 (클라이언트). **자기 몫만** 받는다.
+@rpc("authority", "call_remote", "reliable")
+func _receive_pick_start(choices: Array, seconds: float, player_id: int) -> void:
+	weapon_pick.open(choices, seconds, player_id)
+
+
+## 클라이언트가 고른 카드 (**서버가 받는다**). 넘어오는 값은 **후보 배열에서의 자리**다 —
+## 무기 이름을 받으면 후보에 없는 무기를 적어 보낼 수 있다.
+@rpc("any_peer", "call_remote", "reliable")
+func _receive_pick(index: int) -> void:
+	if not Network.is_server() or not _picking:
+		return
+	var player_id := Lobby.player_id_of(multiplayer.get_remote_sender_id())
+	var choices: Array = _pick_options.get(player_id, [])
+	# 이미 고른 사람의 두 번째 요청은 버린다 — 받아 주면 상대가 기다리는 동안 바꿔 가며 고른다.
+	if choices.is_empty() or _pick_choices.has(player_id):
+		return
+	if index < 0 or index >= choices.size():
+		return
+	_pick_choices[player_id] = choices[index]
+	if _pick_choices.size() >= _pick_options.size():
+		_finish_pick_phase()
 
 
 ## 제한 시간이 다 됐다 — 그 사람 몫은 후보 중에서 대신 뽑는다 (#205).
@@ -430,7 +580,7 @@ func _finish_pick_phase() -> void:
 		player.set_weapon(chosen)
 		# 궁극기 버튼에도 이번 라운드 무기 그림을 보여준다 (#334) — 쿨타임과 달리
 		# 라운드마다 한 번만 바뀌는 값이라 여기서 한 번만 넘긴다.
-		touch_controls.set_weapon(player_id, chosen)
+		_show_skill_weapon.rpc(player_id, chosen)
 		# 뽑기는 무기를 바꾼 **뒤에** 한다 (#134) — 지난 무기로 뽑으면 폭탄·표창이
 		# 아닌 무기에서는 늘 false가 되어 강화가 영영 안 나온다.
 		player.set_empowered(_roll_empowered(chosen))
@@ -443,10 +593,29 @@ func _finish_pick_phase() -> void:
 
 	_pick_options.clear()
 	_pick_choices.clear()
-	weapon_pick.close()
+	_close_weapon_pick.rpc()
 
 	_round_opens_at = _now() + Combat.COUNTDOWN_TIME
+	_play_countdown.rpc()
+
+
+## 무기 카드를 닫는다. 온라인이면 두 기기에서 같이 닫힌다.
+@rpc("authority", "call_local", "reliable")
+func _close_weapon_pick() -> void:
+	weapon_pick.close()
+
+
+## 판이 열리기 전 카운트다운. 세는 것은 화면이고 **판을 여는 것은 판정하는 쪽이다** —
+## 실제 시작 시각은 `_round_opens_at` 하나로 정해진다.
+@rpc("authority", "call_local", "reliable")
+func _play_countdown() -> void:
 	countdown.play()
+
+
+## 궁극기 버튼에 이번 라운드 무기 그림을 보여준다 (#334).
+@rpc("authority", "call_local", "reliable")
+func _show_skill_weapon(player_id: int, weapon_id: String) -> void:
+	touch_controls.set_weapon(player_id, weapon_id)
 
 
 ## 다 세었다 — 얼음을 풀어 판을 연다 (요청).
@@ -499,7 +668,12 @@ func _tick_round() -> void:
 		_begin_pick_phase()
 	# 제한 시간이 다 됐다 — 이번 차례 몫을 대신 뽑는다 (#205).
 	if _picking and _pick_deadline > 0.0 and now >= _pick_deadline:
-		_auto_pick()
+		# 온라인은 둘이 동시에 고르므로 차례가 없다 — 안 고른 사람 몫은 `_finish_pick_phase()`가
+		# 후보에서 뽑는다.
+		if Network.is_server():
+			_finish_pick_phase()
+		else:
+			_auto_pick()
 	# 다 셌다 — 얼음을 풀어 판을 연다 (요청).
 	if _round_opens_at > 0.0 and now >= _round_opens_at:
 		_round_opens_at = 0.0
@@ -507,14 +681,20 @@ func _tick_round() -> void:
 	# 마지막 포인트 장면이 끝났다 — 미뤄 둔 결과 화면을 이제 띄운다 (#273).
 	if _result_at > 0.0 and now >= _result_at:
 		_result_at = 0.0
-		_show_match_result(_result_winner)
+		_show_match_result.rpc(_result_winner)
 	if _return_at > 0.0 and now >= _return_at:
 		_return_at = 0.0
 		_return_to_select()
 
 
-## 점수와 안내 문구를 화면에 반영한다.
+## 점수와 안내 문구를 화면에 반영한다. 온라인이면 두 기기에도 같이 적힌다.
 func _update_round(new_banner: String) -> void:
+	_receive_round.rpc(scores, new_banner)
+
+
+@rpc("authority", "call_local", "reliable")
+func _receive_round(new_scores: Dictionary, new_banner: String) -> void:
+	scores = new_scores
 	banner = new_banner
 	_update_hud()
 
@@ -528,6 +708,7 @@ func _update_round(new_banner: String) -> void:
 ##
 ## **점수가 난 자리에서 바로 부르지 않는다** (이슈 #273) — 마지막 포인트의 획득 장면이
 ## 끝난 뒤에 `_tick_round`가 부른다. 여기서 읽는 최종 점수는 그 전에 이미 적혀 있다.
+@rpc("authority", "call_local", "reliable")
 func _show_match_result(winner_id: int) -> void:
 	var winner := get_player(winner_id)
 	if winner == null:
@@ -663,6 +844,13 @@ func _pick_round_map() -> String:
 	return _last_map
 
 
+## 이번 라운드의 지형 (#361). 뽑는 것은 판정하는 쪽(`_start_round`)이고 모두가 같은 이름을 받는다.
+## **이름만 싣는다** — 같은 이름이면 같은 씬 파일을 열고, 그 안의 스폰 마커까지 같다.
+@rpc("authority", "call_local", "reliable")
+func _receive_round_map(map_name: String) -> void:
+	_load_map(map_name)
+
+
 ## 맵 지형을 MapRoot 아래에 붙인다.
 ## **라운드마다 다시 불린다**(`_start_round`) — 두 번째 호출이 깨끗해야 한다.
 func _load_map(map_name: String) -> void:
@@ -724,8 +912,19 @@ func _on_fish_struck(body: Node2D, direction: float) -> void:
 ##
 ## **판이 도는 중에는 다시 재지 않는다** — 창 크기가 바뀔 때마다 맵을 옮기면 이미 서 있는
 ## 젤리가 지형 밖에 남아 떨어진다. 다음 판에서 `_load_map()` 이 다시 잰다.
+##
+## **온라인에서는 맵이 아니라 화면을 민다** (#361). 좌표는 서버가 정하는데 서버(헤드리스)와
+## 기기의 화면 폭이 다르다 — 맵을 밀면 같은 좌표가 기기마다 다른 자리를 가리켜, 젤리가
+## 발판에서 떠 보인다. 그래서 세상 좌표는 서버와 같게(맵 원점 0) 두고, 클라이언트만
+## 뷰포트의 `canvas_transform` 으로 통째로 옮긴다. UI 는 CanvasLayer 라 따라 움직이지 않는다.
 func _center_map() -> void:
-	_map_offset = ((get_viewport_rect().size - Maps.SIZE) * 0.5).floor()
+	var offset := ((get_viewport_rect().size - Maps.SIZE) * 0.5).floor()
+	if Network.is_online():
+		_map_offset = Vector2.ZERO
+		if Network.is_client():
+			get_viewport().canvas_transform = Transform2D(0.0, offset)
+	else:
+		_map_offset = offset
 	if _map != null:
 		_map.position = _map_offset
 
@@ -747,7 +946,12 @@ func _spawn_facing(index: int) -> int:
 
 ## 경기가 끝났다 — 선택 창으로 돌아간다. 씬이 통째로 새로 열리므로 다음 경기는
 ## 점수도 표도 깨끗한 자리에서 시작한다.
+##
+## 온라인 서버는 화면을 옮기지 않고 두 사람을 대기실로 돌려보낸다 (`_end_online_match`).
 func _return_to_select() -> void:
+	if Network.is_server():
+		_end_online_match("")
+		return
 	get_tree().change_scene_to_file("res://scenes/select.tscn")
 
 
@@ -770,6 +974,10 @@ func _now() -> float:
 # ─────────────────────────── 전투 틱 ───────────────────────────
 
 func _physics_process(_delta: float) -> void:
+	# 온라인 클라이언트는 판정하지 않는다 (#361) — 궁극기 버튼의 쿨타임만 자기 시계로 그린다.
+	if Network.is_client():
+		_sync_special_ready()
+		return
 	_sync_special_ready()
 	_check_basic_attacks()
 	_check_pending_specials()
@@ -797,6 +1005,18 @@ func _sync_special_ready() -> void:
 		var weapon := Weapons.get_weapon(player.weapon_id)
 		var total: float = weapon.get("special_cooldown", 0.0)
 		touch_controls.set_cooldown(player.player_id, ready_at - now, total)
+
+
+## 특수 쿨타임을 건다. 온라인이면 클라이언트도 **남은 초**를 받아 자기 시계로 센다 (#361) —
+## 기기마다 시계가 다르므로 끝나는 시각이 아니라 길이를 보낸다. 판정은 서버 값만 본다.
+@rpc("authority", "call_local", "reliable")
+func _start_cooldown(player_id: int, seconds: float) -> void:
+	_special_ready_at[player_id] = _now() + seconds
+
+
+@rpc("authority", "call_local", "reliable")
+func _clear_cooldowns() -> void:
+	_special_ready_at.clear()
 
 
 ## 기본 공격은 조작 없이 자동으로 들어간다 — 근접은 닿으면, 원거리는 간격마다.
@@ -871,7 +1091,7 @@ func _try_melee_basic(attacker: Player, target: Player) -> void:
 	# 나온 값이라, 기절을 거는 능력이 다른 무기에 붙어도 번개와 기절이 어긋나지 않는다.
 	# 지금 이 길로 오는 것은 망치 특수뿐이다.
 	if stun > 0.0:
-		_play_lightning_strike(target.global_position + Vector2(0.0, Player.BODY_BOTTOM))
+		_play_lightning_strike.rpc(target.global_position + Vector2(0.0, Player.BODY_BOTTOM))
 
 
 ## 이 무기가 근접인가. `basic_kind` 가 "melee" 로 시작하면 참이다 —
@@ -1143,7 +1363,7 @@ func _cone_blast(attacker: Player, weapon: Dictionary) -> void:
 	var spread: float = weapon["special_cone_angle"]
 	# **맞았는지와 무관하게 먼저 띄운다.** 빗나간 것도 "여기까지였다"로 보여야 한다
 	# (착지 충격파를 띄우는 이유 #167과 같다).
-	_play_shotgun_blast(
+	_play_shotgun_blast.rpc(
 		attacker.global_position + Vector2(0.0, Player.WEAPON_CENTER_Y),
 		signf(float(attacker.facing)), reach, spread)
 	var target := _opponent_of(attacker.player_id)
@@ -1235,7 +1455,7 @@ func _punch_cone(attacker: Player, weapon: Dictionary) -> bool:
 		_resolve_punch(attacker, shot)
 		return true
 
-	_play_punch_range(shot["origin"], aim, reach, spread, shot["charged"], windup)
+	_play_punch_range.rpc(shot["origin"], aim, reach, spread, shot["charged"], windup)
 	shot["at"] = _now() + windup
 	_punch_pending[player_id] = shot
 	return true
@@ -1283,7 +1503,7 @@ func _tick_sword_swings() -> void:
 		# 비율은 **맞는 순간의** 현재 체력에 걸린다 — 휘두르는 동안 깎였으면 그만큼 적다.
 		target.apply_hit(target.hp * float(swing["hp_ratio"]),
 			int(swing["knockback"]), attacker.global_position.x, 0.0, "special")
-		_play_light_burst(target.global_position + Vector2(0.0, Player.BODY_BOTTOM))
+		_play_light_burst.rpc(target.global_position + Vector2(0.0, Player.BODY_BOTTOM))
 
 
 ## 굳혀 둔 부채꼴로 판정하고 주먹 연출을 띄운다 (#231).
@@ -1296,7 +1516,7 @@ func _tick_sword_swings() -> void:
 func _resolve_punch(attacker: Player, shot: Dictionary) -> void:
 	var aim: float = shot["aim"]
 	var reach: float = shot["reach"]
-	_play_heavy_punch(shot["origin"], aim, reach, shot["spread"], shot["charged"])
+	_play_heavy_punch.rpc(shot["origin"], aim, reach, shot["spread"], shot["charged"])
 
 	var target := _opponent_of(attacker.player_id)
 	if target == null or not target.alive:
@@ -1363,9 +1583,11 @@ func _launch_velocity(dir: float, angle_degrees: float,
 
 ## 투사체 노드를 만들어 화면에 붙인다.
 func _spawn_projectile(data: Dictionary) -> void:
-	var projectile := PROJECTILE_SCENE.instantiate() as Projectile
-	projectile.name = "Projectile_%d" % int(data["id"])
-	projectile.setup(data)
+	var projectile := projectile_spawner.spawn(data) as Projectile
+	if projectile == null:
+		return
+	# 맞힌 것을 알리는 신호는 판정하는 쪽에서만 받는다 — 이 함수가 거기서만 돈다.
+	# 온라인 클라이언트의 탄은 스포너가 만들어 그리기만 하고 신호를 내지 않는다.
 	projectile.finished.connect(_on_projectile_finished)
 	projectile.picked_up.connect(_on_dagger_picked_up)
 	projectile.swapped.connect(_on_positions_swapped)
@@ -1373,7 +1595,16 @@ func _spawn_projectile(data: Dictionary) -> void:
 	projectile.sparked.connect(_on_dagger_sparked)
 	projectile.burst.connect(_on_cannon_burst)
 	projectile.exploded.connect(_on_bomb_exploded)
-	projectiles_root.add_child(projectile)
+
+
+## 스폰 데이터로 투사체 노드를 만든다 (`MultiplayerSpawner.spawn_function`, #361).
+## **모든 기기에서** 같은 데이터로 불린다 — 이름도 데이터의 id에서 나오므로 같다.
+## 서버가 `queue_free()` 하면 클라이언트에서도 함께 사라진다.
+func _make_projectile(data: Dictionary) -> Node:
+	var projectile := PROJECTILE_SCENE.instantiate() as Projectile
+	projectile.name = "Projectile_%d" % int(data["id"])
+	projectile.setup(data)
+	return projectile
 
 
 ## 다 쓴 투사체를 치운다.
@@ -1406,7 +1637,7 @@ func _on_special_requested(player_id: int, long_press: bool) -> void:
 		return
 	if not _execute_special(attacker, target, weapon, long_press):
 		return
-	_special_ready_at[player_id] = now + weapon["special_cooldown"]
+	_start_cooldown.rpc(player_id, weapon["special_cooldown"])
 
 
 ## 무기별 특수 공격. 발동했으면 true (쿨타임이 돌아간다).
@@ -1640,6 +1871,7 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 ## 잠깐 떴다 스스로 사라지고 아무것도 맞히지 않으므로 나중에 지워 줄 것이 없다.
 
 ## 검 특수의 빛기둥. `at`은 맞은 젤리의 발밑이다.
+@rpc("authority", "call_local", "reliable")
 func _play_light_burst(at: Vector2) -> void:
 	var burst := LIGHT_BURST_SCENE.instantiate()
 	effects_root.add_child(burst)
@@ -1653,6 +1885,7 @@ func _play_light_burst(at: Vector2) -> void:
 ##
 ## **위치와 값을 `add_child` 전에 넣는다.** `_ready()`가 붙는 순간 돌면서 위치로 난수
 ## 씨앗을 잡기 때문이다 — 나중에 넣으면 모든 발사가 (0, 0)으로 같은 씨앗을 받는다.
+@rpc("authority", "call_local", "reliable")
 func _play_shotgun_blast(at: Vector2, aim: float, reach: float, spread: float) -> void:
 	var blast := SHOTGUN_BLAST_SCENE.instantiate()
 	blast.position = at
@@ -1664,6 +1897,7 @@ func _play_shotgun_blast(at: Vector2, aim: float, reach: float, spread: float) -
 
 ## 강펀치가 곧 들어올 범위 (#231). 안쪽이 `windup`에 걸쳐 차오르므로 **언제 들어오는지**도
 ## 같이 보인다. 그리는 부채꼴은 실제로 맞는 부채꼴과 같다.
+@rpc("authority", "call_local", "reliable")
 func _play_punch_range(at: Vector2, aim: float, reach: float, spread: float,
 		charged: bool, windup: float) -> void:
 	var range_hint := HEAVY_PUNCH_SCENE.instantiate()
@@ -1678,6 +1912,7 @@ func _play_punch_range(at: Vector2, aim: float, reach: float, spread: float,
 
 
 ## 너클 강펀치의 부채꼴 (#225). `charged`면 다른 디자인으로 뜬다.
+@rpc("authority", "call_local", "reliable")
 func _play_heavy_punch(at: Vector2, aim: float, reach: float, spread: float,
 		charged: bool) -> void:
 	var punch := HEAVY_PUNCH_SCENE.instantiate()
@@ -1693,17 +1928,17 @@ func _play_heavy_punch(at: Vector2, aim: float, reach: float, spread: float,
 
 ## 삼지창 특수가 맞혔다 (투사체가 알려 온다).
 func _on_lightning_struck(at: Vector2) -> void:
-	_play_lightning_strike(at)
+	_play_lightning_strike.rpc(at)
 
 
 ## 단검이 맞혔다 (#250). 번개와 같은 짜임이다 — 탄은 신호만 내고 연출은 여기가 띄운다.
 func _on_dagger_sparked(at: Vector2) -> void:
-	_play_hit_sparks(at)
+	_play_hit_sparks.rpc(at)
 
 
 ## 대포 총 포탄이 맞혔다 (투사체가 알려 온다). 위 둘과 같은 짜임이다.
 func _on_cannon_burst(at: Vector2) -> void:
-	_play_cannon_burst(at)
+	_play_cannon_burst.rpc(at)
 
 
 ## 폭탄이 터졌다 (투사체가 알려 온다).
@@ -1714,10 +1949,11 @@ func _on_cannon_burst(at: Vector2) -> void:
 ## 연출도 같은 자리에서 띄운다 (#262) — 터진 순간이 곧 이 신호다. 소리와 짝이라
 ## 빗나간 폭탄에도 함께 뜬다.
 func _on_bomb_exploded(at: Vector2, blast_radius: float) -> void:
-	_play_bomb_blast(at, blast_radius)
+	_play_bomb_blast.rpc(at, blast_radius)
 
 
 ## 삼지창 특수의 번개. `at`은 맞은 젤리의 발밑이고, 줄기는 화면 위에서 거기까지 내려온다.
+@rpc("authority", "call_local", "reliable")
 func _play_lightning_strike(at: Vector2) -> void:
 	var bolt := LIGHTNING_STRIKE_SCENE.instantiate()
 	# 위치를 붙이기 전에 넣는다 — `_ready()`가 이 값으로 줄기 모양의 씨앗을 잡는다.
@@ -1729,6 +1965,7 @@ func _play_lightning_strike(at: Vector2) -> void:
 ##
 ## 위치를 붙이기 전에 넣는 것은 번개와 같은 이유다 — `_ready()`가 이 값으로 알갱이가
 ## 튀는 방향의 씨앗을 잡아서, 나중에 넣으면 모든 피격이 (0, 0)으로 같은 모양이 된다.
+@rpc("authority", "call_local", "reliable")
 func _play_hit_sparks(at: Vector2) -> void:
 	var sparks := HIT_SPARKS_SCENE.instantiate()
 	sparks.position = at
@@ -1742,6 +1979,7 @@ func _play_hit_sparks(at: Vector2) -> void:
 ## 위치를 붙이기 전에 넣는 것은 알갱이·번개와 같은 이유다 — `_ready()`가 이 값으로
 ## 살과 불티가 뻗는 방향의 씨앗을 잡아서, 나중에 넣으면 모든 폭발이 (0, 0)으로
 ## 같은 모양이 된다.
+@rpc("authority", "call_local", "reliable")
 func _play_bomb_blast(at: Vector2, blast_radius: float) -> void:
 	var blast := BOMB_BLAST_SCENE.instantiate()
 	blast.position = at
@@ -1754,6 +1992,7 @@ func _play_bomb_blast(at: Vector2, blast_radius: float) -> void:
 ## 위치를 붙이기 전에 넣는 것은 알갱이·번개와 같은 이유다 — `_ready()`가 이 값으로
 ## 살과 알갱이가 뻗는 방향의 씨앗을 잡아서, 나중에 넣으면 모든 피격이 (0, 0)으로
 ## 같은 모양이 된다.
+@rpc("authority", "call_local", "reliable")
 func _play_cannon_burst(at: Vector2) -> void:
 	var burst := CANNON_BURST_SCENE.instantiate()
 	burst.position = at
@@ -1765,6 +2004,7 @@ func _play_cannon_burst(at: Vector2) -> void:
 ##
 ## 이 그림을 띄운 뒤 `MATCH_INTRO_TIME` 만큼 무기 선택을 미룬다 — 그동안
 ## 두 젤리는 얼려 둔다. 미루는 것도 얼리는 것도 부르는 쪽(`_start_round`)의 몫이다.
+@rpc("authority", "call_local", "reliable")
 func _play_match_intro() -> void:
 	match_intro.play()
 
@@ -1775,16 +2015,20 @@ func _play_match_intro() -> void:
 ## "누가 몇 점이 되었다" 하나만 보내고 그것을 자기 편으로 읽는지 남의 편으로 읽는지는
 ## 받는 쪽이 정했다 — 그래서 같은 순간에 한 기기에는 파란 띠가, 다른 기기에는 빨간
 ## 띠가 떴다. 지금은 화면이 하나뿐이라 가를 것이 없다.
+@rpc("authority", "call_local", "reliable")
 func _play_point_gain(scorer_id: int, score_after: int, is_final: bool) -> void:
 	var scorer := get_player(scorer_id)
 	if scorer == null:
 		return
-	point_gain.play(scorer.player_name, scorer.character_id, score_after, true, is_final)
+	# 온라인에서는 다시 **자기 편 기준**이다 (#361) — 딴 쪽 기기는 파란 띠, 잃은 쪽 기기는
+	# 빨간 띠. 오프라인은 화면이 하나라 늘 딴 사람 기준이다.
+	var as_gain := not Network.is_client() or scorer.is_local_player()
+	point_gain.play(scorer.player_name, scorer.character_id, score_after, as_gain, is_final)
 
 
 ## 빨간 표창이 자리를 바꿨다 (투사체가 알려 온다).
 func _on_positions_swapped(from_position: Vector2, to_position: Vector2) -> void:
-	_play_swap_burst(from_position, to_position)
+	_play_swap_burst.rpc(from_position, to_position)
 
 
 ## 위치 교환 연출. **두 자리에 하나씩** 띄운다 — 하나만 띄우면 어디로 갔는지 알 수 없다.
@@ -1794,6 +2038,7 @@ func _on_positions_swapped(from_position: Vector2, to_position: Vector2) -> void
 ##
 ## 원점을 젤리 몸 한가운데로 올린다. 넘어오는 위치는 발밑 기준(`global_position`)이고,
 ## 몸 전체가 사라졌다 나타나는 연출이라 발밑에서 터지면 아래로 쏠려 보인다.
+@rpc("authority", "call_local", "reliable")
 func _play_swap_burst(from_position: Vector2, to_position: Vector2) -> void:
 	for at: Vector2 in [from_position, to_position]:
 		var burst := SWAP_BURST_SCENE.instantiate()
@@ -1823,7 +2068,7 @@ func _on_forced_landed(player_id: int, at: Vector2) -> void:
 
 	# 연출은 맞았는지와 무관하게 띄운다 — 빗나간 것도 "여기까지였다"로 보여야 한다.
 	# 속도까지 넘겨서 **화면에 보이는 앞선이 곧 맞는 경계**가 되게 한다.
-	_play_shockwave(at, radius, speed)
+	_play_shockwave.rpc(at, radius, speed)
 
 	var damage: float = info.get("landing_damage", 0.0)
 	if damage <= 0.0:
@@ -1880,6 +2125,7 @@ func _tick_ruptures() -> void:
 ## 착지 땅 격파. `at`은 떨어진 자리, `radius`는 **좌우 각각 실제로 맞는 거리**,
 ## `speed`는 앞선이 뻗어 나가는 속도다 — 셋 다 판정에 쓰는 값 그대로다.
 ## 보이는 것과 맞는 범위가 어긋나면 이 연출이 거짓말이 된다.
+@rpc("authority", "call_local", "reliable")
 func _play_shockwave(at: Vector2, radius: float, speed: float) -> void:
 	var wave := SHOCKWAVE_SCENE.instantiate()
 	wave.radius = radius
@@ -1942,5 +2188,7 @@ func _score_text(score: int, mirrored: bool) -> String:
 
 func _unhandled_input(event: InputEvent) -> void:
 	# ESC로 경기를 그만두고 타이틀로 돌아간다
+	# 온라인이면 접속도 끊는다 — 남은 사람은 서버가 대기실로 돌려보낸다 (#361).
 	if event.is_action_pressed("ui_cancel"):
+		Network.leave()
 		get_tree().change_scene_to_file("res://scenes/title.tscn")

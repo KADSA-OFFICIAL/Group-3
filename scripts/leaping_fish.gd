@@ -84,6 +84,11 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	_age_splashes(delta)
 	if not _leaping:
+		# 온라인 클라이언트는 언제 뛸지 스스로 정하지 않는다 (#361) — 기기마다 따로 뽑으면
+		# 화면의 물고기와 서버에서 젤리를 미는 물고기가 다른 물고기가 된다. 서버가 뛸 때
+		# `_receive_leap` 으로 같은 궤적을 받는다.
+		if Network.is_client():
+			return
 		_wait -= delta
 		if _wait <= 0.0:
 			_start_leap()
@@ -120,8 +125,20 @@ func _start_leap() -> void:
 	# 넓은 쪽으로 뛴다 — 가장자리에서 바깥으로 뛰면 거리가 모자라 제자리에서 퐁당한다.
 	var direction := 1.0 if from_x < (MIN_X + MAX_X) * 0.5 else -1.0
 	var to_x := clampf(from_x + direction * _rng.randf_range(SPAN_MIN, SPAN_MAX), MIN_X, MAX_X)
-	leap_now(from_x, to_x, _rng.randf_range(APEX_MIN_Y, APEX_MAX_Y),
-			_rng.randf_range(LEAP_TIME_MIN, LEAP_TIME_MAX))
+	var apex_y := _rng.randf_range(APEX_MIN_Y, APEX_MAX_Y)
+	var duration := _rng.randf_range(LEAP_TIME_MIN, LEAP_TIME_MAX)
+	leap_now(from_x, to_x, apex_y, duration)
+	# 전투 화면에 들어온 피어에게만 보낸다 — 경기 사이에 서버가 깔아 둔 임시 맵에도
+	# 물고기가 있을 수 있는데, 대기실에 있는 피어에게는 이 노드가 없다.
+	if Network.is_server():
+		for peer in Lobby.viewers:
+			_receive_leap.rpc_id(peer, from_x, to_x, apex_y, duration)
+
+
+## 서버가 정한 점프 (온라인 클라이언트, #361). 궤적이 같으니 화면의 물고기가 서버의 물고기와 겹친다.
+@rpc("authority", "call_remote", "reliable")
+func _receive_leap(from_x: float, to_x: float, apex_y: float, duration: float) -> void:
+	leap_now(from_x, to_x, apex_y, duration)
 
 
 func _end_leap() -> void:

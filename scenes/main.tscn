@@ -18,6 +18,12 @@ layer = -1
 [node name="Fill" type="Node2D" parent="Backdrop"]
 script = ExtResource("4_backdrop")
 
+[node name="PlayerSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../Players")
+
+[node name="ProjectileSpawner" type="MultiplayerSpawner" parent="."]
+spawn_path = NodePath("../Projectiles")
+
 [node name="MapRoot" type="Node2D" parent="."]
 
 [node name="Players" type="Node2D" parent="."]
