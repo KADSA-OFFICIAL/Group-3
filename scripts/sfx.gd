@@ -1,16 +1,19 @@
 extends Node
 ## 효과음 (오토로드 싱글턴 Sfx, 이슈 #373).
 ##
+## **무기 소리만 난다** (#379, 사용자 요청) — 젤리 몸(걸음·점프·피격·사망 …), 판 진행·화면
+## (카운트다운·포인트·승리·카드·버튼), 무기끼리 부딪침 소리는 들어 본 뒤 뺐다. 되살리려면
+## #373~#376 이력의 `tools/gen_sfx.py` 와 호출부를 본다.
+##
 ## 소리는 `assets/sfx/<이름>.wav` 이고 `tools/gen_sfx.py` 가 합성해서 만든다 — 소리를
 ## 고치려면 그 스크립트의 숫자를 바꿔 다시 돌린다. 파일이 없는 이름은 **조용히** 넘어간다
 ## (무기 그림이 없을 때 막대로 대신하는 것과 같은 태도다 — 소리 하나 빠졌다고 게임이 멈추지
 ## 않는다).
 ##
 ## **부르는 길이 둘이다.**
-##   `play()` — 이 기기에서만 낸다. 모든 기기에서 도는 자리(`_receive_*`·`_play_*` RPC,
-##              화면 연출, 버튼)에서 부른다. 온라인 서버는 아무것도 내지 않는다.
-##   `cue()`  — **판정하는 쪽에서만 도는 자리**(`main.gd` 의 판정, `Player.apply_movement`,
-##              `Projectile._on_body_entered`)에서 부른다. 오프라인이면 그 자리에서 내고,
+##   `play()` — 이 기기에서만 낸다. 모든 기기에서 도는 자리(`_receive_*`·`_play_*` RPC)에서
+##              부른다. 온라인 서버는 아무것도 내지 않는다.
+##   `cue()`  — **판정하는 쪽에서만 도는 자리**(`main.gd` 의 판정, `Projectile._on_body_entered`)에서 부른다. 오프라인이면 그 자리에서 내고,
 ##              온라인 서버면 전투 화면을 연 피어(`Lobby.viewers`)에게 보낸다 — 대기실 피어에게
 ##              보내지 않는 것은 `Player._send_state()` 와 같은 이유다. 클라이언트에서는 무시한다.
 ## 같은 자리에서 둘을 섞어 부르면 온라인 클라이언트에서 두 번 들린다 — 그 자리가 어느
@@ -22,8 +25,8 @@ signal played(sound: String)
 const DIR := "res://assets/sfx/"
 ## 동시에 낼 수 있는 소리 수. 넘치면 가장 오래 전에 시작한 것을 끊는다.
 const VOICES := 20
-## 같은 소리가 이 간격 안에 또 오면 버린다 — 지속 데미지(0.2초 틱)·연사·두 젤리의
-## 발걸음이 겹쳐 한 소리가 쌓여 커지는 것을 막는다.
+## 같은 소리가 이 간격 안에 또 오면 버린다 — 지속 데미지(0.2초 틱)·연사가 겹쳐
+## 한 소리가 쌓여 커지는 것을 막는다.
 const MIN_GAP := 0.045
 ## 같은 소리를 되풀이해도 기계음처럼 안 들리게 음높이를 조금씩 흔든다.
 const PITCH_JITTER := 0.06
@@ -55,22 +58,6 @@ const WEAPON_KEYS := {
 ## 길게 눌렀을 때 특수가 다른 기술이 되는 무기 (방패: 짧게 던지기 · 길게 크기 증가).
 const LONG_PRESS_SPECIALS := {
 	"방패": "shield_grow",
-}
-
-## 근접 공격이 상대 무기에 막혔을 때의 재질 (`clash_<재질>`). 때린 쪽 무기로 고른다.
-const CLASH_MATERIALS := {
-	"검": "metal",
-	"단검": "metal",
-	"삼지창": "metal",
-	"표창": "metal",
-	"너클": "metal",
-	"양날 도끼": "metal",
-	"광선검": "energy",
-	"전기톱": "saw",
-	"망치": "heavy",
-	"장대": "wood",
-	"글러브": "soft",
-	"방패": "shield",
 }
 
 var _streams := {}
@@ -142,11 +129,6 @@ func special_sound(weapon_name: String, long_press: bool) -> String:
 	if long_press and LONG_PRESS_SPECIALS.has(weapon_name):
 		return LONG_PRESS_SPECIALS[weapon_name]
 	return weapon_sound(weapon_name, "special")
-
-
-## 무기끼리 부딪친 소리. 재질이 정해지지 않은 무기는 쇠붙이로 친다.
-func clash_sound(weapon_name: String) -> String:
-	return "clash_" + String(CLASH_MATERIALS.get(weapon_name, "metal"))
 
 
 func _stream(sound: String) -> AudioStream:

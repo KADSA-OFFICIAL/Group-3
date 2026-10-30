@@ -195,7 +195,6 @@ func open(choices: Array, seconds: float, player_id: int) -> void:
 	_refresh_cursor()
 	# 카드 내용을 다 채운 **뒤에** 연출을 건다 (#263) — 먼저 걸면 빈 카드가 떠오른다.
 	_start_intro()
-	Sfx.play("card_open")
 
 
 ## 제목·안내 문구·짚은 카드 테두리를 고르는 사람의 색으로 칠한다 (#344).
@@ -219,7 +218,6 @@ func _move_cursor(step: int) -> void:
 		return
 	_cursor = (_cursor + step + count) % count
 	_refresh_cursor()
-	Sfx.play("card_move")
 
 
 ## 짚은 카드만 밝게 두고 테두리를 고르는 사람의 색으로 두른다.
@@ -287,7 +285,6 @@ func _on_card_pressed(index: int) -> void:
 		return
 	_cursor = index
 	mark_chosen(index)
-	Sfx.play("card_pick", 0.0, false)
 	# 온라인은 둘이 동시에 고르므로(#361) 다 고른 쪽은 상대를 기다린다.
 	if Network.is_client():
 		_status.text = "선택 완료 — 상대를 기다리는 중..."
