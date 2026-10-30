@@ -44,6 +44,20 @@ const DEFAULT_ADDRESS := "100.102.216.35"
 ## 직접 시간을 잰다 — 안 재면 "접속 중..."에서 오래 멈춘다.
 const JOIN_TIMEOUT_SEC := 8.0
 
+## 에디터 F5 로컬 시험의 서버 주소. 이 컴퓨터에 띄운 헤드리스 서버다.
+const LOCAL_TEST_ADDRESS := "127.0.0.1"
+## 로컬 시험의 자식 프로세스에 띄운 쪽의 PID 를 넘기는 인자. 자식은 이것을 보고
+## 띄운 쪽이 사라지면 스스로 끝난다 — 에디터 정지(F8)는 프로세스를 그냥 죽여서
+## 띄운 쪽이 자식을 정리할 틈이 없다. 낡은 코드의 서버가 7777 을 쥐고 남으면
+## 다음 F5 의 서버가 포트를 못 열고, 새 클라이언트가 RPC 목록이 다른 서버에 붙는다.
+##
+## 살아 있는지는 PID 로 묻지 않고 **심박 파일**로 본다. 윈도의 `OS.is_process_running()` 은
+## 자기가 띄운 프로세스만 알아서, 자식이 부모를 물으면 늘 거짓이다(그래서 1초 만에 다 꺼졌다).
+## 띄운 쪽이 `user://local_test_<PID>.alive` 에 지금 시각을 0.5초마다 적고, 자식은 그 값이
+## `LOCAL_TEST_STALE_SEC` 보다 오래되면 끝난다.
+const LOCAL_TEST_PARENT_ARG := "--local-test-parent="
+const LOCAL_TEST_STALE_SEC := 3.0
+
 enum Role { OFFLINE, SERVER, CLIENT }
 
 ## 이 프로세스의 역할. **`multiplayer.is_server()` 대신 이것을 본다** — 접속이 끊긴 뒤에는
@@ -53,6 +67,11 @@ var role := Role.OFFLINE
 ## 마지막 접속 실패 사유. 타이틀 화면이 한 번 읽고 비운다 — 전투 화면에서 끊기면
 ## 화면이 바뀐 뒤에 사유를 보여줘야 한다.
 var last_failure := ""
+
+## 에디터 F5 로 띄운 로컬 시험인가 (`_launch_local_test()`). 참이면 접속 주소가 127.0.0.1 이다.
+var _local_test := false
+## 로컬 시험에서 띄운 자식 프로세스(서버·두 번째 창)의 PID. 이 창이 닫힐 때 같이 끈다.
+var _local_test_pids: Array[int] = []
 
 
 func _ready() -> void:
@@ -66,6 +85,9 @@ func _ready() -> void:
 		# 헤드리스라 화면도 없어서 "서버 떠 있음"으로 착각하기 쉽다. 바로 끝낸다.
 		if start_server() != OK:
 			get_tree().quit(1)
+	_watch_local_test_parent()
+	if _should_launch_local_test():
+		_launch_local_test()
 
 
 ## 이 기기가 온라인으로 하는 기기인가. **PC 는 온라인, 그 밖(안드로이드)은 오프라인**이다.
@@ -131,6 +153,8 @@ func configured_address() -> String:
 			var value := arg.substr(10).strip_edges()
 			if not value.is_empty():
 				return value
+	if _local_test:
+		return LOCAL_TEST_ADDRESS
 	return DEFAULT_ADDRESS
 
 
@@ -178,6 +202,113 @@ func _fail(reason: String) -> void:
 	var shown := last_failure
 	leave()
 	join_failed.emit(shown)
+
+
+## 에디터 F5 로 창 있게 띄웠는가 — 그러면 혼자서 온라인을 확인하도록 로컬 시험을 띄운다.
+##
+## **에디터 빌드에서만** 켜진다(`editor` 기능 태그). 내보낸 exe 는 지금처럼 팀 서버에 붙는다.
+## 헤드리스(커밋 전 검증), `--server`, `--address=`(팀 서버 등 다른 곳에 붙고 싶을 때),
+## `--offline`, 그리고 로컬 시험이 띄운 자식 자신은 건드리지 않는다.
+func _should_launch_local_test() -> bool:
+	if not OS.has_feature("editor") or not is_online_platform():
+		return false
+	if DisplayServer.get_name() == "headless":
+		return false
+	for arg in _cmdline_args():
+		if arg == "--server" or arg.begins_with("--address=") or arg.begins_with(LOCAL_TEST_PARENT_ARG):
+			return false
+	return true
+
+
+## 이 컴퓨터에 헤드리스 서버 하나와 두 번째 창을 띄운다. 두 창은 화면 좌우에 나란히 놓고,
+## 둘 다 127.0.0.1 의 그 서버로 접속한다. 서버 로그는 보이지 않는다 — 서버 쪽을 봐야 하면
+## `run-server.bat` 처럼 콘솔에서 `--server` 를 따로 띄운다(그러면 여기 서버는 포트를 못 열고 끝난다).
+func _launch_local_test() -> void:
+	_local_test = true
+	var exe := OS.get_executable_path()
+	var project := ProjectSettings.globalize_path("res://")
+	var parent := LOCAL_TEST_PARENT_ARG + str(OS.get_process_id())
+
+	# 자식이 뜨자마자 읽으므로 심박을 먼저 적는다.
+	var heartbeat_path := _heartbeat_path(OS.get_process_id())
+	_write_heartbeat(heartbeat_path)
+	var heartbeat := Timer.new()
+	heartbeat.wait_time = 0.5
+	heartbeat.timeout.connect(_write_heartbeat.bind(heartbeat_path))
+	add_child(heartbeat)
+	heartbeat.start()
+
+	var server := OS.create_process(exe, ["--headless", "--path", project, "--", "--server", parent])
+	if server > 0:
+		_local_test_pids.append(server)
+	else:
+		push_error("로컬 시험 서버를 띄우지 못했습니다.")
+
+	# 화면을 반으로 갈라 왼쪽은 이 창, 오른쪽은 두 번째 창. 16:9 로 맞추되 화면보다 높지 않게.
+	var screen := DisplayServer.screen_get_usable_rect(DisplayServer.window_get_current_screen())
+	var width := screen.size.x / 2
+	var height := mini(width * 9 / 16, screen.size.y)
+	var window := get_window()
+	window.title += " — 로컬 시험 (왼쪽)"
+	# 에디터의 게임 탭에 들어가 있으면(`--embedded`) 이 창의 크기·자리는 에디터가 정한다.
+	if not "--embedded" in OS.get_cmdline_args():
+		window.size = Vector2i(width, height)
+		window.position = screen.position
+
+	var second := OS.create_process(exe, [
+		"--path", project,
+		"--position", "%d,%d" % [screen.position.x + width, screen.position.y],
+		"--resolution", "%dx%d" % [width, height],
+		"--", "--address=" + LOCAL_TEST_ADDRESS, parent,
+	])
+	if second > 0:
+		_local_test_pids.append(second)
+	else:
+		push_error("로컬 시험의 두 번째 창을 띄우지 못했습니다.")
+	print("로컬 시험 — 서버 PID %d, 두 번째 창 PID %d, 주소 %s" % [server, second, LOCAL_TEST_ADDRESS])
+
+
+## 로컬 시험이 띄운 자식이면 띄운 쪽을 1초마다 살핀다. 사라졌으면 같이 끝난다.
+func _watch_local_test_parent() -> void:
+	var parent_pid := 0
+	for arg in _cmdline_args():
+		if arg.begins_with(LOCAL_TEST_PARENT_ARG):
+			parent_pid = arg.substr(LOCAL_TEST_PARENT_ARG.length()).to_int()
+	if parent_pid <= 0:
+		return
+	if DisplayServer.get_name() != "headless":
+		get_window().title += " — 로컬 시험 (오른쪽)"
+	var path := _heartbeat_path(parent_pid)
+	var timer := Timer.new()
+	timer.wait_time = 1.0
+	timer.timeout.connect(func() -> void:
+		var file := FileAccess.open(path, FileAccess.READ)
+		var beat := file.get_as_text().to_float() if file != null else 0.0
+		if Time.get_unix_time_from_system() - beat > LOCAL_TEST_STALE_SEC:
+			get_tree().quit()
+	)
+	add_child(timer)
+	timer.start()
+
+
+func _heartbeat_path(pid: int) -> String:
+	return "user://local_test_%d.alive" % pid
+
+
+func _write_heartbeat(path: String) -> void:
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file != null:
+		file.store_string(str(Time.get_unix_time_from_system()))
+
+
+func _exit_tree() -> void:
+	if not _local_test:
+		return
+	# 자기가 띄운 자식이라 여기서는 `is_process_running()` 이 통한다.
+	for pid in _local_test_pids:
+		if OS.is_process_running(pid):
+			OS.kill(pid)
+	DirAccess.remove_absolute(_heartbeat_path(OS.get_process_id()))
 
 
 func _cmdline_args() -> PackedStringArray:
