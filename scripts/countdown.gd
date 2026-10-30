@@ -49,6 +49,8 @@ const RING_SEGMENTS := 40
 const FONT := preload("res://resources/display_font.tres")
 
 var _elapsed := -1.0
+## 소리를 낸 마지막 칸 (#373). 칸이 바뀌는 순간에 한 번씩 삑 — `START!` 는 다른 소리다.
+var _sounded_step := -1
 
 
 func _ready() -> void:
@@ -58,8 +60,10 @@ func _ready() -> void:
 ## 처음부터 다시 센다.
 func play() -> void:
 	_elapsed = 0.0
+	_sounded_step = -1
 	visible = true
 	queue_redraw()
+	_play_step_sound()
 
 
 func _process(delta: float) -> void:
@@ -70,7 +74,16 @@ func _process(delta: float) -> void:
 		_elapsed = -1.0
 		visible = false
 		return
+	_play_step_sound()
 	queue_redraw()
+
+
+func _play_step_sound() -> void:
+	var step := _step()
+	if step == _sounded_step:
+		return
+	_sounded_step = step
+	Sfx.play("count_go" if step == LABELS.size() - 1 else "count_beep", 0.0, false)
 
 
 ## 지금 칸의 번호(0=3, 1=2, 2=1, 3=START!).

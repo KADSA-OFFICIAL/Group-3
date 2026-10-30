@@ -48,6 +48,7 @@ func _ready() -> void:
 
 
 func _on_start_pressed() -> void:
+	Sfx.play("confirm", 0.0, false)
 	if Network.is_online_platform():
 		_join()
 		return

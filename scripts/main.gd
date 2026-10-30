@@ -654,7 +654,11 @@ func _check_falls() -> void:
 	for player: Player in players_root.get_children():
 		if not player.alive:
 			continue
-		if Combat.is_out_of_bounds(player.global_position, screen) or drowning.has(player):
+		if drowning.has(player):
+			Sfx.cue("splash")
+			player.kill()
+		elif Combat.is_out_of_bounds(player.global_position, screen):
+			Sfx.cue("fall")
 			player.kill()
 
 
@@ -719,6 +723,7 @@ func _show_match_result(winner_id: int) -> void:
 	if winner == null:
 		return
 	_play_result(winner.character_id, "%s 승리!" % winner.player_name)
+	Sfx.play("victory", 0.0, false)
 
 
 func _play_result(character_id: String, title: String) -> void:
@@ -902,6 +907,7 @@ func _on_fish_struck(body: Node2D, direction: float) -> void:
 	# 물고기가 가던 쪽으로 밀리게 한다.
 	player.apply_hit(0.0, Combat.Knockback.MEDIUM, player.global_position.x - direction,
 			0.0, "projectile")
+	Sfx.cue("fish")
 
 
 ## 맵 칸을 화면 가운데에 놓는다 (#329).
@@ -1046,14 +1052,27 @@ func _try_melee_basic(attacker: Player, target: Player) -> void:
 	# 가리는 자세라 그 자세로 때릴 수는 없다 — 탄을 막는 것과 맞바꾸는 값이다.
 	if attacker.is_guarding():
 		return
-	if target.is_invulnerable() or is_blocked(attacker, target):
-		return
 	# 등 뒤의 상대는 못 때린다. 뒤를 잡으면 일방적으로 때릴 수 있다는 뜻이기도 하다.
 	if not _faces(attacker, target):
 		return
 
 	var reach: float = MELEE_REACH + attacker.current_reach()
 	if attacker.global_position.distance_to(target.global_position) > reach:
+		return
+
+	var key := "%d>%d" % [attacker.player_id, target.player_id]
+	var now := _now()
+	# 막힌 공격은 **무기끼리 부딪친 소리**를 낸다 (#373). 예전에는 아무 표시 없이 조용히
+	# 빗나가서, 막혔는지 사거리가 모자랐는지 구분할 수 없었다. 거리·방향을 다 통과한 뒤에만
+	# 내야 엉뚱한 자리에서 안 울린다 — 그래서 위 두 검사를 막기보다 앞으로 옮겼다(셋 다
+	# 그냥 돌아가는 검사라 순서가 결과를 바꾸지 않는다). 박자는 넉백과 같은 0.6초다.
+	if is_blocked(attacker, target):
+		var clash_key := "clash>" + key
+		if now >= _next_hit_at.get(clash_key, 0.0):
+			_next_hit_at[clash_key] = now + Combat.MELEE_HIT_INTERVAL
+			Sfx.cue(Sfx.clash_sound(attacker.weapon_id))
+		return
+	if target.is_invulnerable():
 		return
 
 	# 지속 데미지 무기는 자기 basic_interval 대로 촘촘히 들어간다.
@@ -1063,8 +1082,6 @@ func _try_melee_basic(attacker: Player, target: Player) -> void:
 	if not continuous:
 		interval = maxf(interval, Combat.MELEE_HIT_INTERVAL)
 
-	var key := "%d>%d" % [attacker.player_id, target.player_id]
-	var now := _now()
 	if now < _next_hit_at.get(key, 0.0):
 		return
 	_next_hit_at[key] = now + interval
@@ -1081,6 +1098,8 @@ func _try_melee_basic(attacker: Player, target: Player) -> void:
 	var knock_key := "knock>" + key
 	if now < _next_hit_at.get(knock_key, 0.0):
 		target.apply_dot(weapon["basic_damage"])
+		# 지속 틱은 같은 소리를 작게 — 0.2초마다 크게 울리면 시끄럽다.
+		Sfx.cue(Sfx.weapon_sound(attacker.weapon_id, "hit"), -9.0)
 		return
 	_next_hit_at[knock_key] = now + Combat.MELEE_HIT_INTERVAL
 	# 기절은 무기 표에서 바로 읽지 않는다 — **켜져 있는 능력**에서 나온다
@@ -1088,6 +1107,7 @@ func _try_melee_basic(attacker: Player, target: Player) -> void:
 	var stun := attacker.stun_bonus()
 	target.apply_hit(weapon["basic_damage"], weapon["knockback"],
 		attacker.global_position.x, stun, "basic")
+	Sfx.cue(Sfx.weapon_sound(attacker.weapon_id, "hit"))
 	# 기절을 얹은 타격에는 **번개가 내려친다** — 삼지창이 맞혔을 때와 같은 연출이고
 	# 같은 함수를 쓴다(`_play_lightning_strike`). 자리도 같은 기준인 **맞은 젤리의
 	# 발밑**이다.
@@ -1130,6 +1150,7 @@ func _try_ranged_basic(attacker: Player) -> void:
 			return
 		_next_hit_at[key] = now + weapon["basic_interval"]
 		_dagger_held[player_id] = false
+		Sfx.cue(Sfx.weapon_sound(weapon["name"], "fire"))
 		_server_fire(attacker, {
 			"damage": weapon["basic_damage"],
 			"knockback": weapon["knockback"],
@@ -1156,6 +1177,7 @@ func _try_ranged_basic(attacker: Player) -> void:
 	if not is_zero_approx(arc):
 		shot["launch_angle"] = arc
 		shot["use_gravity"] = true
+	Sfx.cue(Sfx.weapon_sound(weapon["name"], "fire"))
 	_server_fire(attacker, shot)
 
 
@@ -1218,6 +1240,7 @@ func _tick_bleeds() -> void:
 		# 그 오차가 쌓여 3초 동안 들어가는 횟수가 열다섯에서 열넷으로 준다.
 		info["next_at"] = float(info["next_at"]) + interval
 		target.apply_dot(float(info["dps"]) * interval)
+		Sfx.cue("bleed", -4.0)
 
 
 ## 소총 연사 — 한 번 누르면 지속시간 동안 자동으로 나간다.
@@ -1244,6 +1267,8 @@ func _tick_bursts() -> void:
 		info["fired"] = int(info["fired"]) + 1
 		if info["remaining"] > 0:
 			info["remaining"] = int(info["remaining"]) - 1
+		# 연발은 한 발마다 그 무기의 발사음이다 (소총 총성·글러브 로켓 펀치).
+		Sfx.cue(Sfx.weapon_sound(shooter.weapon_id, "fire"))
 		_server_fire(shooter, data)
 
 
@@ -1389,6 +1414,7 @@ func _cone_blast(attacker: Player, weapon: Dictionary) -> void:
 	# 탄이 막혔을 때(`Projectile._blocked`)와 같다. 부채꼴 연출은 위에서 이미 띄웠으므로
 	# 쏜 쪽에는 "여기까지였는데 막혔다"가 보인다.
 	if _guarded_cone(attacker, target):
+		Sfx.cue("clash_shield")
 		return
 	# 표에서 꺼낸 값은 Variant라 명시 타입으로 받는다 (#66).
 	var near: float = weapon["special_damage"]
@@ -1541,6 +1567,7 @@ func _resolve_punch(attacker: Player, shot: Dictionary) -> void:
 			return
 		edge = away / maxf(half, 0.001)
 	if _guarded_cone(attacker, target):
+		Sfx.cue("clash_shield")
 		return
 	var center: float = shot["center"]
 	var damage := lerpf(center, center * float(shot["edge_ratio"]), edge)
@@ -1620,6 +1647,7 @@ func _on_projectile_finished(projectile: Projectile) -> void:
 ## 단검을 주우면 다시 들고 있는 상태가 된다.
 func _on_dagger_picked_up(player_id: int, projectile: Projectile) -> void:
 	_dagger_held[player_id] = true
+	Sfx.cue("dagger_pickup")
 	projectile.queue_free()
 
 
@@ -1642,6 +1670,10 @@ func _on_special_requested(player_id: int, long_press: bool) -> void:
 		return
 	if not _execute_special(attacker, target, weapon, long_press):
 		return
+	# 발동음은 여기 한 곳에서 낸다 (#373) — 무기마다 갈래가 다른 `_execute_special()` 안에
+	# 흩어 두면 새 무기를 더할 때 빠뜨린다. 맞은 순간의 소리(번개·폭발·충격파 …)는
+	# 그 연출을 띄우는 `_play_*()` 가 따로 낸다.
+	Sfx.cue(Sfx.special_sound(weapon["name"], long_press))
 	_start_cooldown.rpc(player_id, weapon["special_cooldown"])
 
 
@@ -1878,6 +1910,7 @@ func _execute_special(attacker: Player, target: Player, weapon: Dictionary, long
 ## 검 특수의 빛기둥. `at`은 맞은 젤리의 발밑이다.
 @rpc("authority", "call_local", "reliable")
 func _play_light_burst(at: Vector2) -> void:
+	Sfx.play("sword_burst")
 	var burst := LIGHT_BURST_SCENE.instantiate()
 	effects_root.add_child(burst)
 	burst.global_position = at
@@ -1920,6 +1953,7 @@ func _play_punch_range(at: Vector2, aim: float, reach: float, spread: float,
 @rpc("authority", "call_local", "reliable")
 func _play_heavy_punch(at: Vector2, aim: float, reach: float, spread: float,
 		charged: bool) -> void:
+	Sfx.play("knuckle_punch_big" if charged else "knuckle_punch")
 	var punch := HEAVY_PUNCH_SCENE.instantiate()
 	# **위치를 add_child 전에 넣는다** — 연출이 `_ready()`에서 위치로 씨앗을 잡으므로
 	# 나중에 넣으면 모든 강펀치가 같은 모양이 된다 (`heavy_punch.gd` 참고).
@@ -1960,6 +1994,7 @@ func _on_bomb_exploded(at: Vector2, blast_radius: float) -> void:
 ## 삼지창 특수의 번개. `at`은 맞은 젤리의 발밑이고, 줄기는 화면 위에서 거기까지 내려온다.
 @rpc("authority", "call_local", "reliable")
 func _play_lightning_strike(at: Vector2) -> void:
+	Sfx.play("lightning")
 	var bolt := LIGHTNING_STRIKE_SCENE.instantiate()
 	# 위치를 붙이기 전에 넣는다 — `_ready()`가 이 값으로 줄기 모양의 씨앗을 잡는다.
 	bolt.position = at
@@ -1972,6 +2007,7 @@ func _play_lightning_strike(at: Vector2) -> void:
 ## 튀는 방향의 씨앗을 잡아서, 나중에 넣으면 모든 피격이 (0, 0)으로 같은 모양이 된다.
 @rpc("authority", "call_local", "reliable")
 func _play_hit_sparks(at: Vector2) -> void:
+	Sfx.play("dagger_hit")
 	var sparks := HIT_SPARKS_SCENE.instantiate()
 	sparks.position = at
 	effects_root.add_child(sparks)
@@ -1986,6 +2022,7 @@ func _play_hit_sparks(at: Vector2) -> void:
 ## 같은 모양이 된다.
 @rpc("authority", "call_local", "reliable")
 func _play_bomb_blast(at: Vector2, blast_radius: float) -> void:
+	Sfx.play("explosion")
 	var blast := BOMB_BLAST_SCENE.instantiate()
 	blast.position = at
 	blast.radius = blast_radius
@@ -1999,6 +2036,7 @@ func _play_bomb_blast(at: Vector2, blast_radius: float) -> void:
 ## 같은 모양이 된다.
 @rpc("authority", "call_local", "reliable")
 func _play_cannon_burst(at: Vector2) -> void:
+	Sfx.play("cannon_hit")
 	var burst := CANNON_BURST_SCENE.instantiate()
 	burst.position = at
 	effects_root.add_child(burst)
@@ -2011,6 +2049,7 @@ func _play_cannon_burst(at: Vector2) -> void:
 ## 두 젤리는 얼려 둔다. 미루는 것도 얼리는 것도 부르는 쪽(`_start_round`)의 몫이다.
 @rpc("authority", "call_local", "reliable")
 func _play_match_intro() -> void:
+	Sfx.play("intro", 0.0, false)
 	match_intro.play()
 
 
@@ -2029,6 +2068,7 @@ func _play_point_gain(scorer_id: int, score_after: int, is_final: bool) -> void:
 	# 빨간 띠. 오프라인은 화면이 하나라 늘 딴 사람 기준이다.
 	var as_gain := not Network.is_client() or scorer.is_local_player()
 	point_gain.play(scorer.player_name, scorer.character_id, score_after, as_gain, is_final)
+	Sfx.play("point_final" if is_final else "point", 0.0, false)
 
 
 ## 빨간 표창이 자리를 바꿨다 (투사체가 알려 온다).
@@ -2045,6 +2085,7 @@ func _on_positions_swapped(from_position: Vector2, to_position: Vector2) -> void
 ## 몸 전체가 사라졌다 나타나는 연출이라 발밑에서 터지면 아래로 쏠려 보인다.
 @rpc("authority", "call_local", "reliable")
 func _play_swap_burst(from_position: Vector2, to_position: Vector2) -> void:
+	Sfx.play("swap")
 	for at: Vector2 in [from_position, to_position]:
 		var burst := SWAP_BURST_SCENE.instantiate()
 		# **위치를 붙이기 전에 넣는다.** `_ready()`가 붙는 순간 돌면서 위치로 난수 씨앗을
@@ -2132,6 +2173,7 @@ func _tick_ruptures() -> void:
 ## 보이는 것과 맞는 범위가 어긋나면 이 연출이 거짓말이 된다.
 @rpc("authority", "call_local", "reliable")
 func _play_shockwave(at: Vector2, radius: float, speed: float) -> void:
+	Sfx.play("axe_slam")
 	var wave := SHOCKWAVE_SCENE.instantiate()
 	wave.radius = radius
 	wave.speed = speed
