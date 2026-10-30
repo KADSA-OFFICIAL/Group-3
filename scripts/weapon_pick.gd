@@ -175,6 +175,7 @@ func open(choices: Array, seconds: float, player_id: int) -> void:
 	_picker = player_id
 	_cursor = 0
 	_ends_at = _now() + seconds
+	_title.text = "%dP 무기 선택" % _picker
 	_card_box.visible = true
 	for index in _cards.size():
 		var card: Button = _cards[index]
@@ -246,12 +247,13 @@ func _visible_card_count() -> int:
 func _unhandled_input(event: InputEvent) -> void:
 	if not _armed or _picker == 0 or not visible:
 		return
-	if event.is_action_pressed(GameState.action(_picker, "right")):
+	# 읽을 키 묶음은 `GameState.input_ids()` 가 정한다 — 온라인 기기는 두 벌 다 받는다 (#361).
+	if GameState.event_pressed(event, _picker, "right"):
 		_move_cursor(1)
-	elif event.is_action_pressed(GameState.action(_picker, "left")):
+	elif GameState.event_pressed(event, _picker, "left"):
 		_move_cursor(-1)
-	elif event.is_action_pressed(GameState.action(_picker, "skill")) \
-			or event.is_action_pressed(GameState.action(_picker, "jump")):
+	elif GameState.event_pressed(event, _picker, "skill") \
+			or GameState.event_pressed(event, _picker, "jump"):
 		_on_card_pressed(_cursor)
 	else:
 		return
@@ -283,7 +285,11 @@ func _on_card_pressed(index: int) -> void:
 		return
 	_cursor = index
 	mark_chosen(index)
-	_status.text = "%dP 선택 완료" % _picker
+	# 온라인은 둘이 동시에 고르므로(#361) 다 고른 쪽은 상대를 기다린다.
+	if Network.is_client():
+		_status.text = "선택 완료 — 상대를 기다리는 중..."
+	else:
+		_status.text = "%dP 선택 완료" % _picker
 	weapon_chosen.emit(index)
 
 

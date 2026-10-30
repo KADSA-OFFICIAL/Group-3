@@ -644,6 +644,12 @@ static func texture(weapon_name: String) -> Texture2D:
 	return texture_file(get_weapon(weapon_name).get("file", ""))
 
 
+## 그림이 없는 자리까지 포함해서 기억해 둔다 — `load()`와 `ResourceLoader.exists()`는
+## 둘 다 디스크를 읽는다. 쿨타임이 차는 순간마다(`Player.set_special_ready()`) 손에 든
+## 무기 그림을 다시 묻는데, 캐시가 없으면 **특수 공격을 쓸 때마다 디스크를 다시 읽어**
+## 짧은 끊김이 생긴다 (요청). 무기 그림은 라운드 내내 바뀌지 않으므로 한 번 읽으면 충분하다.
+static var _texture_cache: Dictionary = {}
+
 ## 파일 이름으로 무기 그림을 찾는다. 무기 하나에 그림이 둘일 때 쓴다 —
 ## 폭탄은 일반(`bomb.png`)과 강화(`bomb_charged.png`)가 따로 있어서
 ## 무기 이름만으로는 어느 쪽인지 고를 수 없다 (#131).
@@ -651,9 +657,11 @@ static func texture_file(file: String) -> Texture2D:
 	if file.is_empty():
 		return null
 	var path := ART_DIR + file
-	if not ResourceLoader.exists(path):
-		return null
-	return load(path)
+	if _texture_cache.has(path):
+		return _texture_cache[path]
+	var tex: Texture2D = load(path) if ResourceLoader.exists(path) else null
+	_texture_cache[path] = tex
+	return tex
 
 
 ## 선택 창 선택창에 보여줄 무기 그림 (#173). `preview_file` 이 있으면 그쪽을,

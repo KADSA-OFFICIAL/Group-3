@@ -48,6 +48,20 @@ var _active := false
 var _held := {}
 
 
+## 조이스틱을 위로 둔 채로 있으면 점프를 매 물리 틱 다시 눌러, 착지하는 순간마다
+## 바로 다시 뛰게 한다 (요청) — 키보드처럼 한 번 떼었다 다시 누를 필요가 없다.
+## **바닥에 있을 때만 실제로 뛰는 것은 `player.gd`의 `apply_movement()` 몫이다** —
+## 공중에 있는 동안은 여기서 아무리 다시 눌러도 `is_on_floor()`가 걸러 준다. 그래서
+## 여기는 늘 다시 누르기만 하면 되고, 땅에 떨어지는 그 틱을 놓치지 않는다.
+##
+## `player.gd`가 입력을 읽는 자리(`_read_input()`)와 같은 물리 틱에 맞춰야 한 틱도
+## 비지 않는다 — `_process()`로 두면 화면 주사율이 물리 틱보다 낮을 때 착지 순간의
+## 눌림이 한 틱 비어 그 프레임만 점프를 놓칠 수 있다.
+func _physics_process(_delta: float) -> void:
+	if bool(_held.get("jump", false)):
+		_fire("jump", true)
+
+
 func _draw() -> void:
 	var center := size * 0.5
 	draw_circle(center, RADIUS, BASE_COLOR)
@@ -93,11 +107,16 @@ func _apply() -> void:
 	_set_action("fast_fall", v.y > FALL_THRESHOLD)
 
 
-## 액션 하나의 상태를 맞춘다. **달라졌을 때만** 이벤트를 내보낸다.
+## 액션 하나의 상태를 맞춘다. **달라졌을 때만** 이벤트를 내보낸다 — `jump`만은
+## `_physics_process()`가 따로 매 틱 다시 눌러 준다(위 설명).
 func _set_action(suffix: String, down: bool) -> void:
 	if bool(_held.get(suffix, false)) == down:
 		return
 	_held[suffix] = down
+	_fire(suffix, down)
+
+
+func _fire(suffix: String, down: bool) -> void:
 	var ev := InputEventAction.new()
 	ev.action = GameState.action(player_id, suffix)
 	ev.pressed = down

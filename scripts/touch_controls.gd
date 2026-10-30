@@ -74,6 +74,29 @@ func set_cooldown(player_id: int, remaining: float, total: float) -> void:
 		skill.set_cooldown(remaining, total)
 
 
+## 궁극기 버튼에 지금 든 무기 그림을 넘긴다 (#334). `main.gd`가 라운드마다
+## 무기를 정한 직후(`set_weapon()` 뒤) 한 번만 부른다 — 쿨타임과 달리 매 틱 바뀌는
+## 값이 아니다.
+func set_weapon(player_id: int, weapon_id: String) -> void:
+	var skill: Control = _skills.get(player_id)
+	if skill != null:
+		skill.weapon_id = weapon_id
+
+
+## 온라인 기기 (#361). 기기 앞에는 한 사람뿐이므로 **왼쪽 한 벌만 남기고 그 사람 것으로 바꾼다** —
+## 2P로 붙었어도 조작물은 왼손 자리에 있고, 색과 내보내는 액션(`p2_…`)만 2P 것이 된다.
+## 오른쪽 한 벌은 숨기고 손가락도 나눠 주지 않는다.
+func set_online_seat(player_id: int) -> void:
+	if player_id <= 0:
+		return
+	$P1Stick.player_id = player_id
+	$P1Skill.player_id = player_id
+	$P2Stick.visible = false
+	$P2Skill.visible = false
+	_pads = [$P1Stick, $P1Skill]
+	_skills = {player_id: $P1Skill}
+
+
 func _release_everything() -> void:
 	_fingers.clear()
 	for pad in _pads:
