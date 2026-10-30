@@ -10,14 +10,15 @@ extends Control
 ## 다른 쪽이 굳는다. `InputEventScreenTouch.index`(손가락 번호)를 볼 수 있는 곳은
 ## `_input()` 하나뿐이라, 받는 곳을 여기 하나로 모으고 조작물에는 나눠만 준다.
 ##
-## ## 마우스도 같이 받는다
+## ## PC 에서는 아예 없다 (#360)
 ##
-## PC 에서 F5 로 확인할 길을 없애지 않기 위해서다. 기기에서는 손가락 하나가 터치와
-## 에뮬레이션된 마우스로 **두 번** 올라오지만, 둘 다 같은 조작물로 가고 조작물의
-## `press()` 는 같은 상태를 다시 넣는 것이라 겹쳐도 탈이 없다.
-
-## 마우스를 손가락 번호로 취급할 때 쓰는 값. 실제 손가락 번호는 0 이상이라 겹치지 않는다.
-const MOUSE_FINGER := -1
+## PC 는 키보드로 조작한다(1P `WASD`+왼쪽 `Shift`, 2P 방향키+`Space`). 조작물이 떠 있으면
+## 반투명이라도 젤리가 서는 바닥을 가리고, 마우스로 눌러도 반응해 젤리가 저절로 움직인다.
+## 그래서 `pc` 기능 태그가 있으면 처음부터 접어 두고 다시 펴지 않는다. **노드를 지우지
+## 않고 숨기기만 한다** — `main.gd` 가 `set_cooldown()`·`set_weapon()` 을 늘 부르기 때문이다.
+##
+## 마우스는 받지 않는다. 예전에는 PC 에서 F5 로 조작물을 눌러 보려고 받았는데 PC 에서
+## 조작물이 사라졌으므로 받을 이유가 없다 — 기기에서는 손가락이 터치로 그대로 온다.
 
 ## 전체 화면을 덮는 화면들. 하나라도 떠 있으면 조작물은 접힌다 —
 ## 무기 카드는 직접 터치해야 하고, 그 위에 조이스틱이 떠 있으면 카드를 가린다.
@@ -40,6 +41,10 @@ var _fingers := {}
 
 
 func _ready() -> void:
+	if OS.has_feature("pc"):
+		hide()
+		set_process_input(false)
+		return
 	for path in covers:
 		var overlay := get_node_or_null(path)
 		if overlay != null:
@@ -111,10 +116,6 @@ func _input(event: InputEvent) -> void:
 		_handle_press(event.index, event.position, event.pressed)
 	elif event is InputEventScreenDrag:
 		_handle_drag(event.index, event.position)
-	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		_handle_press(MOUSE_FINGER, event.position, event.pressed)
-	elif event is InputEventMouseMotion:
-		_handle_drag(MOUSE_FINGER, event.position)
 
 
 func _handle_press(finger: int, pos: Vector2, pressed: bool) -> void:
