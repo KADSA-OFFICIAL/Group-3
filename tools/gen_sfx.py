@@ -1,15 +1,23 @@
-"""젤리 워즈 효과음 생성기 (이슈 #373).
+"""젤리 워즈 효과음 생성기 (이슈 #373, 현실감 고도화 #376).
 
 외부 음원 없이 numpy·scipy 로 **합성해서** `assets/sfx/*.wav` 를 만든다 — 라이선스를
 따질 것이 없고, 소리를 고치고 싶으면 여기 숫자를 바꿔 다시 돌리면 된다.
 
-    python3 tools/gen_sfx.py
+    python3 tools/gen_sfx.py            # 전부
+    python3 tools/gen_sfx.py jump land  # 이름을 주면 그것만
 
 만든 뒤 Godot 이 `.wav.import` 를 만들어야 게임이 읽는다 (에디터를 열거나
 `Godot --headless --path . --import`). 소리 이름과 쓰는 곳은 `scripts/sfx.gd` 에 있다.
 
 무기 소리는 `<무기키>_hit`(근접 타격)·`<무기키>_fire`(발사)·`<무기키>_special`(특수 발동),
 부딪침은 `clash_<재질>` 이다. 무기키와 재질은 `scripts/sfx.gd` 의 표가 정한다.
+
+**현실감은 "실제 소리가 어떻게 생기는지"를 흉내 내는 데서 나온다** (#376):
+  - 쇠·나무는 재질 공명(모달 합성)으로 친다 — 막대·판·종의 실제 모드 비율, 높은 모드일수록
+    빨리 죽음, 쇠는 짝지은 모드의 미세한 맥놀이. 때리는 것의 단단함은 첫 충격 길이로 준다.
+  - 총성은 초음속 크랙 + 총구 폭풍 + 저음 + 반사음, 폭발은 닫혀 가는 저역 필터 + 서브 붐 +
+    파편, 전기톱은 2행정 엔진의 점화 주기, 물은 기포 공명(Minnaert)이다.
+  - 마지막에 소리 크기에 맞는 잔향(방·야외·큰 공간)을 건다 — 마른 소리는 귀 바로 앞에서 난다.
 """
 
 import os
@@ -21,104 +29,119 @@ from scipy import signal
 
 SR = 44100
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "sfx")
-RNG = np.random.default_rng(373)
+RNG = np.random.default_rng(376)
 
 
-# ─────────────────────────── 재료 ───────────────────────────
+# ─────────────────────────── 기본 재료 ───────────────────────────
 
 def n(d):
-    return int(SR * d)
+    return max(1, int(SR * d))
 
 
 def t_(d):
     return np.arange(n(d)) / SR
 
 
-def env(d, attack=0.004, decay=10.0):
+def noise(d):
+    return RNG.standard_normal(n(d)) * 0.35
+
+
+def pink(d):
+    """분홍 잡음 — 바람·우르릉처럼 저역이 두꺼운 잡음."""
+    white = RNG.standard_normal(n(d))
+    spec = np.fft.rfft(white)
+    f = np.fft.rfftfreq(len(white), 1 / SR)
+    f[0] = 1
+    spec /= np.sqrt(f)
+    x = np.fft.irfft(spec, len(white))
+    return x / (np.max(np.abs(x)) + 1e-9) * 0.5
+
+
+def env(d, attack=0.002, decay=10.0):
     """빠르게 올라갔다가 지수로 줄어드는 모양."""
     t = t_(d)
-    return np.minimum(t / max(attack, 1e-4), 1.0) * np.exp(-decay * t)
+    return np.minimum(t / max(attack, 1e-5), 1.0) * np.exp(-decay * t)
 
 
-def swell(d, peak=0.6, decay=6.0):
-    """천천히 부풀었다가(`peak` 비율 지점) 줄어드는 모양 — 바람·충전 소리."""
+def bell_env(d, peak=0.5, sharp=2.0):
+    """가운데(`peak` 비율)가 불룩한 모양 — 지나가는 바람·도플러."""
     t = t_(d) / d
-    up = np.clip(t / peak, 0, 1) ** 2
-    down = np.exp(-decay * np.clip(t - peak, 0, None))
-    return up * down
+    left = np.clip(t / peak, 0, 1)
+    right = np.clip((1 - t) / (1 - peak), 0, 1)
+    return np.where(t < peak, left, right) ** sharp
 
 
-def sweep(f0, f1, d, curve="exp"):
-    """f0 → f1 로 움직이는 주파수 배열."""
+def ramp(d, a, b, curve="exp"):
     t = t_(d) / d
     if curve == "exp":
-        return f0 * (f1 / f0) ** t
-    return f0 + (f1 - f0) * t
+        return a * (b / a) ** t
+    return a + (b - a) * t
 
 
-def osc(freq, shape="sine"):
-    """주파수 배열(또는 상수 길이 배열)을 소리로. 위상을 쌓아서 미끄러짐이 매끈하다."""
-    phase = 2 * np.pi * np.cumsum(freq) / SR
+def osc(freq, shape="sine", phase0=0.0):
+    phase = 2 * np.pi * np.cumsum(freq) / SR + phase0
     if shape == "sine":
         return np.sin(phase)
-    if shape == "tri":
-        return 2 / np.pi * np.arcsin(np.sin(phase))
-    if shape == "square":
-        return np.tanh(4 * np.sin(phase))
     if shape == "saw":
         return 2 * ((phase / (2 * np.pi)) % 1.0) - 1
+    if shape == "square":
+        return np.tanh(3 * np.sin(phase))
     raise ValueError(shape)
-
-
-def tone(f0, f1, d, shape="sine", curve="exp"):
-    return osc(sweep(f0, f1, d, curve), shape)
 
 
 def const(f, d):
     return np.full(n(d), float(f))
 
 
-def noise(d):
-    return RNG.uniform(-1, 1, n(d))
+def drift(d, rate=6.0, depth=0.02):
+    """느리게 흔들리는 값(1 ± depth) — 엔진 회전수·사람 손의 떨림."""
+    k = max(4, int(d * rate) + 4)
+    pts = RNG.standard_normal(k)
+    x = np.interp(np.linspace(0, k - 1, n(d)), np.arange(k), pts)
+    return 1 + depth * x / (np.max(np.abs(x)) + 1e-9)
+
+
+def _sos(kind, fc, order=2):
+    nyq = SR * 0.45
+    if kind == "band":
+        lo, hi = fc
+        return signal.butter(order, [max(lo, 20), min(hi, nyq)], "band", fs=SR, output="sos")
+    return signal.butter(order, min(max(fc, 20), nyq), kind, fs=SR, output="sos")
 
 
 def lp(x, fc, order=2):
-    sos = signal.butter(order, min(fc, SR * 0.45), "low", fs=SR, output="sos")
-    return signal.sosfilt(sos, x)
+    return signal.sosfilt(_sos("low", fc, order), x)
 
 
 def hp(x, fc, order=2):
-    sos = signal.butter(order, fc, "high", fs=SR, output="sos")
-    return signal.sosfilt(sos, x)
+    return signal.sosfilt(_sos("high", fc, order), x)
 
 
 def bp(x, lo, hi, order=2):
-    sos = signal.butter(order, [lo, min(hi, SR * 0.45)], "band", fs=SR, output="sos")
-    return signal.sosfilt(sos, x)
+    return signal.sosfilt(_sos("band", (lo, hi), order), x)
 
 
-def metal(f, d, decay=6.0, ratios=(1.0, 2.76, 5.40, 8.93), bright=1.0):
-    """종·쇠붙이 울림 — 정수배가 아닌 배음을 겹친다. 높은 배음일수록 빨리 사라진다."""
-    t = t_(d)
-    out = np.zeros(n(d))
-    for i, r in enumerate(ratios):
-        amp = (0.6 ** i) * (bright if i else 1.0)
-        out += amp * np.sin(2 * np.pi * f * r * t + RNG.uniform(0, 6.28)) * np.exp(-decay * (1 + i * 0.8) * t)
-    return out
+def reson(x, f, q=20.0):
+    """좁은 공명 — 통·관·몸통이 한 주파수를 키우는 것."""
+    b, a = signal.iirpeak(min(f, SR * 0.45), q, fs=SR)
+    return signal.lfilter(b, a, x)
 
 
-def bell(f, d, decay=4.0):
-    return metal(f, d, decay, ratios=(1.0, 2.0, 3.01, 4.2))
-
-
-def pluck(f, d, damp=0.996):
-    """Karplus-Strong 현 — 활 시위."""
-    period = int(SR / f)
-    buf = RNG.uniform(-1, 1, period)
-    out = np.zeros(n(d))
-    for i in range(len(out)):
-        out[i] = buf[i % period]
-        buf[i % period] = damp * 0.5 * (buf[i % period] + buf[(i + 1) % period])
+def tv(x, fc, kind="low", width=1.6, block=128):
+    """시간에 따라 움직이는 필터. `fc` 는 x 와 같은 길이(또는 상수)."""
+    fc = np.broadcast_to(np.asarray(fc, dtype=float), x.shape)
+    out = np.empty_like(x)
+    zi = None
+    for s in range(0, len(x), block):
+        e = min(s + block, len(x))
+        f = fc[(s + e) // 2]
+        if kind == "band":
+            sos = _sos("band", (f / width, f * width))
+        else:
+            sos = _sos(kind, f)
+        if zi is None:
+            zi = np.zeros((sos.shape[0], 2))
+        out[s:e], zi = signal.sosfilt(sos, x[s:e], zi=zi)
     return out
 
 
@@ -134,43 +157,195 @@ def mix(*parts):
     return out
 
 
-def am(x, rate, depth=1.0):
-    """진폭 떨림 — 모터·회전."""
-    t = np.arange(len(x)) / SR
-    return x * (1 - depth * 0.5 * (1 + np.sin(2 * np.pi * rate * t)))
+def fit(x, d):
+    """길이를 d초로 자르거나 늘린다(곱하기 전에 맞출 때)."""
+    m = n(d)
+    return x[:m] if len(x) >= m else np.concatenate([x, np.zeros(m - len(x))])
 
 
-def crackle(d, density=60.0, length=0.004):
-    """타닥거림 — 짧은 잡음 조각을 흩뿌린다 (전기·불꽃·도화선)."""
+def sat(x, drive=2.0):
+    """부드러운 포화 — 큰 소리가 마이크·귀에서 눌리는 모양."""
+    return np.tanh(drive * x) / np.tanh(drive)
+
+
+# ─────────────────────────── 물리 흉내 ───────────────────────────
+
+BAR = (1.0, 2.756, 5.404, 8.933, 13.34, 18.64)          # 양끝 자유 막대 (칼날·자루)
+PLATE = (1.0, 1.59, 2.14, 2.30, 2.65, 2.92, 3.16, 3.50, 4.15, 4.80)  # 원판 (방패)
+CHURCH = (0.5, 1.0, 1.19, 1.5, 2.0, 2.52, 3.0, 4.2)     # 종
+WOOD = (1.0, 2.57, 4.03, 5.6)
+GLOCK = (1.0, 2.76, 5.40)
+MARIMBA = (1.0, 3.93, 9.17)
+
+
+def modal(f0, ratios, d, base=3.0, slope=0.0012, amps=None, beat=0.0, hard=0.0004, jitter=0.004):
+    """재질 공명. 모드마다 감쇠가 `base + slope·주파수` 라 높은 모드가 빨리 죽는다.
+
+    `beat` 는 짝지은 모드의 어긋남 — 쇠가 "웅웅" 맥놀이하는 것. `hard` 는 때린 순간의
+    길이(초) — 길수록 무른 것이 때린 것이라 높은 모드가 덜 울린다.
+    """
+    t = t_(d)
+    out = np.zeros(len(t))
+    for i, r in enumerate(ratios):
+        f = f0 * r * (1 + RNG.uniform(-jitter, jitter))
+        if f > SR * 0.45:
+            continue
+        a = amps[i] if amps is not None else 1.0 / (1 + 0.7 * i)
+        rate = base + slope * f
+        ph = RNG.uniform(0, 2 * np.pi)
+        out += a * np.sin(2 * np.pi * f * t + ph) * np.exp(-rate * t)
+        if beat:
+            out += 0.7 * a * np.sin(2 * np.pi * f * (1 + beat) * t + ph * 1.7) * np.exp(-rate * 1.15 * t)
+    pulse = np.hanning(max(3, n(hard)))
+    return np.convolve(out, pulse / pulse.sum())[: len(t)]
+
+
+def strike(d=0.03, lo=800, hi=9000, decay=120.0):
+    """맞닿는 순간의 짧은 잡음 — 모든 타격의 '탁'."""
+    return bp(noise(d), lo, hi) * env(d, 0.0002, decay)
+
+
+def thump(f0=110, f1=45, d=0.22, decay=16.0):
+    """몸통에 전해지는 저음 쿵 — 음높이가 빨리 떨어진다."""
+    return osc(ramp(d, f0, f1)) * env(d, 0.001, decay)
+
+
+def squelch(d=0.16, f0=1100, f1=300, wet=1.0):
+    """젤리의 물컹함 — 공명이 아래로 미끄러지는 젖은 잡음 + 기포 몇 개."""
+    body = tv(noise(d), ramp(d, f0, f1), "band", 1.35) * env(d, 0.003, 14) * 2.2
+    pops = mix(*[at(bubble(RNG.uniform(500, 1400), 0.04, 0.6, 70), RNG.uniform(0, d * 0.6))
+                 for _ in range(3)])
+    return mix(body, 0.35 * wet * pops)
+
+
+def flesh(d=0.09, bright=1.0):
+    """몸에 맞는 소리 — 젖은 '퍽'. 높은 대역의 짧은 찰싹 + 몸통 저음."""
+    slap = bp(noise(d), 500, 3500 * bright) * env(d, 0.0003, 70)
+    return mix(slap, 0.8 * thump(150, 60, 0.14, 24), 0.4 * squelch(0.1, 900, 350, 0.3))
+
+
+def whoosh(d, f0=500, f1=1800, f2=None, width=1.5, peak=0.55, flutter=0.0):
+    """휘두르는 바람. 공명 주파수가 지나가며 오르내리는 것이 도플러다."""
+    if f2 is None:
+        fc = ramp(d, f0, f1)
+    else:
+        half = n(d) // 2
+        fc = np.concatenate([np.linspace(f0, f1, half), np.linspace(f1, f2, n(d) - half)])
+    x = tv(pink(d) + 0.4 * noise(d), fc, "band", width) * bell_env(d, peak, 1.6)
+    if flutter:
+        x *= 0.6 + 0.4 * np.abs(np.sin(np.pi * flutter * t_(d)))
+    return x * 3.0
+
+
+def grains(d, rate, lo=900, hi=6000, grain=0.0007, fade=4.0):
+    """알갱이 소리 — 흙·자갈이 밟히는 바스락, 파편, 튀는 불꽃."""
     out = np.zeros(n(d))
-    count = int(density * d)
+    count = RNG.poisson(rate * d)
     for _ in range(count):
-        start = RNG.integers(0, max(1, n(d) - n(length)))
-        piece = noise(length) * env(length, 0.0005, 1.0 / length * 3)
-        out[start : start + len(piece)] += piece * RNG.uniform(0.3, 1.0)
-    return hp(out, 1500)
+        tpos = RNG.exponential(d / fade) if fade else RNG.uniform(0, d)
+        s = int(tpos * SR)
+        if s >= len(out) - n(grain) * 3:
+            continue
+        g = noise(grain * RNG.uniform(0.6, 2.5))
+        g *= np.hanning(len(g))
+        out[s : s + len(g)] += g * RNG.uniform(0.2, 1.0)
+    return bp(out, lo, hi) * 3
 
 
-def whoosh(d, lo=600, hi=3500, peak=0.5):
-    return bp(noise(d), lo, hi) * swell(d, peak, 8.0)
+def crackle(d, rate=200.0, fade=0.0):
+    """전기·불꽃의 타닥 — 아주 짧고 날카로운 알갱이."""
+    return grains(d, rate, 1500, 12000, 0.00025, fade)
 
 
-def thud(f0=140, f1=50, d=0.18, decay=18.0, click=0.4):
-    body = tone(f0, f1, d) * env(d, 0.002, decay)
-    knock = lp(noise(d), 900) * env(d, 0.001, decay * 2.5) * click
-    return body + knock
+def bubble(f0, d=0.06, rise=0.5, decay=50.0):
+    """기포 하나의 공명 (Minnaert) — 터지며 음이 올라간다. 물보라·물방울의 재료."""
+    t = t_(d)
+    f = f0 * (1 + rise * t / d)
+    return osc(f) * np.exp(-decay * t) * np.minimum(t / 0.0006, 1)
 
 
-def finish(x, peak=0.8, tail=0.012):
-    """끝을 살짝 접고 크기를 맞춘다 — 뚝 끊기면 딸깍 소리가 난다."""
+def pluck(f, d, damp=0.996, bright=0.5):
+    """Karplus-Strong 현 — 활 시위."""
+    period = int(SR / f)
+    buf = lp(RNG.uniform(-1, 1, period * 2), 2000 + 8000 * bright)[-period:]
+    out = np.zeros(n(d))
+    for i in range(len(out)):
+        j = i % period
+        out[i] = buf[j]
+        buf[j] = damp * 0.5 * (buf[j] + buf[(j + 1) % period])
+    return out
+
+
+def scrape(d, f0=3000, f1=5000, rough=40.0):
+    """쇠가 쇠 위를 미끄러지는 소리 — 좁은 공명 + 거친 떨림."""
+    x = tv(noise(d), ramp(d, f0, f1), "band", 1.08) * 4
+    t = t_(d)
+    return x * (0.6 + 0.4 * np.sin(2 * np.pi * rough * t + 3 * np.sin(2 * np.pi * 7 * t)))
+
+
+def click(d=0.006, f=3500, ring=0.02):
+    """기계 딸깍 — 날카로운 첫소리 + 짧은 쇠 울림."""
+    return mix(strike(d, 1500, 12000, 900), 0.25 * modal(f, (1.0, 2.3, 3.9), ring, 120, 0.004))
+
+
+def fm_brass(f, d, bright=3.0, vib=5.5):
+    """금관 — 소리가 커질수록 밝아지는 FM. 팡파르용."""
+    t = t_(d)
+    a = np.minimum(t / 0.04, 1) * np.exp(-1.2 * np.maximum(t - 0.05, 0))
+    fv = f * (1 + 0.006 * np.sin(2 * np.pi * vib * t) * np.clip((t - 0.12) * 5, 0, 1))
+    ph = 2 * np.pi * np.cumsum(fv) / SR
+    return np.sin(ph + bright * a * np.sin(ph)) * a
+
+
+# ─────────────────────────── 공간 ───────────────────────────
+
+def _ir(d, damp0, damp1, early):
+    t = t_(d)
+    tail = noise(d) * np.exp(-6.9 * t / d)
+    tail = tv(tail, ramp(d, damp0, damp1), "low")
+    tail[: n(0.006)] *= np.linspace(0, 1, n(0.006))
+    ir = np.zeros(len(t))
+    ir[0] = 1.0
+    for delay, g in early:
+        ir[n(delay)] += g
+    ir += tail / np.sqrt(np.sum(tail ** 2) + 1e-9) * 0.9
+    return ir
+
+
+SPACES = {}
+
+
+def space(kind):
+    if kind not in SPACES:
+        SPACES[kind] = {
+            "room": _ir(0.45, 7000, 1800, [(0.007, 0.35), (0.013, 0.25), (0.021, 0.2), (0.033, 0.12)]),
+            "hall": _ir(1.4, 6000, 900, [(0.019, 0.3), (0.037, 0.22), (0.061, 0.15)]),
+            "outdoor": _ir(1.6, 4500, 500, [(0.09, 0.28), (0.21, 0.14), (0.43, 0.06)]),
+        }[kind]
+    return SPACES[kind]
+
+
+def verb(x, kind="room", wet=0.15):
+    """잔향을 섞는다. 건조음은 그대로 두고 젖은 소리만 더한다."""
+    ir = space(kind)
+    y = signal.fftconvolve(x, ir[1:])
+    y /= np.max(np.abs(y)) + 1e-9
+    y *= np.max(np.abs(x))
+    return mix(x, wet * y)
+
+
+def finish(x, peak=0.8, tail=0.02):
+    """끝을 접고 꼬리의 무음을 잘라 크기를 맞춘다."""
     x = np.asarray(x, dtype=np.float64)
+    x = hp(x, 25)
+    top = np.max(np.abs(x)) + 1e-12
+    loud = np.where(np.abs(x) > top * 0.0015)[0]
+    if len(loud):
+        x = x[: min(len(x), loud[-1] + n(0.01))]
     fade = min(n(tail), len(x))
-    if fade > 0:
-        x[-fade:] *= np.linspace(1, 0, fade)
-    x[: n(0.001)] *= np.linspace(0, 1, n(0.001))
-    top = np.max(np.abs(x))
-    if top > 0:
-        x = x / top * peak
+    x[-fade:] *= np.linspace(1, 0, fade) ** 2
+    x[: n(0.0005)] *= np.linspace(0, 1, n(0.0005))
+    x = x / (np.max(np.abs(x)) + 1e-12) * peak
     return x
 
 
@@ -184,9 +359,74 @@ def write(name, x, peak=0.8):
         w.writeframes(data.tobytes())
 
 
-def notes(freqs, step, d, shape="tri", decay=7.0):
-    """짧은 음을 차례로 — 팡파르·차임."""
-    return mix(*[at(osc(const(f, d), shape) * env(d, 0.005, decay), i * step) for i, f in enumerate(freqs)])
+# ─────────────────────────── 큰 소리 묶음 ───────────────────────────
+
+def gunshot(boom=70.0, blast_lp=6000.0, blast_decay=45.0, barrel=700.0, size=1.0, tail=0.32):
+    """총성: 초음속 크랙(N파) → 총구 폭풍(넓은 잡음 + 총열 공명) → 저음 → 반사음·야외 잔향."""
+    nw = np.linspace(1, -1, n(0.0007))
+    crack = hp(mix(nw, np.zeros(n(0.01))), 2500) * 0.9
+    d = 0.3
+    burst = noise(d) * env(d, 0.0002, blast_decay)
+    blast = mix(lp(burst, blast_lp) * 2.2, reson(burst, barrel, 6) * 1.6)
+    low = thump(boom * 2.2, boom, 0.25, 14) * size
+    x = sat(mix(crack, at(blast, 0.0008), low), 2.5)
+    echo = lp(x, 2500)
+    x = mix(x, at(0.22 * echo, 0.085), at(0.1 * echo, 0.19))
+    return verb(x, "outdoor", tail)
+
+
+def explosion(size=1.0, d=1.6):
+    """폭발: 첫 충격 → 닫혀 가는 저역 필터의 폭풍 → 서브 붐 → 떨어지는 파편 → 우르릉."""
+    first = strike(0.02, 300, 12000, 160) * 1.5
+    body = tv(pink(d) + noise(d) * 0.5, ramp(d, 7000 * size, 250), "low") * env(d, 0.004, 3.2 / size) * 2.6
+    sub = osc(ramp(d * 0.6, 70, 28)) * env(d * 0.6, 0.003, 4.5 / size) * 1.4 * size
+    debris = at(grains(d * 0.8, 70, 700, 5000, 0.002, 2.5) * 0.5, 0.08)
+    rumble = lp(pink(d), 160) * env(d, 0.08, 2.2) * 1.8
+    x = sat(mix(first, body, sub, debris, rumble), 2.2)
+    return verb(x, "outdoor", 0.4)
+
+
+def engine(f, d, load=0.0):
+    """2행정 엔진(전기톱). `f` 는 점화 주파수 배열. 배기 공명과 체인 소리를 얹는다."""
+    f = fit(f, d) * drift(d, 9, 0.03)
+    phase = np.cumsum(f) / SR
+    frac = phase % 1.0
+    pulses = np.exp(-frac * 9) * (1 + 0.35 * RNG.standard_normal(len(frac)))
+    exhaust = mix(reson(pulses, 280, 4) * 1.4, reson(pulses, 820, 5), reson(pulses, 2100, 6) * 0.5)
+    chain = hp(noise(d), 3500) * (0.5 + 0.5 * np.exp(-((phase * 2) % 1.0) * 4)) * (0.6 + load)
+    return sat(mix(lp(exhaust, 5000) * 1.2, chain * 0.7), 1.8)
+
+
+def saber_hum(d, f=92.0, freq=None):
+    """광선검 웅 — 브라운관 험(두 톱니가 어긋나 맥놀이) + 영사기 모터 지직.
+    `freq` 를 주면 그 주파수 배열을 따라간다(휘두를 때의 도플러·켜질 때의 솟음)."""
+    fv = const(f, d) if freq is None else fit(freq, d)
+    hum = osc(fv, "saw") + osc(fv * 1.013, "saw") * 0.8
+    hum = mix(lp(hum, 1200) * 0.9, reson(hum, 230, 3) * 0.6)
+    buzz = bp(noise(d), 2000, 6000) * (0.5 + 0.5 * np.sin(2 * np.pi * fv.mean() * 2 * t_(d))) * 0.18
+    return mix(hum, buzz)
+
+
+def thunder(d=1.8):
+    """천둥: 날카로운 갈라짐 → 바로 뒤의 큰 터짐 → 굴러가는 우르릉(여러 번 솟는다)."""
+    rip = crackle(0.05, 6000) * 1.4
+    blast = lp(noise(0.35), 3500) * env(0.35, 0.001, 9) * 2
+    roll_env = np.zeros(n(d))
+    for c in RNG.uniform(0.1, d * 0.75, 5):
+        roll_env += np.exp(-((t_(d) - c) / RNG.uniform(0.08, 0.2)) ** 2) * RNG.uniform(0.4, 1.0)
+    roll = lp(pink(d), 300) * roll_env * np.exp(-1.2 * t_(d)) * 3
+    x = sat(mix(rip, at(blast, 0.01), at(roll, 0.03), at(osc(ramp(0.5, 60, 30)) * env(0.5, 0.005, 6), 0.02)), 2)
+    return verb(x, "outdoor", 0.35)
+
+
+def water(d=0.9, size=1.0):
+    """물보라: 수면을 치는 찰싹 → 물 덩이가 튀는 쏴 → 크고 작은 기포들."""
+    slap = mix(strike(0.04, 400, 8000, 90) * 1.5, thump(140, 60, 0.15, 20) * 0.6 * size)
+    spray = hp(noise(d), 1800) * env(d, 0.01, 5.5 / size) * 1.4
+    pops = [at(bubble(RNG.uniform(250, 2500) / np.sqrt(size), RNG.uniform(0.02, 0.08),
+                      RNG.uniform(0.3, 1.2), RNG.uniform(30, 90)) * RNG.uniform(0.2, 0.8),
+               RNG.exponential(d * 0.3)) for _ in range(int(28 * size))]
+    return verb(mix(slap, spray, *pops), "room", 0.12)
 
 
 # ─────────────────────────── 소리 ───────────────────────────
@@ -204,547 +444,628 @@ def sound(name, peak=0.8):
 
 # ── 젤리 몸 ──
 
-@sound("jump", 0.45)
+@sound("step", 0.24)
 def _():
-    d = 0.16
-    body = tone(260, 720, d, "tri") * env(d, 0.004, 14)
-    wob = 1 + 0.05 * np.sin(2 * np.pi * 30 * t_(d))
-    return body * wob + 0.2 * lp(noise(d), 1500) * env(d, 0.001, 50)
+    # 흙을 밟는 바스락 + 발바닥이 붙었다 떨어지는 물컹함.
+    crunch = grains(0.07, 900, 1200, 7000, 0.0006, 6)
+    return verb(mix(crunch, 0.6 * thump(120, 70, 0.06, 45), 0.3 * squelch(0.07, 900, 500, 0.2)), "room", 0.08)
+
+
+@sound("jump", 0.42)
+def _():
+    push = mix(grains(0.05, 700, 1000, 6000, 0.0006, 8), 0.5 * thump(130, 80, 0.07, 40))
+    body = whoosh(0.2, 300, 900, width=1.7, peak=0.35) * 0.6
+    return verb(mix(push, at(body, 0.01), 0.35 * squelch(0.12, 700, 1200, 0.5)), "room", 0.1)
 
 
 @sound("land", 0.5)
 def _():
-    d = 0.16
-    return thud(150, 60, d, 22, 0.8) + 0.4 * bp(noise(d), 200, 900) * env(d, 0.002, 30)
-
-
-@sound("step", 0.22)
-def _():
-    d = 0.06
-    return bp(noise(d), 250, 1100) * env(d, 0.002, 70) + 0.5 * tone(220, 140, d) * env(d, 0.002, 60)
+    hit = mix(thump(110, 45, 0.2, 18) * 1.2, strike(0.03, 300, 4000, 110))
+    dirt = grains(0.18, 900, 900, 6000, 0.0008, 5) * 0.8
+    return verb(mix(hit, dirt, 0.6 * squelch(0.18, 800, 250)), "room", 0.12)
 
 
 @sound("dive", 0.45)
 def _():
-    d = 0.22
-    return whoosh(d, 400, 2500, 0.3) + 0.5 * tone(700, 220, d, "tri") * swell(d, 0.25, 6)
+    d = 0.32
+    return verb(whoosh(d, 1600, 500, width=1.8, peak=0.3), "room", 0.1)
 
 
-@sound("hurt", 0.6)
+@sound("hurt", 0.62)
 def _():
-    d = 0.2
-    wobble = sweep(420, 160, d) * (1 + 0.15 * np.sin(2 * np.pi * 38 * t_(d)))
-    squish = osc(wobble, "tri") * env(d, 0.003, 14)
-    splat = bp(noise(d), 300, 2400) * env(d, 0.001, 35)
-    return squish + 0.6 * splat
+    return verb(mix(flesh(0.1), at(squelch(0.2, 1300, 260) * 1.2, 0.005)), "room", 0.12)
 
 
-@sound("death", 0.75)
+@sound("death", 0.78)
 def _():
-    d = 0.6
-    splat = bp(noise(d), 200, 3000) * env(d, 0.001, 18)
-    wah = osc(sweep(620, 70, d) * (1 + 0.1 * np.sin(2 * np.pi * 12 * t_(d))), "tri") * env(d, 0.01, 4.5)
-    return mix(0.8 * splat, wah, 0.6 * thud(120, 40, 0.3, 10))
+    impact = mix(flesh(0.12, 1.3) * 1.3, thump(90, 35, 0.4, 7) * 1.1)
+    goo = at(squelch(0.45, 1000, 160) * 1.4, 0.01)
+    droplets = [at(mix(strike(0.01, 1200, 6000, 400), bubble(RNG.uniform(700, 1800), 0.03, 0.8, 90) * 0.5),
+                   RNG.uniform(0.08, 0.5)) * RNG.uniform(0.2, 0.6) for _ in range(9)]
+    collapse = at(thump(80, 40, 0.2, 14) * 0.8, 0.28)
+    return verb(mix(impact, goo, collapse, *droplets), "room", 0.16)
 
 
 @sound("fall", 0.55)
 def _():
-    d = 0.7
-    return tone(1400, 260, d, "sine") * swell(d, 0.15, 3.0)
+    d = 0.9
+    wind = tv(pink(d), ramp(d, 400, 1600), "band", 2.0) * (t_(d) / d) ** 1.3 * 3
+    return verb(mix(wind, 0.25 * hp(noise(d), 3000) * (t_(d) / d) ** 2), "outdoor", 0.2)
 
 
-@sound("splash", 0.7)
+@sound("splash", 0.75)
 def _():
-    d = 0.6
-    wash = hp(noise(d), 700) * env(d, 0.003, 7)
-    bubbles = mix(*[at(tone(f, f * 1.6, 0.05) * env(0.05, 0.002, 40), o)
-                    for f, o in zip(RNG.uniform(500, 1400, 9), np.sort(RNG.uniform(0.04, 0.45, 9)))])
-    return mix(wash, 0.5 * bubbles, 0.5 * thud(110, 50, 0.2, 14))
+    return water(1.0, 1.4)
 
 
-@sound("fish", 0.65)
+@sound("fish", 0.68)
 def _():
-    slap = bp(noise(0.08), 600, 4000) * env(0.08, 0.001, 50)
-    d = 0.35
-    wash = hp(noise(d), 1200) * env(d, 0.003, 12)
-    return mix(slap * 1.2, at(0.6 * wash, 0.02), 0.5 * thud(200, 80, 0.12, 25))
+    jump = water(0.6, 0.8)
+    slap = at(mix(strike(0.03, 600, 7000, 110) * 1.3, thump(170, 80, 0.1, 30) * 0.5, squelch(0.1, 1400, 600, 0.6)), 0.12)
+    return mix(jump * 0.7, slap)
 
 
 @sound("stun", 0.45)
 def _():
-    d = 0.12
-    birds = [at(tone(f, f * 1.15, d) * env(d, 0.003, 18), o)
-             for f, o in [(1900, 0.0), (2300, 0.1), (2050, 0.2), (2500, 0.3)]]
-    return mix(*birds)
+    # 전기에 감전되는 지직 + 귀가 멍한 이명.
+    d = 0.5
+    buzz = osc(const(120, 0.18), "square") * 0.4
+    zap = mix(lp(buzz, 4000), crackle(0.18, 900)) * env(0.18, 0.001, 9)
+    ring = osc(const(3900, d)) * env(d, 0.05, 4) * 0.12 + osc(const(3960, d)) * env(d, 0.05, 4) * 0.08
+    return verb(mix(zap, at(ring, 0.04)), "room", 0.1)
 
 
 @sound("bleed", 0.3)
 def _():
-    d = 0.09
-    return tone(1500, 450, d) * env(d, 0.002, 35)
+    # 떨어지는 핏방울 — 물방울 소리는 기포 하나가 음을 올리며 터지는 것이다.
+    drop = mix(strike(0.004, 2000, 8000, 900) * 0.3, bubble(1150, 0.07, 1.4, 45))
+    return verb(drop, "room", 0.15)
 
 
-@sound("ready", 0.35)
+@sound("ready", 0.33)
 def _():
-    return mix(bell(1320, 0.4, 7), at(0.7 * bell(1980, 0.35, 8), 0.06))
+    # 칼날이 빛나는 '스윙' — 날 위를 훑는 쇳소리 + 맑은 울림.
+    return verb(mix(scrape(0.12, 4200, 6500) * bell_env(0.12, 0.3) * 0.5,
+                    at(modal(2600, BAR, 0.7, 4, 0.0004, beat=0.002), 0.05) * 0.7), "hall", 0.18)
 
 
-@sound("empowered", 0.4)
+@sound("empowered", 0.45)
 def _():
-    return mix(notes([1050, 1320, 1570, 2100], 0.045, 0.16, "sine", 16), 0.15 * crackle(0.3, 50))
+    # 불이 붙는 '화륵' + 타닥.
+    d = 0.5
+    ignite = tv(pink(d), ramp(d, 300, 2500), "band", 2.2) * bell_env(d, 0.25, 1.5) * 3
+    return verb(mix(ignite, crackle(d, 250, 3) * 0.5, thump(90, 50, 0.2, 12) * 0.4), "room", 0.1)
 
 
-@sound("charged", 0.45)
+@sound("charged", 0.48)
 def _():
-    d = 0.35
-    hum = tone(160, 420, d, "saw") * swell(d, 0.8, 8)
-    return mix(lp(hum, 2200), 0.5 * bell(1760, 0.3, 9))
+    # 힘이 차오르는 전기 웅 — 험의 음이 오르고 지직이 촘촘해진다.
+    d = 0.45
+    f = ramp(d, 80, 180)
+    hum = lp(osc(f, "saw") + osc(f * 1.5, "saw") * 0.4, 2500) * (t_(d) / d) ** 0.7
+    return verb(mix(hum, crackle(d, 400) * (t_(d) / d), at(modal(1800, BAR, 0.4, 6, 0.0005) * 0.4, d - 0.05)), "room", 0.12)
 
 
-@sound("dagger_pickup", 0.4)
+@sound("dagger_pickup", 0.42)
 def _():
-    return mix(metal(3200, 0.15, 25), at(tone(900, 1500, 0.08, "tri") * env(0.08, 0.003, 25), 0.03))
+    scr = scrape(0.08, 2500, 4000) * env(0.08, 0.005, 25) * 0.6
+    clink = at(modal(3100, BAR, 0.35, 8, 0.0008, hard=0.0002), 0.06)
+    grip = at(strike(0.02, 600, 3000, 150) * 0.6, 0.09)
+    return verb(mix(scr, clink, grip), "room", 0.12)
 
 
 # ── 무기: 근접 타격 ──
 
-@sound("sword_hit")
+@sound("sword_hit", 0.82)
 def _():
-    swish = whoosh(0.09, 2000, 7000, 0.6)
-    ring = metal(2300, 0.32, 9, bright=0.8)
-    return mix(swish, at(0.6 * ring, 0.05), at(0.4 * thud(200, 90, 0.08, 40), 0.05))
+    swing = whoosh(0.13, 700, 3200, 1500, width=1.3, peak=0.6)
+    cut = at(mix(strike(0.02, 2500, 12000, 200) * 1.2, flesh(0.1)), 0.1)
+    ring = at(modal(1250, BAR, 0.9, 4, 0.0007, beat=0.0025, hard=0.0002) * 0.35, 0.1)
+    return verb(mix(swing * 0.7, cut, ring), "room", 0.14)
 
 
-@sound("saber_hit", 0.7)
+@sound("saber_hit", 0.72)
 def _():
-    d = 0.22
-    hum = lp(osc(sweep(150, 95, d), "saw") + osc(sweep(152, 96, d), "saw"), 1800)
-    zap = bp(noise(d), 1500, 6000) * env(d, 0.001, 30)
-    return mix(hum * env(d, 0.002, 9), 0.8 * zap, 0.3 * crackle(0.12, 120))
+    d = 0.3
+    w = 1 + 0.1 * bell_env(d, 0.4, 1.5)
+    swing = saber_hum(d, freq=92 * w) * bell_env(d, 0.4, 1.2) * 1.3
+    burn = at(mix(crackle(0.14, 1500), bp(noise(0.14), 1500, 7000) * env(0.14, 0.001, 18)) * 0.9, 0.08)
+    return verb(mix(swing, burn), "room", 0.14)
 
 
-@sound("chainsaw_hit", 0.55)
+@sound("chainsaw_hit", 0.6)
 def _():
-    d = 0.2
-    motor = am(osc(const(62, d), "square"), 31, 0.7)
-    grind = am(bp(noise(d), 1800, 5500), 47, 0.6)
-    return (0.6 * lp(motor, 1500) + grind) * env(d, 0.004, 6)
+    d = 0.24
+    run = engine(ramp(d, 120, 95), d, load=0.6)
+    bite = bp(noise(d), 900, 5000) * (0.5 + 0.5 * np.sin(2 * np.pi * 63 * t_(d))) * 1.2
+    return verb(mix(run, bite * env(d, 0.003, 8), 0.4 * squelch(d, 900, 400)) * env(d, 0.003, 3), "room", 0.1)
 
 
-@sound("hammer_hit", 0.85)
+@sound("hammer_hit", 0.88)
 def _():
-    bonk = tone(560, 470, 0.12, "tri") * env(0.12, 0.001, 30)
-    return mix(thud(180, 55, 0.32, 11, 1.0), 0.5 * bonk)
+    impact = mix(thump(100, 38, 0.4, 9) * 1.6, lp(strike(0.05, 100, 2500, 70), 1800) * 1.4)
+    handle = modal(210, WOOD, 0.25, 18, 0.01) * 0.25
+    return verb(sat(mix(impact, handle, flesh(0.12, 0.8), 0.6 * squelch(0.25, 700, 180)), 1.6), "room", 0.16)
 
 
-@sound("trident_hit")
+@sound("trident_hit", 0.8)
 def _():
-    stab = hp(noise(0.06), 2500) * env(0.06, 0.001, 60)
-    return mix(stab, at(0.7 * metal(1500, 0.28, 10), 0.01), at(0.5 * thud(170, 80, 0.1, 30), 0.01))
+    stab = mix(strike(0.015, 2500, 12000, 260) * 1.2, flesh(0.1, 1.2))
+    prongs = mix(*[modal(f, BAR, 0.7, 5, 0.0008, hard=0.0003) for f in (1380, 1445, 1515)]) * 0.18
+    return verb(mix(stab, at(prongs, 0.004)), "room", 0.14)
 
 
-@sound("glove_hit", 0.7)
+@sound("glove_hit", 0.72)
 def _():
-    d = 0.16
-    cushion = lp(noise(d), 700) * env(d, 0.002, 25)
-    return cushion + 0.9 * tone(170, 80, d) * env(d, 0.002, 18)
+    # 권투 글러브 — 가죽 찰싹 + 묵직한 몸통, 쇠 울림이 없다.
+    leather = bp(noise(0.05), 350, 2200) * env(0.05, 0.0005, 60) * 1.5
+    return verb(mix(leather, thump(115, 55, 0.18, 18) * 1.3, 0.4 * squelch(0.12, 800, 350)), "room", 0.12)
 
 
-@sound("shuriken_hit", 0.6)
+@sound("shuriken_hit", 0.62)
 def _():
-    slice_ = hp(noise(0.05), 4000) * env(0.05, 0.001, 70)
-    return mix(slice_, at(0.6 * metal(3600, 0.16, 18), 0.01))
+    tick = strike(0.008, 4000, 14000, 700) * 1.3
+    ring = modal(4100, BAR, 0.35, 10, 0.0008, hard=0.00015) * 0.3
+    return verb(mix(tick, ring, at(flesh(0.07, 1.4) * 0.6, 0.003)), "room", 0.12)
 
 
 @sound("knuckle_hit", 0.8)
 def _():
-    crack = hp(noise(0.04), 1800) * env(0.04, 0.0005, 90)
-    return mix(crack, thud(210, 70, 0.17, 20, 0.7))
+    crack = strike(0.02, 1200, 9000, 180) * 1.4
+    clink = modal(2700, (1.0, 2.4, 4.1), 0.18, 15, 0.002) * 0.15
+    return verb(mix(crack, thump(140, 55, 0.18, 20) * 1.2, clink, 0.3 * squelch(0.1, 900, 400)), "room", 0.12)
 
 
-@sound("axe_hit", 0.85)
+@sound("axe_hit", 0.88)
 def _():
-    chop = whoosh(0.08, 900, 3500, 0.7)
-    crack = bp(noise(0.06), 1200, 4000) * env(0.06, 0.001, 50)
-    return mix(chop, at(crack, 0.06), at(thud(150, 60, 0.22, 14, 1.0), 0.06))
+    swing = whoosh(0.16, 350, 1600, 800, width=1.4, peak=0.65)
+    chop = at(mix(strike(0.03, 800, 6000, 120) * 1.5, thump(130, 50, 0.25, 12) * 1.4, flesh(0.12, 0.9)), 0.13)
+    ring = at(modal(820, BAR, 0.6, 5, 0.0009, beat=0.003, hard=0.0004) * 0.2, 0.13)
+    return verb(mix(swing * 0.8, chop, ring), "room", 0.15)
 
 
-@sound("pole_hit", 0.75)
+@sound("pole_hit", 0.78)
 def _():
-    d = 0.14
-    knock = noise(d) * env(d, 0.0008, 45)
-    wood = bp(knock, 650, 760, 2) * 6 + bp(knock, 1350, 1500, 2) * 4
-    return mix(wood, 0.5 * thud(240, 120, 0.08, 40, 0.2))
+    swing = whoosh(0.12, 300, 1100, width=1.6, peak=0.6) * 0.6
+    knock = at(mix(modal(430, WOOD, 0.3, 14, 0.012, hard=0.0006) * 1.5, strike(0.015, 800, 5000, 250),
+                   thump(130, 70, 0.1, 30)), 0.09)
+    return verb(mix(swing, knock), "room", 0.14)
 
 
-@sound("shield_hit", 0.8)
+@sound("shield_hit", 0.82)
 def _():
-    return mix(metal(620, 0.3, 9, bright=0.6), bp(noise(0.05), 500, 3000) * env(0.05, 0.001, 50),
-               0.6 * thud(160, 70, 0.15, 22))
+    plate = modal(330, PLATE, 0.45, 9, 0.002, beat=0.004, hard=0.0012) * 0.8
+    return verb(mix(strike(0.03, 400, 5000, 120) * 1.2, plate, thump(110, 50, 0.2, 16) * 1.2, 0.3 * squelch(0.1, 800, 400)), "room", 0.15)
 
 
 # ── 무기: 발사 ──
 
 @sound("dagger_fire", 0.5)
 def _():
-    return mix(whoosh(0.16, 1500, 5000, 0.35), 0.3 * metal(4000, 0.06, 40))
+    return verb(whoosh(0.18, 900, 3500, 1800, width=1.3, peak=0.4, flutter=22), "room", 0.1)
 
 
-@sound("cannon_fire", 0.8)
+@sound("cannon_fire", 0.85)
 def _():
-    d = 0.45
-    boom = tone(95, 38, d) * env(d, 0.002, 8)
-    blast = lp(noise(d), 700) * env(d, 0.001, 12)
-    pop = hp(noise(0.03), 2000) * env(0.03, 0.0005, 80)
-    return mix(boom, 0.9 * blast, 0.5 * pop)
+    return gunshot(boom=55, blast_lp=3500, blast_decay=22, barrel=320, size=1.6, tail=0.45)
 
 
-@sound("bow_fire", 0.6)
+@sound("bow_fire", 0.62)
 def _():
-    string = pluck(190, 0.3, 0.993) * env(0.3, 0.001, 9)
-    return mix(string, at(0.5 * whoosh(0.12, 1500, 5000, 0.2), 0.02))
+    # 시위가 놓이는 '퉁' + 줄 떨림 + 활대 울림 + 화살이 찢는 바람.
+    string = pluck(118, 0.35, 0.991, 0.4) * env(0.35, 0.0005, 7)
+    limb = thump(95, 60, 0.12, 30) * 0.9
+    arrow = at(whoosh(0.12, 1800, 4500, width=1.3, peak=0.15) * 0.6, 0.008)
+    return verb(mix(string * 0.9, limb, arrow), "outdoor", 0.15)
 
 
-@sound("rifle_fire", 0.55)
+@sound("rifle_fire", 0.6)
 def _():
-    crack = hp(noise(0.08), 1500) * env(0.08, 0.0005, 45)
-    return crack + 0.6 * tone(160, 70, 0.08) * env(0.08, 0.001, 35)
+    return gunshot(boom=90, blast_lp=8000, blast_decay=60, barrel=900, size=0.7, tail=0.25)
 
 
-@sound("glove_fire", 0.55)
+@sound("glove_fire", 0.58)
 def _():
-    d = 0.2
-    rocket = lp(noise(d), 1800) * env(d, 0.003, 10)
-    return rocket + 0.5 * tone(220, 480, d, "square") * env(d, 0.003, 14) * 0.5
+    # 로켓 주먹 하나 — 점화 '퍽' + 짧은 분사 쉬익.
+    d = 0.32
+    pop = mix(strike(0.02, 200, 3000, 150) * 1.2, thump(120, 60, 0.1, 30))
+    jet = mix(lp(pink(d), 2500) * 2, hp(noise(d), 3000) * 0.6) * env(d, 0.01, 7) * (1 + 0.3 * np.sin(2 * np.pi * 37 * t_(d)))
+    return verb(mix(pop, jet), "outdoor", 0.15)
 
 
 # ── 무기: 특수 발동 ──
 
-@sound("sword_special", 0.65)
+@sound("sword_special", 0.68)
 def _():
-    # 들어 올리는 0.26초 동안 빛이 차오르고, 내려베는 0.12초에 바람이 가른다.
-    d = 0.28
-    shimmer = tone(600, 1600, d) * swell(d, 0.95, 4) * (1 + 0.3 * np.sin(2 * np.pi * 22 * t_(d)))
-    return mix(0.6 * shimmer, at(whoosh(0.14, 1800, 7000, 0.5), 0.24))
+    # 들어 올리는 0.26초 — 칼을 뽑아 날을 세우는 쇳소리, 0.24초부터 크게 내려벤다.
+    draw = scrape(0.24, 2800, 5200) * bell_env(0.24, 0.7, 1.2) * 0.45
+    ring = at(modal(1350, BAR, 0.6, 3.5, 0.0005, beat=0.002) * 0.25, 0.2)
+    swing = at(whoosh(0.16, 500, 2600, 900, width=1.3, peak=0.5), 0.23)
+    return verb(mix(draw, ring, swing), "hall", 0.15)
 
 
-@sound("sword_burst", 0.85)
+@sound("sword_burst", 0.88)
 def _():
-    chord = mix(bell(880, 0.9, 3.5), 0.7 * bell(1320, 0.8, 4), 0.5 * bell(1760, 0.7, 5))
-    rise = hp(noise(0.25), 3000) * swell(0.25, 0.3, 6)
-    return mix(0.5 * rise, chord, 0.7 * thud(110, 45, 0.5, 6, 0.5))
+    # 빛기둥 — 공기가 빨려 들어가는 소리(거꾸로 된 잔향) 뒤의 큰 충격과 길게 우는 쇠 공명.
+    swell = verb(noise(0.3) * env(0.3, 0.001, 12), "hall", 1.0)[::-1][-n(0.3):] * 0.8
+    hit = at(mix(thump(90, 32, 0.6, 6) * 1.5, strike(0.04, 200, 9000, 70) * 1.2), 0.28)
+    shimmer = at(mix(modal(660, CHURCH, 1.6, 1.5, 0.0004, beat=0.002) * 0.5,
+                     modal(1320, BAR, 1.2, 2.5, 0.0004, beat=0.002) * 0.25), 0.28)
+    return verb(sat(mix(swell, hit, shimmer), 1.5), "hall", 0.3)
 
 
-@sound("dagger_special", 0.5)
+@sound("dagger_special", 0.52)
 def _():
-    back = whoosh(0.2, 1200, 4500, 0.9)
-    return mix(back, at(metal(3000, 0.15, 20), 0.18))
+    back = whoosh(0.25, 1200, 3800, width=1.3, peak=0.85, flutter=18)
+    catch = at(mix(modal(3000, BAR, 0.3, 9, 0.001, hard=0.0002) * 0.5, strike(0.02, 500, 3000, 160) * 0.8), 0.24)
+    return verb(mix(back, catch), "room", 0.12)
 
 
-@sound("saber_special", 0.6)
+@sound("saber_special", 0.65)
 def _():
-    d = 0.55
-    hum = lp(osc(sweep(70, 230, d), "saw") + osc(sweep(71, 232, d), "saw"), 2400) * swell(d, 0.7, 5)
-    return hum + 0.4 * crackle(d, 50) * swell(d, 0.7, 5)
-
-
-@sound("chainsaw_special", 0.65)
-def _():
-    # 0.45초 제자리에서 돌다가 돌진한다 — 시동이 걸려 회전이 오르고 돌진에서 크게 운다.
-    d = 0.9
-    f = np.concatenate([sweep(35, 75, 0.45), sweep(75, 95, 0.45)])
-    motor = am(osc(f, "square"), 28, 0.5)
-    grind = am(bp(noise(d), 1500, 5000), 41, 0.5) * np.concatenate([np.linspace(0.2, 0.5, n(0.45)), np.ones(n(0.45))])
-    return (0.7 * lp(motor, 1600) + grind) * swell(d, 0.55, 3)
-
-
-@sound("hammer_special", 0.6)
-def _():
-    d = 0.5
-    rise = tone(180, 820, d, "sine") * (1 + 0.5 * np.sin(2 * np.pi * 28 * t_(d)))
-    return 0.6 * rise * swell(d, 0.85, 6) + crackle(d, 90) * swell(d, 0.6, 3)
-
-
-@sound("lightning", 0.85)
-def _():
+    # 켜지는 '치-잉' — 음이 바닥에서 솟아오르고 지직거리며 웅이 자리 잡는다.
     d = 0.7
-    crack = hp(noise(0.05), 2000) * env(0.05, 0.0005, 60)
-    zap = crackle(0.2, 250)
-    rumble = lp(noise(d), 260) * env(d, 0.02, 4)
-    return mix(crack, 0.7 * zap, at(1.4 * rumble, 0.03))
+    f = np.concatenate([ramp(0.22, 25, 92), const(92, d - 0.22)])
+    hum = saber_hum(d, freq=f) * np.minimum(t_(d) / 0.05, 1) * 1.2
+    snap = mix(crackle(0.25, 2500, 3) * 0.8, bp(noise(0.25), 2500, 9000) * env(0.25, 0.001, 12))
+    return verb(mix(hum * env(d, 0.01, 1.5), snap), "room", 0.12)
 
 
-@sound("cannon_special", 0.8)
+@sound("chainsaw_special", 0.68)
 def _():
+    # 제자리 0.45초: 줄을 당겨 시동 → 회전이 치솟음, 돌진: 최고 회전으로 운다.
+    pull = mix(strike(0.03, 300, 3000, 100), thump(80, 50, 0.1, 25)) * 0.8
+    d = 1.0
+    f = np.concatenate([ramp(0.12, 25, 40), ramp(0.33, 40, 150), ramp(d - 0.45, 150, 165, "lin")])
+    run = engine(f, d, load=0.2) * fit(np.concatenate([np.linspace(0.4, 1, n(0.45)), np.ones(n(d))]), d)
+    return verb(mix(pull, at(run * env(d + 0.05, 0.02, 0.6)[: n(d)], 0.03)), "outdoor", 0.12)
+
+
+@sound("hammer_special", 0.62)
+def _():
+    # 망치에 전기가 감긴다 — 변압기 험이 커지고 아크가 튄다.
     d = 0.6
-    hiss = bp(noise(d), 600, 3500) * swell(d, 0.15, 4)
-    return mix(thud(110, 40, 0.35, 9, 1.0), at(0.6 * hiss, 0.03), 0.4 * tone(300, 700, d, "saw") * swell(d, 0.2, 5) * 0.4)
+    hum = osc(const(120, d), "square") + 0.5 * osc(const(240, d), "square")
+    hum = lp(hum, 3500) * (t_(d) / d) ** 0.8 * 0.5
+    arcs = crackle(d, 700) * (0.3 + t_(d) / d)
+    whine = osc(ramp(d, 400, 1600)) * (t_(d) / d) ** 2 * 0.15
+    return verb(mix(hum, arcs, whine, at(crackle(0.06, 6000) * 1.2, d - 0.06)), "room", 0.12)
 
 
-@sound("cannon_hit", 0.8)
+@sound("lightning", 0.9)
 def _():
-    d = 0.4
-    return lp(noise(d), 1500) * env(d, 0.001, 10) + tone(130, 45, d) * env(d, 0.002, 9)
+    return thunder(1.8)
 
 
-@sound("bomb_special", 0.5)
+@sound("cannon_special", 0.85)
 def _():
-    throw = whoosh(0.14, 700, 3000, 0.4)
-    d = 0.55
-    fuse = hp(noise(d), 3000) * 0.3 + crackle(d, 70)
-    return mix(throw, at(0.6 * fuse * env(d, 0.03, 2.5), 0.1))
+    # 미사일 — 발사 쿵 + 로켓 모터가 그르렁거리며 멀어진다.
+    launch = gunshot(boom=60, blast_lp=3000, blast_decay=25, barrel=400, size=1.2, tail=0.2) * 0.8
+    d = 1.1
+    burble = 1 + 0.5 * np.sin(2 * np.pi * 31 * t_(d) + 4 * np.sin(2 * np.pi * 7 * t_(d)))
+    motor = tv(pink(d) * burble + noise(d) * 0.4, ramp(d, 4000, 600), "low") * env(d, 0.03, 2.2) * 2.5
+    return verb(mix(launch, at(motor, 0.04)), "outdoor", 0.25)
+
+
+@sound("cannon_hit", 0.82)
+def _():
+    return explosion(0.55, 0.9)
+
+
+@sound("bomb_special", 0.52)
+def _():
+    throw = whoosh(0.16, 600, 2000, width=1.5, peak=0.5) * 0.8
+    d = 0.8
+    fuse = mix(crackle(d, 1100) * 0.7, hp(noise(d), 4000) * 0.5 * drift(d, 30, 0.4)) * env(d, 0.02, 2)
+    return verb(mix(throw, at(fuse, 0.08)), "room", 0.1)
 
 
 @sound("explosion", 0.95)
 def _():
-    d = 1.0
-    blast = lp(noise(d), 900) * env(d, 0.002, 4.5)
-    boom = tone(80, 28, d) * env(d, 0.002, 4)
-    debris = crackle(0.5, 80)
-    return mix(1.2 * blast, boom, at(0.4 * debris, 0.05))
+    return explosion(1.0, 1.8)
 
 
-@sound("bow_special", 0.65)
+@sound("bow_special", 0.66)
 def _():
-    strings = [at(pluck(f, 0.3, 0.993) * env(0.3, 0.001, 9), o) for f, o in [(180, 0.0), (205, 0.035), (230, 0.07)]]
-    return mix(*strings, at(0.6 * whoosh(0.18, 1500, 6000, 0.2), 0.03))
+    # 세 발을 메긴 강한 시위 — 더 깊은 '퉁', 화살 셋이 조금씩 어긋나 찢고 간다.
+    string = pluck(100, 0.45, 0.992, 0.5) * env(0.45, 0.0005, 6) * 1.1
+    limb = thump(85, 50, 0.15, 22) * 1.1
+    arrows = [at(whoosh(0.16, 1600, 4800, width=1.25, peak=0.15) * 0.5, o) for o in (0.005, 0.025, 0.045)]
+    return verb(mix(string, limb, *arrows), "outdoor", 0.18)
 
 
-@sound("trident_special", 0.75)
+@sound("trident_special", 0.78)
 def _():
-    throw = whoosh(0.22, 400, 2500, 0.4)
-    return mix(throw, at(0.6 * metal(900, 0.4, 6), 0.06), at(0.35 * crackle(0.3, 80), 0.06))
+    # 무거운 창을 던지는 깊은 바람 + 갈래가 바람을 가르며 내는 휘파람 + 전기 기운.
+    d = 0.45
+    heave = whoosh(d, 220, 900, 500, width=1.6, peak=0.35) * 1.2
+    whistle = osc(ramp(d, 1900, 1500)) * bell_env(d, 0.4, 2) * 0.08
+    return verb(mix(heave, whistle, crackle(d, 250, 2) * 0.3), "outdoor", 0.15)
 
 
-@sound("glove_special", 0.6)
+@sound("glove_special", 0.62)
 def _():
-    d = 0.35
-    ignite = lp(osc(sweep(140, 520, d), "square"), 1600) * swell(d, 0.7, 6)
-    return 0.6 * ignite + lp(noise(d), 2500) * swell(d, 0.5, 4)
-
-
-@sound("shuriken_special", 0.5)
-def _():
-    d = 0.35
-    whirr = am(bp(noise(d), 1800, 6000), 26, 0.85) * env(d, 0.01, 5)
-    whistle = tone(2200, 1600, d) * env(d, 0.01, 7)
-    return whirr + 0.3 * whistle
-
-
-@sound("knuckle_special", 0.6)
-def _():
-    # 0.5초 끌어모은 뒤 강펀치(`knuckle_punch`)가 터진다.
+    # 로켓 점화 — 그르렁거리는 분사가 커지며 밝아진다.
     d = 0.5
-    growl = lp(osc(sweep(70, 210, d), "saw"), 900) * swell(d, 0.95, 3)
-    return growl + 0.5 * bp(noise(d), 300, 1500) * swell(d, 0.95, 3)
+    burble = 1 + 0.4 * np.sin(2 * np.pi * 27 * t_(d))
+    jet = tv(pink(d) * burble + noise(d) * 0.5, ramp(d, 500, 4500), "low") * (t_(d) / d) ** 0.8 * 2.6
+    return verb(mix(strike(0.03, 200, 2500, 90), jet), "outdoor", 0.15)
 
 
-@sound("knuckle_punch", 0.85)
+@sound("shuriken_special", 0.52)
 def _():
-    crack = hp(noise(0.05), 1500) * env(0.05, 0.0005, 70)
-    return mix(crack, thud(180, 45, 0.35, 10, 1.0), 0.5 * whoosh(0.15, 500, 2500, 0.1))
+    d = 0.45
+    spin = whoosh(d, 2200, 4200, 2600, width=1.25, peak=0.3, flutter=26)
+    return verb(spin * env(d, 0.005, 2.5), "outdoor", 0.12)
+
+
+@sound("knuckle_special", 0.62)
+def _():
+    # 0.5초 끌어모은다 — 가죽이 조여 삐걱이고 낮은 압력이 차오른다. 뒤이어 강펀치가 터진다.
+    d = 0.5
+    creak = grains(d, 120, 300, 2000, 0.003, 0) * 0.6
+    pressure = tv(pink(d), ramp(d, 120, 600), "low") * (t_(d) / d) ** 1.5 * 2.5
+    return verb(mix(creak, pressure, whoosh(d, 200, 800, width=1.8, peak=0.95) * 0.5), "room", 0.1)
+
+
+@sound("knuckle_punch", 0.88)
+def _():
+    air = whoosh(0.12, 400, 1500, width=1.5, peak=0.7) * 0.6
+    hit = at(mix(strike(0.03, 600, 8000, 130) * 1.6, thump(110, 38, 0.35, 10) * 1.6, flesh(0.12, 1.1)), 0.1)
+    return verb(sat(mix(air, hit), 1.8), "room", 0.18)
 
 
 @sound("knuckle_punch_big", 0.95)
 def _():
-    crack = hp(noise(0.07), 1200) * env(0.07, 0.0005, 50)
-    boom = tone(120, 30, 0.7) * env(0.7, 0.002, 5)
-    return mix(crack, boom, 0.8 * lp(noise(0.6), 600) * env(0.6, 0.002, 6), 0.4 * bell(660, 0.6, 5))
+    air = whoosh(0.15, 300, 1300, width=1.6, peak=0.7) * 0.7
+    hit = at(sat(mix(strike(0.05, 300, 9000, 80) * 1.8, thump(90, 28, 0.7, 5) * 2.0, flesh(0.15, 1.2),
+                     lp(pink(0.6), 400) * env(0.6, 0.002, 6) * 2), 2.4), 0.12)
+    return verb(mix(air, hit), "hall", 0.25)
 
 
-@sound("axe_special", 0.6)
+@sound("axe_special", 0.62)
 def _():
-    d = 0.3
-    return whoosh(d, 500, 3000, 0.5) + 0.4 * tone(200, 600, d, "tri") * swell(d, 0.6, 6)
+    # 땅을 박차고 솟는다 — 흙 튀는 소리 + 몸과 도끼가 크게 도는 바람.
+    kick = mix(grains(0.1, 600, 800, 5000, 0.001, 5), thump(100, 50, 0.12, 25))
+    rise = whoosh(0.4, 250, 1200, 700, width=1.6, peak=0.45) * 1.1
+    return verb(mix(kick, at(rise, 0.02)), "outdoor", 0.15)
 
 
 @sound("axe_slam", 0.95)
 def _():
-    d = 0.75
-    boom = tone(75, 28, d) * env(d, 0.002, 5)
-    rumble = lp(noise(d), 350) * env(d, 0.005, 5)
-    debris = mix(*[at(bp(noise(0.03), 800, 3000) * env(0.03, 0.001, 80), o) for o in RNG.uniform(0.05, 0.4, 8)])
-    return mix(boom, 1.2 * rumble, 0.4 * debris)
+    hit = sat(mix(strike(0.05, 200, 6000, 70) * 1.8, thump(70, 25, 0.8, 4.5) * 2.2), 2.2)
+    earth = lp(pink(1.0), 350) * env(1.0, 0.004, 4) * 2.2
+    debris = at(grains(0.8, 90, 500, 4500, 0.003, 3) * 0.7, 0.05)
+    ring = modal(700, BAR, 0.6, 5, 0.001, beat=0.003) * 0.15
+    return verb(mix(hit, earth, debris, ring), "outdoor", 0.35)
 
 
-@sound("shotgun_special", 0.9)
+@sound("shotgun_special", 0.92)
 def _():
-    blast = hp(noise(0.3), 400) * env(0.3, 0.0005, 14)
-    body = tone(110, 40, 0.3) * env(0.3, 0.001, 12)
-    click = lambda: mix(bp(noise(0.03), 1500, 5000) * env(0.03, 0.0005, 90), 0.5 * metal(2500, 0.05, 50))
-    return mix(blast, body, at(0.35 * click(), 0.32), at(0.4 * click(), 0.42))
+    shot = gunshot(boom=60, blast_lp=5000, blast_decay=30, barrel=550, size=1.4, tail=0.35)
+    # 펌프 — 손잡이를 당기는 마찰과 '철', 밀어 넣는 '컥'.
+    slide = lambda d: bp(noise(d), 1500, 6000) * bell_env(d, 0.5, 1) * 0.35
+    pump = mix(slide(0.07), at(click(0.008, 2600, 0.04) * 1.4, 0.07),
+               at(slide(0.06), 0.13), at(click(0.008, 2200, 0.05) * 1.6, 0.19))
+    return mix(shot, at(verb(pump, "room", 0.1), 0.38))
 
 
-@sound("pole_special", 0.55)
+@sound("pole_special", 0.58)
 def _():
-    d = 0.35
-    stretch = osc(sweep(260, 900, d) * (1 + 0.06 * np.sin(2 * np.pi * 18 * t_(d))), "tri") * env(d, 0.01, 5)
-    creak = bp(noise(d), 500, 900) * swell(d, 0.5, 6)
-    return stretch + 0.5 * creak
+    # 봉이 쑥 늘어난다 — 마디가 미끄러져 나오는 마찰과 끝에서 잠기는 '탁'.
+    d = 0.32
+    slide = tv(noise(d), ramp(d, 500, 1400), "band", 1.3) * bell_env(d, 0.6, 1) * 2
+    lock = at(mix(modal(520, WOOD, 0.2, 18, 0.01, hard=0.0005) * 1.4, click(0.006, 1800, 0.02)), d - 0.02)
+    return verb(mix(whoosh(0.3, 300, 900, width=1.7) * 0.4, slide, lock), "room", 0.12)
 
 
-@sound("rifle_special", 0.5)
+@sound("rifle_special", 0.52)
 def _():
-    click = lambda f: mix(hp(noise(0.03), 2000) * env(0.03, 0.0005, 90), 0.6 * metal(f, 0.08, 30))
-    return mix(click(2600), at(click(3100), 0.09))
+    # 장전 손잡이 — 당기는 '철' + 마찰 + 놓아서 닫히는 '척'.
+    back = click(0.008, 2400, 0.05) * 1.4
+    slide = at(bp(noise(0.05), 1800, 6000) * bell_env(0.05, 0.4, 1) * 0.35, 0.01)
+    home = at(mix(click(0.01, 1900, 0.07) * 1.8, thump(180, 120, 0.04, 60) * 0.4), 0.09)
+    return verb(mix(back, slide, home), "room", 0.1)
 
 
-@sound("shield_special", 0.55)
+@sound("shield_special", 0.58)
 def _():
-    d = 0.35
-    whirr = am(bp(noise(d), 500, 2500), 18, 0.8) * env(d, 0.01, 5)
-    return mix(whirr, 0.3 * metal(800, 0.2, 10))
+    # 던진 방패 — 원판이 돌며 바람을 '웅웅' 썰고, 판이 낮게 운다.
+    d = 0.5
+    spin = whoosh(d, 600, 1500, 900, width=1.4, peak=0.3, flutter=14)
+    hum = modal(330, PLATE, d, 3, 0.002, beat=0.006) * (0.6 + 0.4 * np.sin(2 * np.pi * 14 * t_(d))) * 0.12
+    return verb(mix(spin, hum), "outdoor", 0.12)
 
 
-@sound("shield_grow", 0.7)
+@sound("shield_grow", 0.72)
 def _():
-    return mix(metal(380, 0.6, 4, bright=0.7), 0.5 * tone(180, 480, 0.3, "tri") * swell(0.3, 0.8, 6))
+    # 방패가 커진다 — 쇠판이 늘어나며 낮게 신음하고 '쿵' 하고 자리 잡는다.
+    d = 0.45
+    groan = tv(noise(d), ramp(d, 180, 420), "band", 1.08) * bell_env(d, 0.7, 1.2) * 4
+    settle = at(mix(modal(260, PLATE, 0.8, 4, 0.0015, beat=0.004, hard=0.001), thump(90, 45, 0.25, 12)), d - 0.05)
+    return verb(mix(groan, settle), "hall", 0.18)
 
 
-@sound("swap", 0.6)
+@sound("swap", 0.62)
 def _():
-    d = 0.35
-    f = np.concatenate([sweep(400, 1600, d / 2), sweep(1600, 400, d / 2)])
-    shimmer = osc(f + 60 * np.sin(2 * np.pi * 40 * t_(d)[: len(f)]), "sine")
-    return shimmer * swell(d, 0.5, 4) + 0.2 * crackle(d, 60)
+    # 순간이동 — 공기가 빨려 들어가는 소리(거꾸로 된 잔향)와 반대편에서 '펑' 메우는 소리.
+    puff = mix(lp(noise(0.08), 3000) * env(0.08, 0.001, 30), thump(130, 60, 0.1, 25) * 0.6)
+    suck = verb(puff, "hall", 1.0)[::-1][-n(0.25):] * 0.8
+    pop = at(mix(puff * 1.2, whoosh(0.2, 2000, 600, width=1.6, peak=0.15) * 0.6), 0.25)
+    return verb(mix(suck, pop), "room", 0.15)
 
 
-@sound("dagger_hit", 0.7)
+@sound("dagger_hit", 0.72)
 def _():
-    shnk = bp(noise(0.07), 2500, 8000) * env(0.07, 0.0005, 45)
-    return mix(shnk, at(0.6 * metal(2900, 0.2, 14), 0.01), 0.4 * thud(200, 90, 0.08, 40))
+    stab = mix(strike(0.012, 3000, 13000, 400) * 1.3, flesh(0.1, 1.3))
+    tick = modal(3400, BAR, 0.25, 12, 0.001, hard=0.0002) * 0.2
+    return verb(mix(stab, tick), "room", 0.12)
 
 
-@sound("projectile_hit", 0.5)
+@sound("projectile_hit", 0.55)
 def _():
-    return thud(230, 90, 0.12, 30, 0.6)
+    return verb(mix(strike(0.015, 1200, 9000, 300), flesh(0.1, 1.1) * 1.1), "room", 0.1)
 
 
-@sound("projectile_land", 0.35)
+@sound("projectile_land", 0.38)
 def _():
-    return thud(320, 150, 0.08, 45, 0.9)
+    thunk = mix(strike(0.02, 300, 3000, 180) * 1.2, thump(170, 80, 0.08, 40), grains(0.1, 500, 700, 4000, 0.001, 5) * 0.5)
+    return verb(thunk, "room", 0.1)
 
 
 # ── 무기끼리 부딪침 ──
 
-@sound("clash_metal", 0.8)
+@sound("clash_metal", 0.82)
 def _():
-    click = hp(noise(0.02), 3000) * env(0.02, 0.0003, 120)
-    return mix(click, metal(2100, 0.45, 7), 0.8 * metal(2950, 0.4, 8))
+    # 칼과 칼 — 두 날이 각자 울고(맥놀이), 미끄러지며 긁히고, 불꽃이 튄다.
+    ring = mix(modal(1180, BAR, 1.3, 2.5, 0.0005, beat=0.003, hard=0.00012),
+               modal(1530, BAR, 1.1, 2.8, 0.0005, beat=0.0025, hard=0.00012) * 0.8)
+    grind = scrape(0.12, 4500, 3000) * env(0.12, 0.002, 18) * 0.4
+    return verb(mix(strike(0.008, 3000, 14000, 500) * 1.2, ring * 0.7, grind, crackle(0.15, 700, 4) * 0.4), "hall", 0.18)
 
 
-@sound("clash_energy", 0.7)
+@sound("clash_energy", 0.74)
 def _():
-    d = 0.3
-    zap = bp(noise(d), 1200, 7000) * env(d, 0.001, 18)
-    hum = lp(osc(const(118, d), "saw") + osc(const(123, d), "saw"), 2000) * env(d, 0.002, 10)
-    return mix(zap, 0.6 * hum, 0.6 * crackle(0.2, 200))
+    d = 0.4
+    surge = saber_hum(d, 110) * env(d, 0.002, 6) * 1.3
+    flare = mix(crackle(0.25, 3000, 3) * 1.2, bp(noise(0.25), 1500, 9000) * env(0.25, 0.001, 14) * 1.2)
+    return verb(mix(surge, flare), "room", 0.14)
 
 
-@sound("clash_wood", 0.7)
+@sound("clash_wood", 0.72)
 def _():
-    d = 0.12
-    knock = noise(d) * env(d, 0.0005, 55)
-    return mix(bp(knock, 850, 980) * 6 + bp(knock, 1650, 1850) * 5, at(bp(noise(0.08), 900, 1000) * env(0.08, 0.0005, 60) * 4, 0.05))
+    # 나무 봉끼리 — '딱' 하고 둘이 다른 높이로 짧게 운다.
+    a = modal(560, WOOD, 0.25, 16, 0.012, hard=0.0004)
+    b = modal(740, WOOD, 0.22, 18, 0.012, hard=0.0004)
+    return verb(mix(strike(0.01, 800, 6000, 400), a, at(b * 0.8, 0.003)), "room", 0.13)
 
 
-@sound("clash_heavy", 0.85)
+@sound("clash_heavy", 0.86)
 def _():
-    return mix(metal(330, 0.55, 5, bright=0.8), thud(150, 60, 0.25, 14, 1.0))
+    # 망치가 쇠를 친다 — 낮고 둔한 '깡', 몸통 쿵.
+    ring = modal(380, PLATE, 0.9, 3.5, 0.0012, beat=0.004, hard=0.0006)
+    return verb(sat(mix(strike(0.03, 300, 6000, 140) * 1.4, thump(90, 40, 0.3, 10) * 1.5, ring * 0.9), 1.6), "hall", 0.18)
 
 
-@sound("clash_soft", 0.6)
+@sound("clash_soft", 0.62)
 def _():
-    d = 0.16
-    return lp(noise(d), 600) * env(d, 0.003, 22) + tone(260, 170, d, "tri") * env(d, 0.003, 18)
+    # 글러브가 막힌다 — 가죽이 단단한 것에 '퍽', 울림 없음.
+    return verb(mix(bp(noise(0.05), 300, 1800) * env(0.05, 0.0005, 55) * 1.4, thump(130, 70, 0.14, 24)), "room", 0.1)
 
 
-@sound("clash_saw", 0.7)
+@sound("clash_saw", 0.72)
 def _():
-    d = 0.3
-    sparks = am(hp(noise(d), 3500), 55, 0.7) * env(d, 0.002, 9)
-    return mix(sparks, 0.5 * metal(3200, 0.25, 12), 0.5 * crackle(d, 150))
+    # 톱날이 쇠에 걸린다 — 체인이 긁어 대는 '끼기기긱'과 불꽃.
+    d = 0.35
+    chatter = scrape(d, 3600, 2600, rough=70) * env(d, 0.002, 6) * 0.7
+    return verb(mix(chatter, engine(const(120, d), d, 0.5) * 0.4 * env(d, 0.002, 6), crackle(d, 1200, 3) * 0.6,
+                    modal(2900, BAR, 0.3, 8, 0.001) * 0.15), "room", 0.12)
 
 
-@sound("clash_shield", 0.85)
+@sound("clash_shield", 0.86)
 def _():
-    click = bp(noise(0.03), 800, 4000) * env(0.03, 0.0005, 90)
-    return mix(click, metal(520, 0.6, 5, bright=0.9), 0.5 * metal(1240, 0.4, 8))
+    # 방패 — 넓은 쇠판이 낮게 '부웅' 울며 오래 맥놀이한다.
+    plate = modal(240, PLATE, 1.4, 2.2, 0.0011, beat=0.005, hard=0.0005)
+    return verb(mix(strike(0.02, 500, 9000, 260) * 1.2, plate, thump(100, 50, 0.2, 18)), "hall", 0.2)
 
 
 # ── 판 진행·화면 ──
 
 @sound("count_beep", 0.45)
 def _():
-    d = 0.16
-    return (osc(const(880, d), "tri") + 0.3 * osc(const(1760, d), "sine")) * env(d, 0.003, 14)
+    # 경기장 계시기 — 짧고 단단한 전자 삑, 큰 공간에 울린다.
+    d = 0.14
+    tone = (osc(const(988, d), "square") * 0.5 + osc(const(1976, d)) * 0.2) * env(d, 0.002, 4)
+    tone[-n(0.02):] *= np.linspace(1, 0, n(0.02))
+    return verb(lp(tone, 5000), "hall", 0.18)
 
 
-@sound("count_go", 0.6)
+@sound("count_go", 0.62)
 def _():
-    d = 0.5
-    chord = sum(osc(const(f, d), "tri") for f in (1047, 1319, 1568)) / 3
-    return mix(chord * env(d, 0.004, 5), 0.3 * hp(noise(0.2), 3000) * env(0.2, 0.002, 15))
+    # 시작 에어혼 — 겹친 리드 두 음, 처음에 음이 차오르고 숨이 끝난다.
+    d = 0.75
+    rise = np.minimum(t_(d) / 0.04, 1)
+    tones = sum(osc(f * (0.94 + 0.06 * rise) * drift(d, 8, 0.003), "saw") for f in (349, 440, 523)) / 3
+    horn = mix(reson(tones, 1100, 2) * 1.2, reson(tones, 2600, 3) * 0.6, lp(tones, 3000) * 0.5)
+    shape = np.minimum(t_(d) / 0.02, 1) * np.clip((d - t_(d)) / 0.12, 0, 1)
+    return verb(horn * shape, "hall", 0.25)
 
 
-@sound("intro", 0.7)
+@sound("intro", 0.72)
 def _():
-    sweep_in = whoosh(0.35, 400, 4000, 0.8)
-    stab = sum(osc(const(f, 0.7), "saw") for f in (262, 330, 392, 523)) / 4
-    return mix(0.7 * sweep_in, at(lp(stab, 3000) * env(0.7, 0.004, 4), 0.3), at(0.8 * thud(110, 45, 0.4, 7), 0.3))
+    # 경기 표지 — 빨려 드는 바람이 차오르다 큰 타격과 쇠 공명이 넓은 공간에 퍼진다.
+    riser = tv(pink(0.5) + noise(0.5) * 0.3, ramp(0.5, 300, 6000), "band", 1.8) * (t_(0.5) / 0.5) ** 2 * 3
+    hit = at(sat(mix(thump(70, 28, 1.0, 3.5) * 2, strike(0.05, 150, 9000, 60) * 1.5,
+                     modal(220, CHURCH, 1.5, 1.6, 0.0006, beat=0.003) * 0.6), 1.8), 0.48)
+    return verb(mix(riser, hit), "hall", 0.35)
 
 
-@sound("point", 0.6)
+@sound("point", 0.62)
 def _():
     # point_gain.gd 의 시각에 맞춘다 — 띠가 쓸려 들어오고(0) 빛이 터지고(0.60)
-    # `+1 포인트!` 가 뜬다(0.74).
-    band = whoosh(0.25, 800, 5000, 0.4)
-    burst = mix(hp(noise(0.2), 3500) * env(0.2, 0.002, 12), bell(1760, 0.5, 6))
-    chime = notes([1047, 1319, 1568], 0.06, 0.4, "tri", 6)
-    return mix(0.6 * band, at(0.6 * burst, 0.60), at(chime, 0.74))
+    # `+1 포인트!` 가 뜬다(0.74). 실로폰과 반짝이는 쇠 울림이다.
+    band = whoosh(0.28, 600, 4000, width=1.6, peak=0.4) * 0.8
+    burst = at(mix(hp(noise(0.25), 4000) * env(0.25, 0.002, 14) * 0.6,
+                   modal(2637, GLOCK, 0.8, 4, 0.0003, hard=0.0002) * 0.5), 0.60)
+    notes = mix(*[at(modal(f, GLOCK, 1.0, 3, 0.0003, hard=0.0003), 0.74 + i * 0.07)
+                  for i, f in enumerate((1047, 1319, 1568))])
+    return verb(mix(band, burst, notes * 0.6), "hall", 0.25)
 
 
-@sound("point_final", 0.7)
+@sound("point_final", 0.72)
 def _():
-    band = whoosh(0.25, 800, 5000, 0.4)
-    burst = mix(hp(noise(0.4), 2500) * env(0.4, 0.002, 6), bell(1760, 0.8, 4), 0.6 * thud(100, 40, 0.5, 6))
-    chime = notes([1047, 1319, 1568, 2093], 0.07, 0.7, "tri", 4)
-    return mix(0.6 * band, at(burst, 0.60), at(chime, 0.74))
+    band = whoosh(0.28, 600, 4000, width=1.6, peak=0.4) * 0.8
+    burst = at(mix(hp(noise(0.5), 2500) * env(0.5, 0.002, 6) * 0.6, thump(80, 35, 0.6, 5) * 1.2,
+                   modal(1319, CHURCH, 1.6, 1.4, 0.0004, beat=0.002) * 0.5), 0.60)
+    notes = mix(*[at(modal(f, GLOCK, 1.3, 2.4, 0.0003, hard=0.0003), 0.74 + i * 0.08)
+                  for i, f in enumerate((1047, 1319, 1568, 2093))])
+    return verb(mix(band, burst, notes * 0.65), "hall", 0.3)
 
 
-@sound("victory", 0.7)
+@sound("victory", 0.72)
 def _():
-    melody = notes([523, 659, 784, 1047], 0.13, 0.3, "square", 6) * 0.5
-    final = sum(osc(const(f, 1.2), "tri") for f in (523, 659, 784, 1047)) / 4 * env(1.2, 0.01, 2.2)
-    return mix(lp(melody, 4000), at(final, 0.52), at(0.4 * bell(2093, 1.0, 3), 0.52))
+    # 금관 팡파르 — 짧은 세 음 뒤 길게 뻗는 화음, 팀파니 쿵.
+    lead = mix(*[at(fm_brass(f, dur) * 0.6, o) for f, dur, o in
+                 [(523, 0.14, 0.0), (523, 0.14, 0.15), (523, 0.14, 0.3), (659, 0.24, 0.45)]])
+    chord = at(sum(fm_brass(f, 1.4, 2.5) for f in (392, 523, 659, 784)) / 3, 0.72)
+    timp = at(mix(modal(98, (1.0, 1.5, 1.98, 2.44), 1.0, 3, 0.001, hard=0.003) * 0.8, thump(98, 70, 0.4, 6)), 0.72)
+    return verb(lp(mix(lead, chord, timp), 6000), "hall", 0.3)
 
 
-@sound("card_open", 0.45)
+@sound("card_open", 0.48)
 def _():
-    swish = lambda: hp(noise(0.07), 2500) * swell(0.07, 0.3, 10)
-    return mix(swish(), at(swish(), 0.08), at(swish(), 0.16))
+    # 카드 석 장을 펼친다 — 종이가 미끄러지는 '스윽'과 끝의 '탁'.
+    def deal():
+        slide = bp(noise(0.06), 2000, 8000) * bell_env(0.06, 0.3, 1) * 0.8
+        flick = at(strike(0.006, 1500, 7000, 700) * 0.7, 0.055)
+        return mix(slide, flick, grains(0.06, 300, 3000, 9000, 0.0003, 0) * 0.2)
+    return verb(mix(deal(), at(deal(), 0.09), at(deal(), 0.18)), "room", 0.08)
 
 
 @sound("card_move", 0.3)
 def _():
-    d = 0.04
-    return osc(const(1500, d), "square") * env(d, 0.001, 70) * 0.5
+    return verb(mix(strike(0.005, 1500, 7000, 900), bp(noise(0.025), 3000, 8000) * env(0.025, 0.001, 120) * 0.4), "room", 0.06)
 
 
-@sound("card_pick", 0.5)
+@sound("card_pick", 0.52)
 def _():
-    return notes([784, 1047, 1568], 0.05, 0.3, "tri", 9)
+    # 카드를 탁 내려놓고, 고른 것을 알리는 실로폰 두 음.
+    slap = mix(bp(noise(0.03), 500, 5000) * env(0.03, 0.0003, 120) * 1.3, thump(220, 140, 0.04, 70) * 0.4)
+    chime = mix(at(modal(1568, GLOCK, 0.6, 5, 0.0003), 0.03), at(modal(2093, GLOCK, 0.6, 5, 0.0003), 0.09)) * 0.5
+    return verb(mix(slap, chime), "room", 0.12)
 
 
-@sound("click", 0.4)
+@sound("click", 0.42)
 def _():
-    d = 0.06
-    return tone(800, 1300, d, "tri") * env(d, 0.001, 45)
+    # 실제 버튼 — 누를 때 '딸', 놓을 때 작게 '깍'.
+    return verb(mix(click(0.004, 3200, 0.015), at(click(0.003, 3600, 0.01) * 0.45, 0.055)), "room", 0.06)
 
 
-@sound("confirm", 0.5)
+@sound("confirm", 0.52)
 def _():
-    return notes([660, 990], 0.08, 0.22, "tri", 12)
+    press = click(0.005, 3000, 0.02)
+    notes = mix(at(modal(659, MARIMBA, 0.6, 6, 0.004, hard=0.0012), 0.02), at(modal(988, MARIMBA, 0.6, 6, 0.004, hard=0.0012), 0.1))
+    return verb(mix(press, notes * 0.7), "room", 0.12)
 
 
 def main():
