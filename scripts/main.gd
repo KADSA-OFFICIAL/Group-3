@@ -654,11 +654,7 @@ func _check_falls() -> void:
 	for player: Player in players_root.get_children():
 		if not player.alive:
 			continue
-		if drowning.has(player):
-			Sfx.cue("splash")
-			player.kill()
-		elif Combat.is_out_of_bounds(player.global_position, screen):
-			Sfx.cue("fall")
+		if Combat.is_out_of_bounds(player.global_position, screen) or drowning.has(player):
 			player.kill()
 
 
@@ -723,7 +719,6 @@ func _show_match_result(winner_id: int) -> void:
 	if winner == null:
 		return
 	_play_result(winner.character_id, "%s 승리!" % winner.player_name)
-	Sfx.play("victory", 0.0, false)
 
 
 func _play_result(character_id: String, title: String) -> void:
@@ -907,7 +902,6 @@ func _on_fish_struck(body: Node2D, direction: float) -> void:
 	# 물고기가 가던 쪽으로 밀리게 한다.
 	player.apply_hit(0.0, Combat.Knockback.MEDIUM, player.global_position.x - direction,
 			0.0, "projectile")
-	Sfx.cue("fish")
 
 
 ## 맵 칸을 화면 가운데에 놓는다 (#329).
@@ -1052,27 +1046,14 @@ func _try_melee_basic(attacker: Player, target: Player) -> void:
 	# 가리는 자세라 그 자세로 때릴 수는 없다 — 탄을 막는 것과 맞바꾸는 값이다.
 	if attacker.is_guarding():
 		return
+	if target.is_invulnerable() or is_blocked(attacker, target):
+		return
 	# 등 뒤의 상대는 못 때린다. 뒤를 잡으면 일방적으로 때릴 수 있다는 뜻이기도 하다.
 	if not _faces(attacker, target):
 		return
 
 	var reach: float = MELEE_REACH + attacker.current_reach()
 	if attacker.global_position.distance_to(target.global_position) > reach:
-		return
-
-	var key := "%d>%d" % [attacker.player_id, target.player_id]
-	var now := _now()
-	# 막힌 공격은 **무기끼리 부딪친 소리**를 낸다 (#373). 예전에는 아무 표시 없이 조용히
-	# 빗나가서, 막혔는지 사거리가 모자랐는지 구분할 수 없었다. 거리·방향을 다 통과한 뒤에만
-	# 내야 엉뚱한 자리에서 안 울린다 — 그래서 위 두 검사를 막기보다 앞으로 옮겼다(셋 다
-	# 그냥 돌아가는 검사라 순서가 결과를 바꾸지 않는다). 박자는 넉백과 같은 0.6초다.
-	if is_blocked(attacker, target):
-		var clash_key := "clash>" + key
-		if now >= _next_hit_at.get(clash_key, 0.0):
-			_next_hit_at[clash_key] = now + Combat.MELEE_HIT_INTERVAL
-			Sfx.cue(Sfx.clash_sound(attacker.weapon_id))
-		return
-	if target.is_invulnerable():
 		return
 
 	# 지속 데미지 무기는 자기 basic_interval 대로 촘촘히 들어간다.
@@ -1082,6 +1063,8 @@ func _try_melee_basic(attacker: Player, target: Player) -> void:
 	if not continuous:
 		interval = maxf(interval, Combat.MELEE_HIT_INTERVAL)
 
+	var key := "%d>%d" % [attacker.player_id, target.player_id]
+	var now := _now()
 	if now < _next_hit_at.get(key, 0.0):
 		return
 	_next_hit_at[key] = now + interval
@@ -1240,7 +1223,6 @@ func _tick_bleeds() -> void:
 		# 그 오차가 쌓여 3초 동안 들어가는 횟수가 열다섯에서 열넷으로 준다.
 		info["next_at"] = float(info["next_at"]) + interval
 		target.apply_dot(float(info["dps"]) * interval)
-		Sfx.cue("bleed", -4.0)
 
 
 ## 소총 연사 — 한 번 누르면 지속시간 동안 자동으로 나간다.
@@ -1414,7 +1396,6 @@ func _cone_blast(attacker: Player, weapon: Dictionary) -> void:
 	# 탄이 막혔을 때(`Projectile._blocked`)와 같다. 부채꼴 연출은 위에서 이미 띄웠으므로
 	# 쏜 쪽에는 "여기까지였는데 막혔다"가 보인다.
 	if _guarded_cone(attacker, target):
-		Sfx.cue("clash_shield")
 		return
 	# 표에서 꺼낸 값은 Variant라 명시 타입으로 받는다 (#66).
 	var near: float = weapon["special_damage"]
@@ -1567,7 +1548,6 @@ func _resolve_punch(attacker: Player, shot: Dictionary) -> void:
 			return
 		edge = away / maxf(half, 0.001)
 	if _guarded_cone(attacker, target):
-		Sfx.cue("clash_shield")
 		return
 	var center: float = shot["center"]
 	var damage := lerpf(center, center * float(shot["edge_ratio"]), edge)
@@ -2049,7 +2029,6 @@ func _play_cannon_burst(at: Vector2) -> void:
 ## 두 젤리는 얼려 둔다. 미루는 것도 얼리는 것도 부르는 쪽(`_start_round`)의 몫이다.
 @rpc("authority", "call_local", "reliable")
 func _play_match_intro() -> void:
-	Sfx.play("intro", 0.0, false)
 	match_intro.play()
 
 
@@ -2068,7 +2047,6 @@ func _play_point_gain(scorer_id: int, score_after: int, is_final: bool) -> void:
 	# 빨간 띠. 오프라인은 화면이 하나라 늘 딴 사람 기준이다.
 	var as_gain := not Network.is_client() or scorer.is_local_player()
 	point_gain.play(scorer.player_name, scorer.character_id, score_after, as_gain, is_final)
-	Sfx.play("point_final" if is_final else "point", 0.0, false)
 
 
 ## 빨간 표창이 자리를 바꿨다 (투사체가 알려 온다).

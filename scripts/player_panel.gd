@@ -121,7 +121,6 @@ func apply_config(config: Dictionary) -> void:
 
 
 func _cycle(what: String) -> void:
-	Sfx.play("click")
 	match what:
 		"character":
 			character_i = (character_i + 1) % GameState.CHARACTERS.size()
@@ -130,7 +129,6 @@ func _cycle(what: String) -> void:
 
 
 func _randomize_all() -> void:
-	Sfx.play("click")
 	character_i = randi() % GameState.CHARACTERS.size()
 	_update_ui()
 	config_changed.emit()

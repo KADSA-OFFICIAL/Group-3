@@ -715,7 +715,6 @@ func _on_body_entered(body: Node) -> void:
 		# **폭탄보다 뒤에 둔다** — 반경으로 흩뿌리는 것은 막기를 거치지 않는 것이
 		# 이 게임의 규칙이다(샷건 부채꼴·도끼 착지 충격파와 같은 취급).
 		if _guarded_by(body):
-			Sfx.cue("clash_shield")
 			_blocked(body)
 			return
 		_hit_ids[player_id] = true

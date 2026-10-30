@@ -132,11 +132,6 @@ const TRAIL_COLOR := PIERCE_COLOR
 ## 그대로 지워져서 밀리는 것이 보이지 않는다.
 const KNOCKBACK_CONTROL_LOCK := 0.2
 
-## 걷는 동안 발걸음 소리 간격 (#373).
-const STEP_SOUND_INTERVAL := 0.26
-## 이보다 빠르게 떨어지다 닿아야 착지음이 난다 — 낮은 턱을 내려설 때마다 쿵 하면 시끄럽다.
-const LAND_SOUND_SPEED := 260.0
-
 ## 전투 상태. 전투 판정이 정한다.
 var hp := Combat.MAX_HP
 var alive := true
@@ -257,12 +252,6 @@ var _skill_was_pressed := false
 var _target_position := Vector2.ZERO
 var _remote_on_floor := false
 
-## 몸 소리(#373)를 내려고 들고 있는 직전 상태. 판정하는 쪽에서만 쓴다.
-var _was_on_floor := true
-var _fall_speed := 0.0
-var _was_fast_falling := false
-var _next_step_sound_at := 0.0
-
 
 func _ready() -> void:
 	_apply_character()
@@ -324,7 +313,6 @@ func apply_movement(input: Dictionary, delta: float) -> void:
 
 	if input["jump"] and is_on_floor():
 		velocity.y = JUMP_VELOCITY
-		Sfx.cue("jump")
 
 	var direction: float = input["direction"]
 	if direction != 0.0:
@@ -1052,9 +1040,7 @@ func _physics_process(delta: float) -> void:
 		if not Network.is_server():
 			_read_input()
 		_check_long_press()
-		var falling := velocity.y
 		apply_movement(_take_input(), delta)
-		_play_motion_sounds(falling)
 		_send_state()
 		_update_squash(is_on_floor(), delta)
 
@@ -1071,29 +1057,6 @@ func _physics_process(delta: float) -> void:
 	# 여백 보정의 부호는 _place_body()가 flip_h를 보고 맞춘다.
 	$Body.flip_h = facing < 0
 	_place_body()
-
-
-## 착지·발걸음·급강하 소리 (#373). 물리를 계산하는 쪽에서만 돈다 — 온라인 클라이언트는
-## 위치를 받기만 하므로 `Sfx.cue()` 가 서버에서 전해 준다.
-##
-## 강제 이동(돌진·도끼 낙하)은 자기 소리가 따로 있어 여기서 내지 않는다.
-func _play_motion_sounds(falling_speed: float) -> void:
-	var grounded := is_on_floor()
-	if not grounded:
-		_fall_speed = maxf(_fall_speed, falling_speed)
-		var diving := _input_fast_fall and can_act() and velocity.y > 0.0
-		if diving and not _was_fast_falling:
-			Sfx.cue("dive")
-		_was_fast_falling = diving
-	elif not _was_on_floor:
-		if alive and forced_mode == "" and _fall_speed >= LAND_SOUND_SPEED:
-			Sfx.cue("land")
-		_fall_speed = 0.0
-		_was_fast_falling = false
-	elif can_act() and absf(velocity.x) > 1.0 and _now() >= _next_step_sound_at:
-		_next_step_sound_at = _now() + STEP_SOUND_INTERVAL
-		Sfx.cue("step")
-	_was_on_floor = grounded
 
 
 ## 이번 프레임의 입력을 읽어 둔다 (#320).
@@ -1451,12 +1414,7 @@ func apply_buff(kind: String, value: float, duration: float) -> void:
 @rpc("authority", "call_local", "reliable")
 func _receive_hit(new_hp: float, knockback_level: int, direction: float,
 		stun: float, source: String, new_gauge: float, knockback_speed := 0.0) -> void:
-	# 소리는 여기서 낸다 (#373) — 모든 기기가 같은 순간 이 함수를 지나므로 따로 보내지 않는다.
-	# 데미지 없는 밀침(물고기)은 자기 소리가 있어 몸 소리를 내지 않는다.
-	if new_hp < hp and new_hp > 0.0:
-		Sfx.play("hurt")
-	if stun > 0.0:
-		Sfx.play("stun")
+	# 너클 충전 소리는 여기서 낸다 (#373) — 모든 기기가 같은 순간 이 함수를 지난다.
 	_play_charge_sound(new_gauge)
 	_mark_hurt(new_hp)
 	hp = new_hp
@@ -1497,8 +1455,6 @@ func _receive_teleport(to: Vector2) -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _receive_empowered(value: bool) -> void:
-	if value and not empowered_ready:
-		Sfx.play("empowered")
 	empowered_ready = value
 	_apply_weapon()
 
@@ -1581,7 +1537,6 @@ func _check_death() -> void:
 	modulate.a = 1.0
 	pose = Characters.POSE_LOSE
 	_apply_character()
-	Sfx.play("death")
 	# 포인트를 주는 것은 판정하는 쪽뿐이다 — 클라이언트까지 알리면 점수가 두 번 난다.
 	if Network.has_authority():
 		died.emit(player_id)
@@ -1650,10 +1605,6 @@ func _receive_reset(spawn_position: Vector2, spawn_facing: int) -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _receive_special_ready(value: bool) -> void:
-	# 쿨타임이 다 찬 순간 작게 알린다 (#373). 무기를 고르는 동안(얼어 있을 때) 풀리는 것은
-	# 쓸 수 없는 때라 조용히 둔다.
-	if value and not special_ready and alive and not frozen:
-		Sfx.play("ready", -4.0, false)
 	special_ready = value
 	# 쿨타임이 계기인 그림(양날 도끼의 빨간 도끼)은 여기서 갈아 끼워야 한다 (`ready_file`).
 	# `_update_weapon_shape()`가 매 프레임 손보는 것은 밝기·색뿐이고 텍스처는 아니다.
