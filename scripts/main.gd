@@ -211,6 +211,11 @@ func _ready() -> void:
 		Network.join_failed.connect(_on_disconnected)
 		# 기기 앞에는 한 사람뿐이다 — 조작물도 한 벌만 내 색으로 남긴다.
 		touch_controls.set_online_seat(Lobby.my_player_id())
+		# 표지를 **먼저** 띄워 둔다 (#367). 서버가 두 사람을 확인하고 표지를 보내기까지의
+		# 왕복 시간 동안 아래 임시 지형이 그대로 보이던 것을 덮는다. 서버의 `_play_match_intro`
+		# 가 오면 표지는 그 순간부터 시간을 재서 사라진다. 한 프레임 미루는 것은 표지의 `size`(크기를
+		# 키우는 축)가 배치가 끝난 뒤라야 맞기 때문이다 — 미룬 호출도 그 프레임을 그리기 전에 돈다.
+		match_intro.hold.call_deferred()
 		# 씬이 준비된 뒤에 서버에 알린다. 먼저 스폰하면 이 씬을 열기 전이라 놓친다.
 		_notify_ready.rpc_id(1)
 		return

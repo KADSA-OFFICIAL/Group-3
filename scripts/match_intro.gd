@@ -43,6 +43,12 @@ const DIM_ALPHA := 0.72
 
 ## 시작한 뒤 흐른 시간(초). 음수면 돌고 있지 않다.
 var _elapsed := -1.0
+## 먼저 띄워 두고 기다리는 중인가 (#367). 켜져 있는 동안은 다 나온 모습에서 멈춰 있고
+## 사라지지 않는다 — `play()`가 와야 남은 시간을 잰다.
+var _holding := false
+## 이번 재생에서 "둥" 구간을 건너뛰는가 (#367). 먼저 띄워 둔 그림은 이미 다 나와 있으므로
+## `play()`에서 다시 튀어나오면 같은 그림이 두 번 친다.
+var _skip_pop := false
 
 
 func _ready() -> void:
@@ -52,6 +58,10 @@ func _ready() -> void:
 ## 처음부터 다시 튼다. 소리는 `main.gd`가 따로 낸다 — 그림과 소리를 한 노드가
 ## 들고 있으면 소리만 바꾸고 싶을 때 이 파일을 건드려야 한다.
 func play() -> void:
+	# 먼저 띄워 둔 것이면 그 모습 그대로 이어 간다 — 시계만 0으로 돌려 **이 순간부터**
+	# `TOTAL` 을 잰다. `main.gd` 가 무기 선택을 미루는 시간과 맞추기 위해서다.
+	_skip_pop = _holding
+	_holding = false
 	_elapsed = 0.0
 	visible = true
 	# 크기를 **화면** 가운데 기준으로 바꾼다. `size`는 `_ready()` 시점에 아직 안 잡혀 있을
@@ -65,10 +75,22 @@ func play() -> void:
 	_apply(0.0)
 
 
+## 온라인 클라이언트가 전투 화면을 여는 순간 먼저 띄운다 (#367).
+##
+## 클라이언트는 서버가 두 사람을 확인하고 `play()` 를 보내 줄 때까지 왕복 시간만큼
+## 기다린다 — 그동안 아무것도 안 덮으면 `main.gd` 가 깐 임시 지형이 그대로 보인다.
+## 그래서 그 자리에서 "둥" 하고 튀어나오게 해 두고, 다 나온 모습에서 멈춰 기다린다.
+func hold() -> void:
+	play()
+	_holding = true
+
+
 func _process(delta: float) -> void:
 	if _elapsed < 0.0:
 		return
 	_elapsed += delta
+	if _holding:
+		_elapsed = minf(_elapsed, POP_TIME + SETTLE_TIME)
 	if _elapsed >= TOTAL:
 		_elapsed = -1.0
 		visible = false
@@ -81,7 +103,9 @@ func _process(delta: float) -> void:
 func _apply(t: float) -> void:
 	var scale_now := 1.0
 	var alpha := 1.0
-	if t < POP_TIME:
+	if _skip_pop and t < POP_TIME + SETTLE_TIME:
+		pass
+	elif t < POP_TIME:
 		# 뒤로 갈수록 느려진다(ease-out) — 앞이 빨라야 친 것으로 보인다.
 		var p := t / POP_TIME
 		var eased := 1.0 - pow(1.0 - p, 3.0)
