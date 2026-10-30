@@ -30,6 +30,9 @@ const VOICES := 20
 const MIN_GAP := 0.045
 ## 같은 소리를 되풀이해도 기계음처럼 안 들리게 음높이를 조금씩 흔든다.
 const PITCH_JITTER := 0.06
+## 모든 효과음에 더하는 일괄 음량(dB, 이슈 #391 — 사용자 요청으로 낮췄다). 호출부가 정한
+## 소리 사이의 상대 음량(지속 데미지 틱 -9dB 등)은 그대로 두고 전체만 내린다.
+const MASTER_DB := -4.0
 
 ## 무기 이름 → 소리 이름 앞부분. `<키>_hit`(근접 타격)·`<키>_fire`(발사)·`<키>_special`
 ## (특수 발동)이 붙는다. 무기 표(`Weapons.LIST`)에 칸을 늘리지 않고 여기 두는 것은
@@ -93,7 +96,7 @@ func play(sound: String, volume_db := 0.0, vary := true) -> void:
 	var voice := _voices[_next_voice]
 	_next_voice = (_next_voice + 1) % _voices.size()
 	voice.stream = stream
-	voice.volume_db = volume_db
+	voice.volume_db = volume_db + MASTER_DB
 	voice.pitch_scale = randf_range(1.0 - PITCH_JITTER, 1.0 + PITCH_JITTER) if vary else 1.0
 	voice.play()
 	played.emit(sound)
