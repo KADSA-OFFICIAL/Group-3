@@ -50,7 +50,6 @@ func _on_config_changed(slot: int) -> void:
 
 
 func _on_go_pressed() -> void:
-	Sfx.play("confirm", 0.0, false)
 	if Network.is_client():
 		Lobby.submit_ready(not Lobby.is_ready(multiplayer.get_unique_id()))
 		return
@@ -62,7 +61,6 @@ func _on_go_pressed() -> void:
 
 
 func _on_home_pressed() -> void:
-	Sfx.play("click")
 	# 온라인이면 접속도 끊는다 — 홈은 대기실을 떠난다는 뜻이다.
 	Network.leave()
 	get_tree().change_scene_to_file("res://scenes/title.tscn")
