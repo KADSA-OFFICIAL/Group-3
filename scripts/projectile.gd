@@ -715,9 +715,13 @@ func _on_body_entered(body: Node) -> void:
 		# **폭탄보다 뒤에 둔다** — 반경으로 흩뿌리는 것은 막기를 거치지 않는 것이
 		# 이 게임의 규칙이다(샷건 부채꼴·도끼 착지 충격파와 같은 취급).
 		if _guarded_by(body):
+			Sfx.cue("clash_shield")
 			_blocked(body)
 			return
 		_hit_ids[player_id] = true
+		# 맞은 소리 (#373). 무기다운 소리는 맞은 자리의 연출(번개·불꽃·파열·위치 교환)이
+		# 얹고, 여기는 어떤 탄이든 "맞았다"는 짧은 타격음만 낸다.
+		Sfx.cue("projectile_hit")
 		# 빨간 표창은 때린 **뒤에** 자리를 바꾼다. 예전에는 데미지가 0이라 때리기를
 		# 통째로 건너뛰었는데, 지금은 일반 표창과 같은 데미지가 들어간다.
 		#
@@ -763,6 +767,10 @@ func _on_body_entered(body: Node) -> void:
 		return
 
 	# 벽·바닥·기물
+	# 땅·벽에 닿은 소리 (#373). 굴러가는 폭탄은 처음 닿을 때만 — 구르는 동안 바닥과
+	# 몸이 붙었다 떨어졌다 하며 여러 번 들어온다.
+	if not landed:
+		Sfx.cue("projectile_land")
 	match on_solid:
 		"vanish", "return":
 			_finish()
