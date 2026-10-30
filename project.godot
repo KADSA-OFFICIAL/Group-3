@@ -22,6 +22,8 @@ config/icon="res://icon.svg"
 [autoload]
 
 GameState="*res://scripts/game_state.gd"
+Network="*res://scripts/network.gd"
+Lobby="*res://scripts/lobby.gd"
 
 [display]
 

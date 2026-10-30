@@ -108,6 +108,13 @@ func _apply_accent() -> void:
 
 
 ## 들고 있던 선택값을 그대로 표시한다. config_changed를 내보내지 않는다.
+## 조작 가능 여부 (#361). 온라인 대기실에서 상대 패널은 false로 두어 표시 전용이 된다 —
+## 상대가 고른 것은 서버가 보내 준 값을 `apply_config()`로 보여주기만 한다.
+func set_interactive(value: bool) -> void:
+	for button in [character_button, random_button]:
+		button.disabled = not value
+
+
 func apply_config(config: Dictionary) -> void:
 	character_i = maxi(GameState.CHARACTERS.find(config.get("character", "")), 0)
 	_update_ui()
