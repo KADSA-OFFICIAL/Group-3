@@ -266,6 +266,10 @@ func setup(data: Dictionary) -> void:
 
 
 func _ready() -> void:
+	# 온라인 서버는 전투 화면에 들어온 피어에게만 보낸다 (#361). `public_visibility` 는
+	# 건드리지 않는다 — 끄면 필터가 참이어도 아무에게도 안 보인다(#167에서 투사체가 통째로 사라졌다).
+	if Network.is_server():
+		$Sync.add_visibility_filter(Lobby.can_view)
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
 	_spawn_time = _now()
@@ -587,7 +591,9 @@ func _draw_arrow_body(forward: Vector2, perp: Vector2,
 
 
 func _physics_process(delta: float) -> void:
-	if _done:
+	# 온라인 클라이언트는 이동도 판정도 하지 않는다 (#361) — 위치(`position`)와 떨어졌는지
+	# (`landed`)는 씬의 `Sync` 가 서버에서 받아 온다. 그림은 `_process()`가 그 값으로 그린다.
+	if _done or not Network.has_authority():
 		return
 
 	# 도화선 (폭탄) — 바닥에 놓여 있어도 시간이 되면 터진다.
@@ -692,7 +698,9 @@ func _explode() -> void:
 
 
 func _on_body_entered(body: Node) -> void:
-	if _done:
+	# 맞았는지는 판정하는 쪽만 본다 (#361) — 클라이언트에도 몸체가 있어 겹침은 일어나지만,
+	# 여기서 신호를 내면 연출이 서버가 보낸 것과 한 번씩 더 뜬다.
+	if _done or not Network.has_authority():
 		return
 
 	if body is Player:
@@ -851,7 +859,7 @@ func _blocked(jelly: Player) -> void:
 ## 이게 없으면 폭탄이 발판 밖 허공을 그대로 굴러간다. 떨어지다 아래 바닥에 닿으면
 ## `_on_body_entered`가 다시 굴리는데, 그때는 남은 속도가 더 작아 조금만 구른다.
 func _on_body_exited(body: Node) -> void:
-	if _done or not landed:
+	if _done or not landed or not Network.has_authority():
 		return
 	if on_solid != "roll" or body is Player:
 		return

@@ -73,3 +73,43 @@ func set_config(player_id: int, config: Dictionary) -> void:
 ## 1P는 `WASD`+왼쪽 `Shift`, 2P는 방향키+`Space`.
 func action(player_id: int, name: String) -> String:
 	return "p%d_%s" % [player_id, name]
+
+
+## 이 플레이어의 조작으로 읽을 키 묶음의 번호들 (#361).
+##
+## 오프라인은 자기 번호 한 벌뿐이다 — 한 키보드를 둘이 나눠 쓰므로 섞이면 안 된다.
+## **온라인 클라이언트는 두 벌을 다 읽는다** — 기기 앞에 한 사람뿐이라 `WASD` 든 방향키든
+## 손에 익은 쪽으로 조작하면 된다. 2P로 붙었다고 방향키만 써야 할 이유가 없다.
+func input_ids(player_id: int) -> Array:
+	return PLAYER_IDS if Network.is_client() else [player_id]
+
+
+## 이 플레이어의 조작으로 `name` 이 눌려 있는가. 읽을 묶음은 `input_ids()` 가 정한다.
+func is_pressed(player_id: int, name: String) -> bool:
+	for id: int in input_ids(player_id):
+		if Input.is_action_pressed(action(id, name)):
+			return true
+	return false
+
+
+func is_just_pressed(player_id: int, name: String) -> bool:
+	for id: int in input_ids(player_id):
+		if Input.is_action_just_pressed(action(id, name)):
+			return true
+	return false
+
+
+## 좌우 입력 (-1 ~ 1). 두 벌을 읽을 때는 더해서 자른다 — 양손이 서로 반대로 밀면 멈춘다.
+func axis(player_id: int) -> float:
+	var total := 0.0
+	for id: int in input_ids(player_id):
+		total += Input.get_axis(action(id, "left"), action(id, "right"))
+	return clampf(total, -1.0, 1.0)
+
+
+## 이 입력 이벤트가 이 플레이어의 `name` 누름인가 (무기 카드처럼 이벤트로 받는 곳이 쓴다).
+func event_pressed(event: InputEvent, player_id: int, name: String) -> bool:
+	for id: int in input_ids(player_id):
+		if event.is_action_pressed(action(id, name)):
+			return true
+	return false
