@@ -874,6 +874,33 @@ def _():
     return verb(lp(mix(notes, last, tuba), 2600), "hall", 0.25)
 
 
+# ── 카운트다운 (#403) ──
+# 레이싱 게임 출발 신호 — 같은 높이의 '뚜' 셋 뒤에 한 옥타브 높은 '땅!'. #379 에서 뺀
+# 예전 `count_beep`(삑)·`count_go`(에어혼)과 이름만 같고 새로 만든 소리다.
+
+def start_tone(f, d, hold, bright=0.35):
+    """출발 신호기 음 — 사인에 약간의 사각파를 섞은 전자음. 바로 서고, `hold` 동안 버틴 뒤 빠르게 꺼진다."""
+    t = t_(d)
+    tone = osc(const(f, d)) + osc(const(f, d), "square") * bright + osc(const(2 * f, d)) * 0.15
+    shape = np.minimum(t / 0.004, 1) * np.where(t < hold, 1.0, np.exp(-(t - hold) * 18))
+    return lp(tone * shape, 6000)
+
+
+@sound("count_beep", 0.5)
+def _():
+    # 뚜 — 짧고 평평한 전자음. 셋이 같은 높이여야 '아직'으로 들린다. 0.42초마다 오므로
+    # 잔향은 짧은 방으로 — 큰 공간이면 꼬리가 다음 '뚜'에 겹쳐 뭉개진다.
+    return verb(start_tone(587, 0.24, 0.15), "room", 0.12)
+
+
+@sound("count_go", 0.62)
+def _():
+    # 땅! — 한 옥타브 위, 더 밝고 길게 끌다 천천히 꺼진다.
+    d = 0.75
+    tone = start_tone(1175, d, 0.38, 0.5) * (1 - 0.25 * np.clip((t_(d) - 0.1) / 0.6, 0, 1))
+    return verb(tone, "hall", 0.18)
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     only = set(sys.argv[1:])

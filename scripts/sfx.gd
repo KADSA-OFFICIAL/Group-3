@@ -8,6 +8,8 @@ extends Node
 ## `match_start`(경기 표지, `main._play_match_intro`) · `weapon_pick`(카드를 고른 기기,
 ## `WeaponPick._on_card_pressed`) · `victory`/`defeat`(결과 화면, `main._show_match_result` —
 ## 온라인에서 진 기기만 `defeat`, 오프라인 한 화면은 늘 `victory`). 모두 `play()` 다.
+## 판마다 도는 카운트다운도 레이싱 출발 신호로 다시 붙였다(#403): `3`·`2`·`1` 에 `count_beep`(뚜),
+## `START!` 에 `count_go`(한 옥타브 위 땅!) — `countdown.gd` 가 칸이 바뀌는 프레임에 낸다.
 ##
 ## 소리는 `assets/sfx/<이름>.wav` 이고 `tools/gen_sfx.py` 가 합성해서 만든다 — 소리를
 ## 고치려면 그 스크립트의 숫자를 바꿔 다시 돌린다. 파일이 없는 이름은 **조용히** 넘어간다

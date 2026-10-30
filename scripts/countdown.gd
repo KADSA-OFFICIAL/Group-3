@@ -49,6 +49,8 @@ const RING_SEGMENTS := 40
 const FONT := preload("res://resources/display_font.tres")
 
 var _elapsed := -1.0
+## 소리를 낸 마지막 칸. 칸이 바뀌는 프레임에 한 번만 내려고 둔다 (#403).
+var _sounded_step := -1
 
 
 func _ready() -> void:
@@ -58,7 +60,9 @@ func _ready() -> void:
 ## 처음부터 다시 센다.
 func play() -> void:
 	_elapsed = 0.0
+	_sounded_step = -1
 	visible = true
+	_sound_step()
 	queue_redraw()
 
 
@@ -70,7 +74,18 @@ func _process(delta: float) -> void:
 		_elapsed = -1.0
 		visible = false
 		return
+	_sound_step()
 	queue_redraw()
+
+
+## 레이싱 출발 신호 (#403) — 숫자마다 '뚜', `START!` 에 한 옥타브 높은 '땅!'.
+## 음계가 있는 소리라 음높이를 흔들지 않는다. 이 화면은 모든 기기에서 돌므로 `play()` 다.
+func _sound_step() -> void:
+	var step := _step()
+	if step == _sounded_step:
+		return
+	_sounded_step = step
+	Sfx.play("count_go" if step == LABELS.size() - 1 else "count_beep", 0.0, false)
 
 
 ## 지금 칸의 번호(0=3, 1=2, 2=1, 3=START!).
