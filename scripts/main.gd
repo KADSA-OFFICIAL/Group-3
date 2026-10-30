@@ -719,6 +719,10 @@ func _show_match_result(winner_id: int) -> void:
 	if winner == null:
 		return
 	_play_result(winner.character_id, "%s 승리!" % winner.player_name)
+	# 온라인은 기기마다 한 사람이라 진 쪽에는 패배음을 낸다(#400). 오프라인 한 화면은
+	# 이긴 사람도 같은 화면 앞에 있으므로 승리음이다.
+	var lost := Network.is_client() and winner_id != Lobby.my_player_id()
+	Sfx.play("defeat" if lost else "victory", 0.0, false)
 
 
 func _play_result(character_id: String, title: String) -> void:
@@ -2030,6 +2034,7 @@ func _play_cannon_burst(at: Vector2) -> void:
 @rpc("authority", "call_local", "reliable")
 func _play_match_intro() -> void:
 	match_intro.play()
+	Sfx.play("match_start", 0.0, false)
 
 
 ## 포인트를 딴 순간의 장면 (이슈 #273). 점수를 적은 뒤에 띄운다.

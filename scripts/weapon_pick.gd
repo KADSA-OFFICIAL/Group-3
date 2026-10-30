@@ -285,6 +285,7 @@ func _on_card_pressed(index: int) -> void:
 		return
 	_cursor = index
 	mark_chosen(index)
+	Sfx.play("weapon_pick", 0.0, false)
 	# 온라인은 둘이 동시에 고르므로(#361) 다 고른 쪽은 상대를 기다린다.
 	if Network.is_client():
 		_status.text = "선택 완료 — 상대를 기다리는 중..."
