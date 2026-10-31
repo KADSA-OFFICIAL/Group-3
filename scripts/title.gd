@@ -1,9 +1,9 @@
 extends Control
-## 타이틀 화면. 버튼 하나(`StartButton`)뿐이고, **무엇을 하는지는 기기가 정한다** (#361).
+## 타이틀 화면. 안드로이드는 버튼 하나(`StartButton`)뿐이고, **무엇을 하는지는 기기가 정한다** (#361).
 ##
-## - **PC 는 온라인 전용이다** — 버튼이 `접속`이고, 누르면 팀 서버의 1번 방
-##   (`Network.DEFAULT_ADDRESS`:`Network.PORT`)에 붙는다. 붙으면 선택 창이 온라인 대기실로 열린다.
-##   #320 이전과 같은 흐름이고, 그때 있던 방 고르기·주소 표시·관전 빌드는 되살리지 않았다.
+## - **PC 는 온라인 전용이다** — 버튼이 방마다 하나씩(`1번 방`·`2번 방`)이고, 누른 방의
+##   포트(`Network.ROOMS`)로 팀 서버(`Network.DEFAULT_ADDRESS`)에 붙는다(#409). 붙으면 선택 창이
+##   온라인 대기실로 열린다. 주소 표시·관전 빌드는 되살리지 않았다.
 ## - **안드로이드는 오프라인 전용이다** — 버튼이 `시작`이고, 누르면 한 화면 2인 선택 창으로 간다(#320).
 ##
 ## 화면에서 모드를 고르는 곳은 없다 — 사용자가 기기별로 정했다(`Network.is_online_platform()`).
@@ -14,8 +14,14 @@ extends Control
 ## `README.md` 에 적혀 있다. 지금의 `StatusLabel` 은 그 안내가 아니라 **온라인 접속 상태**만
 ## 적는다(#361) — 오프라인에서는 늘 비어 있다.
 
+## 안드로이드는 `시작`, PC 는 첫 방(`1번 방`) 버튼이다.
 @onready var start_button: Button = $StartButton
+## PC 에서만 보인다. 둘째 방(`Network.ROOMS[1]`) 버튼 — 방이 둘이라 버튼도 둘이다. 방을 더하면 버튼도 더한다.
+@onready var room2_button: Button = $Room2Button
 @onready var status_label: Label = $StatusLabel
+
+## 방 버튼 한 칸의 가로(px). 씬의 `StartButton` 폭 280 을 두 칸과 사이 간격 8 로 나눈 것이다.
+const ROOM_BUTTON_WIDTH := 136.0
 
 ## 접속 시도 중인지. 시간이 다 됐는데도 true 면 실패로 처리한다.
 var _joining := false
@@ -33,7 +39,13 @@ func _ready() -> void:
 	if not Network.is_online_platform():
 		return
 
-	start_button.text = "접속"
+	# 버튼 하나였던 자리(`x +250~+530`)를 둘로 쪼갠다 — 원화의 `wars` 글자를 피해 놓은 자리라
+	# 옆으로 넓히면 글자를 덮는다. 씬에는 안드로이드가 쓰는 한 칸짜리 모양을 그대로 둔다.
+	start_button.text = Network.ROOMS[0]["name"]
+	start_button.offset_right = start_button.offset_left + ROOM_BUTTON_WIDTH
+	room2_button.text = Network.ROOMS[1]["name"]
+	room2_button.visible = true
+	room2_button.pressed.connect(_on_room_pressed.bind(1))
 	Network.join_succeeded.connect(_on_join_succeeded)
 	Network.join_failed.connect(_on_join_failed)
 	# 앞 화면에서 끊겨 여기로 밀려 왔으면 사유를 보여준다 — 전투 중에 끊기면 화면이
@@ -49,19 +61,23 @@ func _ready() -> void:
 
 func _on_start_pressed() -> void:
 	if Network.is_online_platform():
-		_join()
+		_on_room_pressed(0)
 		return
 	get_tree().change_scene_to_file("res://scenes/select.tscn")
 
 
-func _join() -> void:
+func _on_room_pressed(index: int) -> void:
+	_join(index)
+
+
+func _join(room_index: int) -> void:
 	if _joining:
 		return
 	var address := Network.configured_address()
-	status_label.text = "%s 접속 중..." % Network.ROOM_NAME
-	start_button.disabled = true
+	status_label.text = "%s 접속 중..." % Network.ROOMS[room_index]["name"]
+	_set_buttons_disabled(true)
 	_joining = true
-	if Network.join_server(address) != OK:
+	if Network.join_room(address, room_index) != OK:
 		_on_join_failed("주소가 올바르지 않습니다: %s" % address)
 		return
 	_join_timer.start(Network.JOIN_TIMEOUT_SEC)
@@ -88,4 +104,9 @@ func _on_join_failed(reason: String) -> void:
 	# 사유는 여기서 바로 보여주므로 남겨 두지 않는다 — 남기면 다음에 이 화면이 열릴 때 또 뜬다.
 	Network.take_last_failure()
 	status_label.text = reason
-	start_button.disabled = false
+	_set_buttons_disabled(false)
+
+
+func _set_buttons_disabled(flag: bool) -> void:
+	start_button.disabled = flag
+	room2_button.disabled = flag
