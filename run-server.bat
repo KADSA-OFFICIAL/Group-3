@@ -2,11 +2,13 @@
 rem ============================================================
 rem  젤리 워즈 전용 서버 실행기 (이슈 #201, #361 에서 되살림)
 rem
-rem  더블클릭하면 콘솔 창 하나를 열고 그 안에서 헤드리스 서버를 띄운다.
+rem  더블클릭하면 방마다 콘솔 창을 하나씩 열고 그 안에서 헤드리스 서버를 띄운다.
 rem  띄우기 전에 원격 저장소와 게임 파일을 맞춘다 - 서버와 클라이언트의 파일이
 rem  다르면 RPC 가 엉뚱한 함수로 가기 때문이다. 자세한 내용은 아래 2번 단락.
-rem  방은 1번 방 하나다 (UDP 7777, scripts/network.gd 의 PORT). #320 이전의
-rem  2·3번 방은 되살리지 않았다. PC 판만 이 서버에 붙는다 - 안드로이드 판은 오프라인 전용이다.
+rem  방은 둘이다 - 1번 방 UDP 7777, 2번 방 UDP 7778 (scripts/network.gd 의 ROOMS, #409).
+rem  서버 프로세스 하나가 방 하나라서 창도 둘이 뜬다. 방을 더하면 network.gd 의 ROOMS 와
+rem  아래 3·4번 단락을 같이 고친다. #320 이전의 3번 방은 되살리지 않았다.
+rem  PC 판만 이 서버에 붙는다 - 안드로이드 판은 오프라인 전용이다.
 rem  서버를 띄우는 사람이 볼 문서는 docs/server.md.
 rem
 rem  === 고칠 때 지켜야 하는 것 (안 지키면 원인과 전혀 다른 모습으로 깨진다) ===
@@ -274,13 +276,16 @@ echo.
 
 rem ---------- 3. 이미 쓰고 있는 포트가 없는지 미리 본다 ----------
 rem 포트를 못 열면 서버는 일부러 죽는다(exit 1). 미리 알려주면 창을 안 뒤져도 된다.
-rem 포트 번호는 scripts/network.gd 의 PORT 와 같아야 한다.
-set "SERVER_PORT=7777"
-netstat -ano -p UDP | findstr /c:":%SERVER_PORT% " >nul
-if not errorlevel 1 (
-	echo  [경고] UDP %SERVER_PORT% 을 이미 누가 쓰고 있습니다.
-	echo         서버가 이미 떠 있을 수 있습니다. 새로 뜨는 창은 곧 실패합니다.
-	echo.
+rem 포트 번호는 scripts/network.gd 의 ROOMS 와 같아야 한다.
+set "ROOM1_PORT=7777"
+set "ROOM2_PORT=7778"
+for %%P in (%ROOM1_PORT% %ROOM2_PORT%) do (
+	netstat -ano -p UDP | findstr /c:":%%P " >nul
+	if not errorlevel 1 (
+		echo  [경고] UDP %%P 을 이미 누가 쓰고 있습니다.
+		echo         서버가 이미 떠 있을 수 있습니다. 그 방의 새 창은 곧 실패합니다.
+		echo.
+	)
 )
 
 rem ---------- 4. 서버 창을 띄운다 ----------
@@ -288,15 +293,19 @@ rem --server 를 줘야 서버가 된다. 헤드리스라는 것만으로는 서버가 되지 않는다 (#3
 rem 커밋 전 헤드리스 검증이 오프라인 게임을 그대로 돌려야 하기 때문이다.
 rem cmd /k 라서 서버가 죽어도 창이 남는다. 실패 메시지를 읽을 수 있다.
 rem 새 창에서 chcp 65001 을 하는 이유는 Godot 로그가 UTF-8 이기 때문이다.
-echo  1번 방 서버를 띄웁니다 [UDP %SERVER_PORT%].
-start "젤리 워즈 서버 - 1번 방 [UDP %SERVER_PORT%]" cmd /k "chcp 65001 >nul & "%GODOT_EXE%" --headless --path "%PROJECT_DIR%" -- --server"
+rem --room=N 이 방을 고른다. 없으면 1번 방이다.
+echo  1번 방 서버를 띄웁니다 [UDP %ROOM1_PORT%].
+start "젤리 워즈 서버 - 1번 방 [UDP %ROOM1_PORT%]" cmd /k "chcp 65001 >nul & "%GODOT_EXE%" --headless --path "%PROJECT_DIR%" -- --server --room=1"
+echo  2번 방 서버를 띄웁니다 [UDP %ROOM2_PORT%].
+start "젤리 워즈 서버 - 2번 방 [UDP %ROOM2_PORT%]" cmd /k "chcp 65001 >nul & "%GODOT_EXE%" --headless --path "%PROJECT_DIR%" -- --server --room=2"
 
 echo.
-echo  새 창에 이런 줄이 찍혔는지 확인하세요.
+echo  새 창 두 개에 이런 줄이 각각 찍혔는지 확인하세요.
 echo    서버 시작 - 1번 방, 포트 7777, 플레이어 2명
-echo  이 줄이 없으면 서버가 뜬 게 아닙니다. docs/server.md 의 문제 해결을 보세요.
+echo    서버 시작 - 2번 방, 포트 7778, 플레이어 2명
+echo  이 줄이 없으면 그 방 서버가 뜬 게 아닙니다. docs/server.md 의 문제 해결을 보세요.
 echo.
-echo  서버를 끄려면 그 창에서 Ctrl+C 를 누르거나 창을 닫으세요.
+echo  서버를 끄려면 방마다 그 창에서 Ctrl+C 를 누르거나 창을 닫으세요.
 echo  이 창은 이제 닫아도 됩니다.
 echo.
 pause

@@ -6,14 +6,15 @@ extends Node
 ## (타이틀의 버튼이 `접속`), 안드로이드는 지금처럼 **한 화면 2인 오프라인 전용**이다. 화면에서
 ## 고르는 곳은 없다 — 사용자가 정했다.
 ##
-## 방은 **1번 방 하나**다(포트 7777). #320 이전에는 1·2·3번 방이 포트로 갈려 있었는데
-## 1번 방만 되살렸다. 관전·버전 악수(#228)도 되살리지 않았다.
+## 방은 **포트 하나 = 서버 프로세스 하나**로 갈린다(#409). `ROOMS` 의 1번 방(7777)·2번 방(7778)이다.
+## 서버를 방마다 따로 띄우므로 방끼리 완전히 독립적이다 — 한 방에서 경기가 진행 중이어도
+## 다른 방은 두 사람을 받는다. #320 이전의 3번 방, 관전·버전 악수(#228)는 되살리지 않았다.
 ## **버전 악수가 없다는 것을 기억할 것** — RPC 는 함수 이름이 아니라 번호로 오가므로,
 ## 서버와 클라이언트의 `@rpc` 함수 목록이 다르면 엉뚱한 함수가 불린다. 서버는
 ## `run-server.bat` 이 늘 `origin/main` 으로 맞춰 띄우므로, 클라이언트도 같은 빌드를 써야 한다.
 ##
-## 서버는 `--server` 인자로만 된다. **헤드리스라는 것만으로는 서버가 되지 않는다** —
-## 커밋 전 헤드리스 검증(`CLAUDE.md`)이 오프라인 게임을 그대로 돌려야 하기 때문이다.
+## 서버는 `--server` 인자로만 되고, 어느 방인지는 `--room=2` 로 고른다(없으면 1번 방).
+## **헤드리스라는 것만으로는 서버가 되지 않는다** — 커밋 전 헤드리스 검증(`CLAUDE.md`)이 오프라인 게임을 그대로 돌려야 하기 때문이다.
 ## 띄우는 방법은 docs/server.md.
 
 signal join_succeeded
@@ -21,11 +22,14 @@ signal join_failed(reason: String)
 signal peer_joined(peer_id: int)
 signal peer_left(peer_id: int)
 
-## 서버 포트. 서버컴 Windows 방화벽에 이 포트가 UDP 로 열려 있어야 한다.
-## #320 이전의 `ROOMS` 에서 1번 방 자리다 — `run-server.bat` 도 같은 값을 쓴다.
-const PORT := 7777
-## 방 이름. 화면과 서버 로그에 적는다. 방이 하나뿐이라 고르는 곳은 없다.
-const ROOM_NAME := "1번 방"
+## 방 목록. **방 구성의 유일한 출처다** — 타이틀의 방 버튼과 서버가 이 목록을 따른다.
+## 서버컴 Windows 방화벽에 이 포트들이 전부 UDP 로 열려 있어야 한다.
+## `run-server.bat` 은 이 목록을 읽지 못하고 포트를 따로 적어 두므로, **방을 더하면
+## 그 스크립트의 `ROOM_COUNT`·`ROOM_PORT_BASE` 도 같이 맞춘다.**
+const ROOMS := [
+	{"name": "1번 방", "port": 7777},
+	{"name": "2번 방", "port": 7778},
+]
 ## 1 VS 1 이므로 접속을 받는 자리는 둘이다. 세 번째는 `Lobby` 가 사유를 알리고 끊는다 —
 ## ENet 정원으로 막으면 아무 신호 없이 거절돼서 "접속 중..."에 멈춰 보인다.
 const MAX_PLAYERS := 2
@@ -54,6 +58,10 @@ var role := Role.OFFLINE
 ## 화면이 바뀐 뒤에 사유를 보여줘야 한다.
 var last_failure := ""
 
+## 지금 붙었거나 붙을 방(`ROOMS` 의 인덱스). 클라이언트는 타이틀이 `join_room()` 으로 정하고,
+## 서버는 `--room=` 인자로 정한다.
+var room_index := 0
+
 
 func _ready() -> void:
 	multiplayer.peer_connected.connect(func(id: int) -> void: peer_joined.emit(id))
@@ -62,6 +70,12 @@ func _ready() -> void:
 	multiplayer.connection_failed.connect(_on_connection_failed)
 	multiplayer.server_disconnected.connect(_on_server_disconnected)
 	if "--server" in _cmdline_args():
+		room_index = room_index_from_cmdline()
+		if room_index < 0:
+			push_error("--room 값이 1~%d 가 아닙니다." % ROOMS.size())
+			room_index = 0
+			get_tree().quit(1)
+			return
 		# 포트를 못 열었는데 그냥 두면 이 프로세스는 오프라인 게임으로 살아남는다 —
 		# 헤드리스라 화면도 없어서 "서버 떠 있음"으로 착각하기 쉽다. 바로 끝낸다.
 		if start_server() != OK:
@@ -99,23 +113,47 @@ func has_authority() -> bool:
 	return role != Role.CLIENT
 
 
+## 지금 방의 이름. 화면과 서버 로그에 적는다.
+func room_name() -> String:
+	return ROOMS[room_index]["name"]
+
+
+## 지금 방의 UDP 포트.
+func room_port() -> int:
+	return ROOMS[room_index]["port"]
+
+
+## `--room=2` 실행 인자가 가리키는 방의 인덱스. 인자가 없으면 1번 방(0)이고, **값이 잘못됐으면 -1** 이다 —
+## 오타 난 값으로 조용히 1번 방에 뜨면 1번 방 서버가 없던 자리에 엉뚱하게 뜨므로 호출한 쪽이 끝낸다.
+func room_index_from_cmdline() -> int:
+	for arg in _cmdline_args():
+		if arg.begins_with("--room="):
+			var value := arg.substr(7).strip_edges()
+			if value.is_valid_int() and int(value) >= 1 and int(value) <= ROOMS.size():
+				return int(value) - 1
+			return -1
+	return 0
+
+
 func start_server() -> Error:
 	var peer := ENetMultiplayerPeer.new()
-	var err := peer.create_server(PORT, MAX_CLIENTS)
+	var err := peer.create_server(room_port(), MAX_CLIENTS)
 	if err != OK:
-		push_error("서버 시작 실패 (포트 %d): %s — 이미 그 포트로 서버가 떠 있지 않은지 확인하세요." % [
-			PORT, error_string(err),
+		push_error("서버 시작 실패 (%s, 포트 %d): %s — 이미 그 포트로 서버가 떠 있지 않은지 확인하세요." % [
+			room_name(), room_port(), error_string(err),
 		])
 		return err
 	multiplayer.multiplayer_peer = peer
 	role = Role.SERVER
-	print("서버 시작 — %s, 포트 %d, 플레이어 %d명" % [ROOM_NAME, PORT, MAX_PLAYERS])
+	print("서버 시작 — %s, 포트 %d, 플레이어 %d명" % [room_name(), room_port(), MAX_PLAYERS])
 	return OK
 
 
-func join_server(address: String) -> Error:
+## `index` 번째 방(`ROOMS` 의 인덱스)에 붙는다.
+func join_room(address: String, index: int) -> Error:
+	room_index = clampi(index, 0, ROOMS.size() - 1)
 	var peer := ENetMultiplayerPeer.new()
-	var err := peer.create_client(address, PORT)
+	var err := peer.create_client(address, room_port())
 	if err != OK:
 		return err
 	multiplayer.multiplayer_peer = peer
