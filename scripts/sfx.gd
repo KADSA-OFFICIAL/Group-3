@@ -7,7 +7,7 @@ extends Node
 ## 예외로 경기의 큰 마디 넷은 사용자 요청으로 다시 붙였다(#400, 예전 소리가 아니라 새로 만든 것):
 ## `match_start`(경기 표지, `main._play_match_intro`) · `weapon_pick`(카드를 고른 기기,
 ## `WeaponPick._on_card_pressed`) · `victory`/`defeat`(결과 화면, `main._show_match_result` —
-## 온라인에서 진 기기만 `defeat`, 오프라인 한 화면은 늘 `victory`). 모두 `play()` 다.
+## 한 화면이라 늘 `victory`). 모두 `play()` 다.
 ## 판마다 도는 카운트다운도 레이싱 출발 신호로 다시 붙였다(#403): `3`·`2`·`1` 에 `count_beep`(뚜),
 ## `START!` 에 `count_go`(한 옥타브 위 땅!) — `countdown.gd` 가 칸이 바뀌는 프레임에 낸다.
 ##
@@ -16,14 +16,7 @@ extends Node
 ## (무기 그림이 없을 때 막대로 대신하는 것과 같은 태도다 — 소리 하나 빠졌다고 게임이 멈추지
 ## 않는다).
 ##
-## **부르는 길이 둘이다.**
-##   `play()` — 이 기기에서만 낸다. 모든 기기에서 도는 자리(`_receive_*`·`_play_*` RPC)에서
-##              부른다. 온라인 서버는 아무것도 내지 않는다.
-##   `cue()`  — **판정하는 쪽에서만 도는 자리**(`main.gd` 의 판정, `Projectile._on_body_entered`)에서 부른다. 오프라인이면 그 자리에서 내고,
-##              온라인 서버면 전투 화면을 연 피어(`Lobby.viewers`)에게 보낸다 — 대기실 피어에게
-##              보내지 않는 것은 `Player._send_state()` 와 같은 이유다. 클라이언트에서는 무시한다.
-## 같은 자리에서 둘을 섞어 부르면 온라인 클라이언트에서 두 번 들린다 — 그 자리가 어느
-## 기기에서 도는지 먼저 본다.
+## 부르는 길은 `play()` 하나다.
 
 ## 소리가 실제로 났다 (검증용 — 사람 손 없는 경기에서 무엇이 났는지 센다).
 signal played(sound: String)
@@ -82,15 +75,14 @@ func _ready() -> void:
 		_voices.append(voice)
 	# 처음 나는 순간 디스크를 읽지 않게 미리 올려 둔다. `list_directory()` 는 내보낸
 	# 빌드에서도 원래 이름(`.wav`)을 돌려준다 — `DirAccess` 는 `.import` 를 보여준다.
-	if not Network.is_server():
-		for file in ResourceLoader.list_directory(DIR):
-			if file.get_extension() == "wav":
-				_stream(file.get_basename())
+	for file in ResourceLoader.list_directory(DIR):
+		if file.get_extension() == "wav":
+			_stream(file.get_basename())
 
 
-## 이 기기에서 소리를 낸다. `vary` 가 거짓이면 음높이를 흔들지 않는다 (음계가 있는 소리).
+## 소리를 낸다. `vary` 가 거짓이면 음높이를 흔들지 않는다 (음계가 있는 소리).
 func play(sound: String, volume_db := 0.0, vary := true) -> void:
-	if sound.is_empty() or Network.is_server():
+	if sound.is_empty():
 		return
 	var now := Time.get_ticks_msec() / 1000.0
 	if now - float(_last_played.get(sound, -1.0)) < MIN_GAP:
@@ -106,23 +98,6 @@ func play(sound: String, volume_db := 0.0, vary := true) -> void:
 	voice.pitch_scale = randf_range(1.0 - PITCH_JITTER, 1.0 + PITCH_JITTER) if vary else 1.0
 	voice.play()
 	played.emit(sound)
-
-
-## 판정하는 쪽이 낸 소리를 전투 화면에 있는 모든 기기에 낸다.
-func cue(sound: String, volume_db := 0.0) -> void:
-	if sound.is_empty() or not Network.has_authority():
-		return
-	if Network.is_server():
-		for peer in Lobby.viewers:
-			_receive_cue.rpc_id(peer, sound, volume_db)
-		return
-	play(sound, volume_db)
-
-
-## 소리 이름은 RPC 로 짧은 문자열 하나다. 놓쳐도 다음 소리가 오므로 unreliable 이다.
-@rpc("authority", "call_remote", "unreliable")
-func _receive_cue(sound: String, volume_db: float) -> void:
-	play(sound, volume_db)
 
 
 ## 무기의 소리 이름 (`kind`: "hit"·"fire"·"special"). 표에 없는 무기면 빈 문자열이다.

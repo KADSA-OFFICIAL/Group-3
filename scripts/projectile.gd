@@ -11,7 +11,7 @@ signal finished(projectile: Node)
 ## 바닥에 남은 것(단검)을 주인이 주웠다.
 signal picked_up(player_id: int, projectile: Node)
 ## 빨간 표창이 자리를 바꾼다. 두 값은 **바꾸기 전의** 위치다 — 연출을 두 자리에 띄우는
-## 쪽(`main.gd`)이 쓴다. 여기서 직접 RPC를 부르지 않는 것은 연출이 `Effects` 아래에
+## 쪽(`main.gd`)이 쓴다. 여기서 직접 연출을 띄우지 않는 것은 연출이 `Effects` 아래에
 ## 붙어야 하고 그 노드를 아는 것이 main.gd이기 때문이다 (검 특수의 빛기둥과 같다).
 ##
 ## **바꾸기 전에 낸다** — 싣는 두 위치가 바꾸기 전의 것이라 옮긴 뒤에는 둘 다 어긋난다.
@@ -266,10 +266,6 @@ func setup(data: Dictionary) -> void:
 
 
 func _ready() -> void:
-	# 온라인 서버는 전투 화면에 들어온 피어에게만 보낸다 (#361). `public_visibility` 는
-	# 건드리지 않는다 — 끄면 필터가 참이어도 아무에게도 안 보인다(#167에서 투사체가 통째로 사라졌다).
-	if Network.is_server():
-		$Sync.add_visibility_filter(Lobby.can_view)
 	body_entered.connect(_on_body_entered)
 	body_exited.connect(_on_body_exited)
 	_spawn_time = _now()
@@ -591,9 +587,7 @@ func _draw_arrow_body(forward: Vector2, perp: Vector2,
 
 
 func _physics_process(delta: float) -> void:
-	# 온라인 클라이언트는 이동도 판정도 하지 않는다 (#361) — 위치(`position`)와 떨어졌는지
-	# (`landed`)는 씬의 `Sync` 가 서버에서 받아 온다. 그림은 `_process()`가 그 값으로 그린다.
-	if _done or not Network.has_authority():
+	if _done:
 		return
 
 	# 도화선 (폭탄) — 바닥에 놓여 있어도 시간이 되면 터진다.
@@ -698,9 +692,7 @@ func _explode() -> void:
 
 
 func _on_body_entered(body: Node) -> void:
-	# 맞았는지는 판정하는 쪽만 본다 (#361) — 클라이언트에도 몸체가 있어 겹침은 일어나지만,
-	# 여기서 신호를 내면 연출이 서버가 보낸 것과 한 번씩 더 뜬다.
-	if _done or not Network.has_authority():
+	if _done:
 		return
 
 	if body is Player:
@@ -720,7 +712,7 @@ func _on_body_entered(body: Node) -> void:
 		_hit_ids[player_id] = true
 		# 맞은 소리 (#373). 무기다운 소리는 맞은 자리의 연출(번개·불꽃·파열·위치 교환)이
 		# 얹고, 여기는 어떤 탄이든 "맞았다"는 짧은 타격음만 낸다.
-		Sfx.cue("projectile_hit")
+		Sfx.play("projectile_hit")
 		# 빨간 표창은 때린 **뒤에** 자리를 바꾼다. 예전에는 데미지가 0이라 때리기를
 		# 통째로 건너뛰었는데, 지금은 일반 표창과 같은 데미지가 들어간다.
 		#
@@ -769,7 +761,7 @@ func _on_body_entered(body: Node) -> void:
 	# 땅·벽에 닿은 소리 (#373). 굴러가는 폭탄은 처음 닿을 때만 — 구르는 동안 바닥과
 	# 몸이 붙었다 떨어졌다 하며 여러 번 들어온다.
 	if not landed:
-		Sfx.cue("projectile_land")
+		Sfx.play("projectile_land")
 	match on_solid:
 		"vanish", "return":
 			_finish()
@@ -866,7 +858,7 @@ func _blocked(jelly: Player) -> void:
 ## 이게 없으면 폭탄이 발판 밖 허공을 그대로 굴러간다. 떨어지다 아래 바닥에 닿으면
 ## `_on_body_entered`가 다시 굴리는데, 그때는 남은 속도가 더 작아 조금만 구른다.
 func _on_body_exited(body: Node) -> void:
-	if _done or not landed or not Network.has_authority():
+	if _done or not landed:
 		return
 	if on_solid != "roll" or body is Player:
 		return
