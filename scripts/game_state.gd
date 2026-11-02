@@ -4,7 +4,8 @@ extends Node
 ## **한 기기 한 화면에서 둘이 하는 오프라인 대전이다** (#320). 접속도 서버도 자리 배정도
 ## 없으므로 화면과 화면을 잇는 상태는 이 싱글톤 하나뿐이다 — 선택 창이 캐릭터를 여기에
 ## 적고 전투 화면이 그것을 읽어 젤리를 세운다. 되돌리지 말 것: 예전에는 `Lobby` 오토로드가
-## 서버에서 자리와 선택을 정해 양쪽에 복제했는데, 한 화면에서는 정할 상대도 보낼 곳도 없다.
+## 서버에서 자리와 선택을 정해 양쪽에 복제했는데, 한 화면에서는 정할 상대도 보낼 곳도 없다
+## (#421에서 온라인을 다시 걷어냈다).
 
 ## 선택 가능한 캐릭터 목록. 선택 UI·검증이 모두 이 배열을 따른다.
 ##
@@ -75,41 +76,21 @@ func action(player_id: int, name: String) -> String:
 	return "p%d_%s" % [player_id, name]
 
 
-## 이 플레이어의 조작으로 읽을 키 묶음의 번호들 (#361).
-##
-## 오프라인은 자기 번호 한 벌뿐이다 — 한 키보드를 둘이 나눠 쓰므로 섞이면 안 된다.
-## **온라인 클라이언트는 두 벌을 다 읽는다** — 기기 앞에 한 사람뿐이라 `WASD` 든 방향키든
-## 손에 익은 쪽으로 조작하면 된다. 2P로 붙었다고 방향키만 써야 할 이유가 없다.
-func input_ids(player_id: int) -> Array:
-	return PLAYER_IDS if Network.is_client() else [player_id]
-
-
-## 이 플레이어의 조작으로 `name` 이 눌려 있는가. 읽을 묶음은 `input_ids()` 가 정한다.
+## 이 플레이어의 조작으로 `name` 이 눌려 있는가. **자기 번호의 키만** 읽는다 —
+## 한 키보드를 둘이 나눠 쓰므로 섞이면 안 된다.
 func is_pressed(player_id: int, name: String) -> bool:
-	for id: int in input_ids(player_id):
-		if Input.is_action_pressed(action(id, name)):
-			return true
-	return false
+	return Input.is_action_pressed(action(player_id, name))
 
 
 func is_just_pressed(player_id: int, name: String) -> bool:
-	for id: int in input_ids(player_id):
-		if Input.is_action_just_pressed(action(id, name)):
-			return true
-	return false
+	return Input.is_action_just_pressed(action(player_id, name))
 
 
-## 좌우 입력 (-1 ~ 1). 두 벌을 읽을 때는 더해서 자른다 — 양손이 서로 반대로 밀면 멈춘다.
+## 좌우 입력 (-1 ~ 1).
 func axis(player_id: int) -> float:
-	var total := 0.0
-	for id: int in input_ids(player_id):
-		total += Input.get_axis(action(id, "left"), action(id, "right"))
-	return clampf(total, -1.0, 1.0)
+	return Input.get_axis(action(player_id, "left"), action(player_id, "right"))
 
 
 ## 이 입력 이벤트가 이 플레이어의 `name` 누름인가 (무기 카드처럼 이벤트로 받는 곳이 쓴다).
 func event_pressed(event: InputEvent, player_id: int, name: String) -> bool:
-	for id: int in input_ids(player_id):
-		if event.is_action_pressed(action(id, name)):
-			return true
-	return false
+	return event.is_action_pressed(action(player_id, name))

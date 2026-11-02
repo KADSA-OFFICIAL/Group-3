@@ -247,7 +247,6 @@ func _visible_card_count() -> int:
 func _unhandled_input(event: InputEvent) -> void:
 	if not _armed or _picker == 0 or not visible:
 		return
-	# 읽을 키 묶음은 `GameState.input_ids()` 가 정한다 — 온라인 기기는 두 벌 다 받는다 (#361).
 	if GameState.event_pressed(event, _picker, "right"):
 		_move_cursor(1)
 	elif GameState.event_pressed(event, _picker, "left"):
@@ -286,11 +285,7 @@ func _on_card_pressed(index: int) -> void:
 	_cursor = index
 	mark_chosen(index)
 	Sfx.play("weapon_pick", 0.0, false)
-	# 온라인은 둘이 동시에 고르므로(#361) 다 고른 쪽은 상대를 기다린다.
-	if Network.is_client():
-		_status.text = "선택 완료 — 상대를 기다리는 중..."
-	else:
-		_status.text = "%dP 선택 완료" % _picker
+	_status.text = "%dP 선택 완료" % _picker
 	weapon_chosen.emit(index)
 
 
