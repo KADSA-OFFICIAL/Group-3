@@ -199,7 +199,7 @@ title(`StartButton`으로 시작 — 고를 것이 없다) → select(1P·2P가 
 - `_ready()`에서 `change_scene_to_file()`을 바로 부르면 "Parent node is busy" 오류가 난다 — `call_deferred`로 미룬다.
 - **헤드리스라는 것만으로는 서버가 되지 않는다**(#361) — `--server` 인자가 있어야 한다. 위 헤드리스 검증이 지금처럼 게임을 돌려야 하기 때문이다.
 - **온라인 클라이언트에서 판정·신호가 돌지 않게 한다**(#361). 클라이언트에도 젤리·투사체 몸체가 있어 겹침과 신호가 일어난다 — 판정하는 함수와 신호를 내는 자리는 `Network.has_authority()`로 막는다(`projectile._on_body_entered`·`Player._check_death`의 `died` 등). 판정 여부를 `multiplayer.is_server()`로 묻지 말 것 — 접속이 끊긴 뒤에는 그것이 참이 되어 클라이언트를 서버로 착각한다. `Network.role`을 본다.
-- **`export_presets.cfg`에 프리셋이 하나다**(이슈 #320에서 관전 빌드를 지웠다) — 산출물이 아니라 빌드 방법이므로 `.gitignore`에서 빼서 커밋한다. 다만 **이 개발 환경에는 export 템플릿이 없어 실제 `.exe`를 만들 수 없다**(`~/AppData/Roaming/Godot/export_templates/`가 비어 있다). 프리셋이 파싱되는지는 `--export-release`가 "템플릿 없음"까지 가는 것으로 확인하고, 빌드는 사용자가 에디터에서 한다. 방법은 `docs/build.md`.
+- **빌드는 Android(apk)뿐이다 — Windows 빌드는 버렸다**(이슈 #418, 사용자 요청). `export_presets.cfg`의 프리셋은 `Android` 하나이고 `Windows Desktop` 프리셋·`build-exe.bat`은 지웠다. 되살리지 말 것 — 산출물이 아니라 빌드 방법이므로 `export_presets.cfg`는 `.gitignore`에서 빼서 커밋한다. PC는 에디터 F5·`--server`로만 돌린다(PC 온라인 모드·서버는 그대로다). 방법은 `docs/build.md`.
 - `README.md`는 프로젝트와 무관한 외부 유저가 보는 문서다 — 폴더 구조, 확장 가이드, 엔진 실행·검증 방법을 넣지 않는다(이슈 #4·#8·#11). 개발자용 정보는 이 파일과 `docs/`에 둔다. 현재 README에는 리셋과 함께 폴더 구조·실행 방법이 다시 들어가 있어 정리가 필요하다.
 - **표(`Weapons.LIST`·`Characters.LIST`·`Maps.LIST`)에서 꺼낸 값은 `Variant`다.** `var path := DIR + dict.get("file", "")`처럼 `:=`로 받으면 타입 추론이 실패해 **스크립트가 파싱되지 않고 게임이 아예 뜨지 않는다**(이슈 #66). 반드시 `var file: String = ...`처럼 명시 타입으로 받는다. 정적 검증이 잡아내지 못하는 종류라 표를 다루는 코드를 쓸 때마다 확인한다.
 - .gd 스크립트를 새로 만들면 사용자 에디터가 .uid 파일을 생성한다 — 발견 시 해당 이슈 브랜치에 커밋한다.
