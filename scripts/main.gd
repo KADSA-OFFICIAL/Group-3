@@ -174,6 +174,8 @@ const WIN_COLOR := Color(0.96, 0.55, 0.78)
 @onready var result_jelly = $UI/HUD/ResultOverlay/Jelly
 @onready var result_label: Label = $UI/HUD/ResultOverlay/ResultLabel
 @onready var result_score: Label = $UI/HUD/ResultOverlay/ScoreLabel
+## 뒤로 가기 확인 창 (#424). 게임이 멈춘 동안에도 눌려야 하므로 `process_mode` 가 ALWAYS 다.
+@onready var quit_confirm: Control = $UI/HUD/QuitConfirm
 
 
 func _ready() -> void:
@@ -186,6 +188,8 @@ func _ready() -> void:
 	_load_map(Maps.default_name())
 	# 라운드마다 뜨는 무기 선택 카드 (#205). 1P·2P가 차례로 고른다.
 	weapon_pick.weapon_chosen.connect(_take_pick)
+	quit_confirm.get_node("Card/ResumeButton").pressed.connect(_close_quit_confirm)
+	quit_confirm.get_node("Card/QuitButton").pressed.connect(_quit_to_title)
 	_spawn_players()
 
 
@@ -763,7 +767,7 @@ func _opponent_of(player_id: int) -> Player:
 
 
 func _now() -> float:
-	return Time.get_ticks_msec() / 1000.0
+	return GameState.now()
 
 
 # ─────────────────────────── 전투 틱 ───────────────────────────
@@ -1968,4 +1972,38 @@ func _score_text(score: int, mirrored: bool) -> String:
 func _unhandled_input(event: InputEvent) -> void:
 	# ESC로 경기를 그만두고 타이틀로 돌아간다
 	if event.is_action_pressed("ui_cancel"):
-		get_tree().change_scene_to_file("res://scenes/title.tscn")
+		_quit_to_title()
+
+
+## 안드로이드 뒤로 가기(버튼·가장자리 스와이프, #424). **바로 나가지 않고 게임을 멈춘 뒤 묻는다** —
+## 1P 조이스틱이 화면 끝 가까이에 있어 엄지가 가장자리를 스치기만 해도 뒤로 가기가 되고,
+## 묻지 않으면 그 한 번에 경기가 통째로 날아간다. 창이 떠 있을 때 한 번 더 누르면 닫는다.
+## 엔진이 앱을 끄지 않는 것은 `project.godot` 의 `quit_on_go_back = false` 덕분이다.
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_WM_GO_BACK_REQUEST or not is_node_ready():
+		return
+	if quit_confirm.visible:
+		_close_quit_confirm()
+	else:
+		_open_quit_confirm()
+
+
+func _open_quit_confirm() -> void:
+	quit_confirm.show()
+	GameState.set_game_paused(true)
+
+
+func _close_quit_confirm() -> void:
+	quit_confirm.hide()
+	GameState.set_game_paused(false)
+
+
+func _quit_to_title() -> void:
+	# 멈춘 채로 씬을 바꾸면 타이틀이 굳는다 — 먼저 푼다.
+	GameState.set_game_paused(false)
+	get_tree().change_scene_to_file("res://scenes/title.tscn")
+
+
+func _exit_tree() -> void:
+	# 어느 길로 나가든 멈춤을 남기지 않는다.
+	GameState.set_game_paused(false)

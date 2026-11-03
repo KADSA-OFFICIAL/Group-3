@@ -94,7 +94,7 @@ vertical_alignment = 1
 [node name="Countdown" parent="UI/HUD" instance=ExtResource("8_count")]
 
 [node name="TouchControls" parent="UI/HUD" instance=ExtResource("9_touch")]
-covers = [NodePath("../WeaponPick"), NodePath("../ResultOverlay"), NodePath("../MatchIntro")]
+covers = [NodePath("../WeaponPick"), NodePath("../ResultOverlay"), NodePath("../MatchIntro"), NodePath("../QuitConfirm")]
 
 [node name="ResultOverlay" type="Control" parent="UI/HUD"]
 visible = false
@@ -156,3 +156,67 @@ vertical_alignment = 1
 [node name="WeaponPick" parent="UI/HUD" instance=ExtResource("5_pick")]
 
 [node name="MatchIntro" parent="UI/HUD" instance=ExtResource("6_intro")]
+
+[node name="QuitConfirm" type="Control" parent="UI/HUD"]
+process_mode = 3
+visible = false
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Dim" type="ColorRect" parent="UI/HUD/QuitConfirm"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.29, 0.23, 0.32, 0.62)
+
+[node name="Card" type="Panel" parent="UI/HUD/QuitConfirm"]
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -270.0
+offset_top = -140.0
+offset_right = 270.0
+offset_bottom = 140.0
+
+[node name="Title" type="Label" parent="UI/HUD/QuitConfirm/Card"]
+anchor_right = 1.0
+offset_top = 34.0
+offset_bottom = 90.0
+theme_override_font_sizes/font_size = 40
+text = "경기를 그만둘까요?"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Note" type="Label" parent="UI/HUD/QuitConfirm/Card"]
+anchor_right = 1.0
+offset_top = 96.0
+offset_bottom = 130.0
+theme_override_colors/font_color = Color(0.44, 0.39, 0.48, 1)
+theme_override_font_sizes/font_size = 22
+text = "지금까지의 점수는 남지 않아요"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ResumeButton" type="Button" parent="UI/HUD/QuitConfirm/Card"]
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -236.0
+offset_top = -104.0
+offset_right = -12.0
+offset_bottom = -36.0
+theme_override_font_sizes/font_size = 30
+text = "계속하기"
+
+[node name="QuitButton" type="Button" parent="UI/HUD/QuitConfirm/Card"]
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = 12.0
+offset_top = -104.0
+offset_right = 236.0
+offset_bottom = -36.0
+theme_override_font_sizes/font_size = 30
+text = "그만두기"
