@@ -1979,13 +1979,22 @@ func _unhandled_input(event: InputEvent) -> void:
 ## 1P 조이스틱이 화면 끝 가까이에 있어 엄지가 가장자리를 스치기만 해도 뒤로 가기가 되고,
 ## 묻지 않으면 그 한 번에 경기가 통째로 날아간다. 창이 떠 있을 때 한 번 더 누르면 닫는다.
 ## 엔진이 앱을 끄지 않는 것은 `project.godot` 의 `quit_on_go_back = false` 덕분이다.
+##
+## **앱이 화면에서 내려가도 같은 창으로 멈춘다**(#427) — 홈으로 쓸어 올리기·다른 앱·전화·
+## 알림창. 그대로 두면 나가 있던 시간이 게임 시계에 들어가 쿨타임이 차고 무기가 대신 뽑히며,
+## 돌아오는 순간 두 사람이 폰을 다시 잡기도 전에 싸움이 이어진다. 이때는 닫지 않고 열기만 한다 —
+## 돌아와서 `계속하기`를 눌러야 이어진다.
 func _notification(what: int) -> void:
-	if what != NOTIFICATION_WM_GO_BACK_REQUEST or not is_node_ready():
+	if not is_node_ready():
 		return
-	if quit_confirm.visible:
-		_close_quit_confirm()
-	else:
-		_open_quit_confirm()
+	match what:
+		NOTIFICATION_WM_GO_BACK_REQUEST:
+			if quit_confirm.visible:
+				_close_quit_confirm()
+			else:
+				_open_quit_confirm()
+		NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_APPLICATION_FOCUS_OUT:
+			_open_quit_confirm()
 
 
 func _open_quit_confirm() -> void:

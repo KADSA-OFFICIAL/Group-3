@@ -30,7 +30,7 @@
 
 title(`StartButton`으로 시작 — 고를 것이 없다) → select(1P·2P가 **각자 캐릭터를 고르고** `시작!`) → main(전투, **라운드가 시작될 때마다 무기 카드 3장이 1P → 2P 차례로 뜬다**, 씬이 열리면 젤리 둘을 바로 세운다) → **3점 선취 시 select로 돌아간다**(`_return_to_select()`). 전투 중 ESC(`ui_cancel`)로 title 복귀.
 
-**안드로이드 뒤로 가기(버튼·가장자리 스와이프)는 앱을 바로 끄지 않는다**(이슈 #424) — `project.godot`의 `application/config/quit_on_go_back=false`이고 화면마다 `NOTIFICATION_WM_GO_BACK_REQUEST`를 받는다. 전투 화면은 **게임을 멈추고** `UI/HUD/QuitConfirm`(`경기를 그만둘까요?` · `계속하기`/`그만두기`)을 띄우고(한 번 더 누르면 닫힌다), 선택 창은 `홈`과 같이 title로, title은 앱을 끝낸다. 1P 조이스틱이 화면 끝 가까이에 있어 엄지가 가장자리를 스치기만 해도 뒤로 가기가 되므로, 전투에서 묻지 않고 나가게 되돌리지 말 것. 알림은 엔진이 트리를 훑는 중에 오므로 **씬을 바꾸는 처리는 `call_deferred`로 미룬다**("Parent node is busy").
+**안드로이드 뒤로 가기(버튼·가장자리 스와이프)는 앱을 바로 끄지 않는다**(이슈 #424) — `project.godot`의 `application/config/quit_on_go_back=false`이고 화면마다 `NOTIFICATION_WM_GO_BACK_REQUEST`를 받는다. 전투 화면은 **게임을 멈추고** `UI/HUD/QuitConfirm`(`일시정지` · `계속하기`/`그만두기`)을 띄우고(한 번 더 누르면 닫힌다), 선택 창은 `홈`과 같이 title로, title은 앱을 끝낸다. 1P 조이스틱이 화면 끝 가까이에 있어 엄지가 가장자리를 스치기만 해도 뒤로 가기가 되므로, 전투에서 묻지 않고 나가게 되돌리지 말 것. 알림은 엔진이 트리를 훑는 중에 오므로 **씬을 바꾸는 처리는 `call_deferred`로 미룬다**("Parent node is busy"). **앱이 화면에서 내려갈 때(홈으로 쓸어 올리기·다른 앱·전화·알림창)도 같은 창으로 멈춘다**(이슈 #427) — `NOTIFICATION_APPLICATION_PAUSED`·`FOCUS_OUT`에 창을 **열기만** 하고, 돌아와서 `계속하기`를 눌러야 이어진다. 나가 있던 시간은 게임 시계(`GameState.now()`)에 들어가지 않는다. PC에서는 창 밖을 눌러 포커스를 잃어도 멈춘다.
 
 **경기가 끝나면 씬이 통째로 새로 열린다** — 점수·표를 손으로 비우던 `_server_reset_match()`가 없어진 이유다. 전용 서버가 씬에 머물던 시절에만 필요했다.
 
