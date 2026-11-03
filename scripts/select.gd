@@ -39,5 +39,13 @@ func _on_go_pressed() -> void:
 	get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 
+## 안드로이드 뒤로 가기는 `홈` 버튼과 같다 (#424) — 고른 것만 있는 화면이라 묻지 않는다.
+## **미뤄서 부른다** — 이 알림은 엔진이 트리 전체를 훑으며 돌리는 중에 오므로, 그 자리에서
+## 씬을 바꾸면 "Parent node is busy" 오류가 난다.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		_on_home_pressed.call_deferred()
+
+
 func _on_home_pressed() -> void:
 	get_tree().change_scene_to_file("res://scenes/title.tscn")

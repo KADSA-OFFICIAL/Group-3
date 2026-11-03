@@ -636,7 +636,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _now() -> float:
-	return Time.get_ticks_msec() / 1000.0
+	return GameState.now()
 
 
 func _find_jelly(player_id: int) -> Node:
