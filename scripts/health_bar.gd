@@ -119,4 +119,4 @@ func _fill_color(ratio: float) -> Color:
 
 
 func _now() -> float:
-	return Time.get_ticks_msec() / 1000.0
+	return GameState.now()

@@ -40,6 +40,38 @@ var configs: Array[Dictionary] = [
 ]
 
 
+## 멈춰 있던 시간의 합과, 지금 멈춰 있다면 멈춘 순간 (벽시계 초, 멈추지 않았으면 -1).
+var _paused_total := 0.0
+var _paused_since := -1.0
+
+
+## **게임 시계**(초, #424). 전투가 재는 시간(쿨타임·무기 선택 제한 시간·라운드 예약·넉백 …)은
+## 전부 이것으로 잰다 — 벽시계(`Time.get_ticks_msec`)를 바로 읽지 말 것.
+##
+## 뒤로 가기로 경기를 멈추면(`set_game_paused`) 노드는 멈춰도 벽시계는 흐른다. 그대로 두면
+## 확인 창을 보는 동안 쿨타임이 다 차고 무기 선택이 대신 뽑히고 예약된 라운드가 지나가
+## 버린다. 그래서 멈춘 동안 이 시계도 멈추고, 풀린 뒤에는 멈춘 만큼을 빼고 센다.
+func now() -> float:
+	if _paused_since >= 0.0:
+		return _paused_since - _paused_total
+	return Time.get_ticks_msec() / 1000.0 - _paused_total
+
+
+## 게임 전체를 멈추거나 푼다 (#424). `SceneTree.paused` 를 직접 건드리지 말고 이것을
+## 거친다 — 시계와 노드가 같이 멈춰야 한다. **씬을 바꾸기 전에는 반드시 푼다**:
+## `paused` 는 씬을 갈아타도 남아서 다음 화면이 통째로 굳는다.
+func set_game_paused(value: bool) -> void:
+	if value == (_paused_since >= 0.0):
+		return
+	var real := Time.get_ticks_msec() / 1000.0
+	if value:
+		_paused_since = real
+	else:
+		_paused_total += real - _paused_since
+		_paused_since = -1.0
+	get_tree().paused = value
+
+
 ## 이 자리(0·1)의 플레이어 번호.
 func id_at(slot: int) -> int:
 	return slot + 1
