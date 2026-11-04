@@ -189,6 +189,10 @@ title(`StartButton`으로 시작 — 고를 것이 없다) → select(1P·2P가 
   `ResourceLoader.load()` 해 보면 컴파일 오류가 한 번에 잡힌다(#320에서 `files=66 failures=0` 으로 확인했다).
   사람 손 없이 한 경기를 돌려 보려면 같은 방식의 오토로드가 `title._on_start_pressed()` →
   `select._on_go_pressed()` → `weapon_pick._on_card_pressed(0)` → `player.kill()` 을 눌러 주면 된다.
+- **PR마다 GitHub Actions가 같은 검사를 돈다**(`.github/workflows/godot-check.yml`, 이슈 #436). 리눅스용 Godot 4.6.2로 `--import`한 뒤 `tools/ci/ci_check.gd`를 임시 오토로드로 붙여 두 단계를 돈다. 첫째, `scripts`·`scenes`·`resources`를 전부 로드한다. 둘째, title → select → 무기 2장 → 판 열림 → 1P 사망 → 2P 점수까지 한 경기를 돈다. 출력에 `SCRIPT ERROR`·`Parse Error`·`Compile Error`가 하나라도 있어도 실패한다. **자동 머지 전에 이 검사가 초록인지 본다**(`gh pr checks <n>`) — 실패면 "검증 누락"으로 보고 멈춘다.
+  - 로컬에서도 똑같이 돌릴 수 있다. 프로젝트 폴더에 `override.cfg`(`[autoload]` / `CICheck="*res://tools/ci/ci_check.gd"`)를 만들고 `--headless --path .`로 실행한 뒤 그 파일을 지운다. 종료 코드가 0이면 통과다.
+  - **컴파일에 실패한 스크립트도 `ResourceLoader.load()`는 null이 아닌 껍데기를 돌려준다.** 그래서 검사는 `Script.can_instantiate()`가 false인지로 판단한다. 예전 메모의 "`files=66 failures=0`"은 null만 셌기 때문에 컴파일 오류를 놓쳤을 수 있다.
+  - 스모크는 함수를 직접 부른다(`_on_start_pressed`·`_on_go_pressed`·`WeaponPick._on_card_pressed`·`_armed`·`_picker`·`Player.frozen`·`main.scores`). **이 이름을 바꾸면 `ci_check.gd`도 같이 고친다.**
 - 그래도 **화면으로 봐야 아는 것**(색·배치·발판 높이·조작감)은 사용자 F5 확인이 필요하다. 헤드리스 실행은 오류 유무만 알려준다.
 - `_ready()`에서 `change_scene_to_file()`을 바로 부르면 "Parent node is busy" 오류가 난다 — `call_deferred`로 미룬다.
 - **빌드는 Android(apk)뿐이다 — Windows 빌드는 버렸다**(이슈 #418, 사용자 요청). `export_presets.cfg`의 프리셋은 `Android` 하나이고 `Windows Desktop` 프리셋·`build-exe.bat`은 지웠다. 되살리지 말 것 — 산출물이 아니라 빌드 방법이므로 `export_presets.cfg`는 `.gitignore`에서 빼서 커밋한다. PC는 에디터 F5로 확인한다. 방법은 `docs/build.md`.
