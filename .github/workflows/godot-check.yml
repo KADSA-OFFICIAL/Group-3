@@ -47,6 +47,11 @@ jobs:
 
       # `.godot/` 는 저장소에 없으므로 처음 한 번 리소스를 가져와야 한다
       # (class_name 목록과 텍스처 가져오기가 여기서 만들어진다).
+      #
+      # **이 출력은 오류 검사에 쓰지 않는다.** 빈 캐시에서 가져올 때는 순서 때문에
+      # `display_font.tres` 가 아직 안 가져온 `.ttf` 를 가리킨다며 "Parse Error" 를 찍는다 —
+      # 파일은 멀쩡하고 다음 실행에서는 제대로 읽힌다. 정말 깨진 참조라면 다음 단계의
+      # 전체 로드가 null 로 잡는다.
       - name: Import project
         run: ~/godot/godot --headless --path . --import 2>&1 | tee import.log
 
@@ -60,7 +65,7 @@ jobs:
           set -e
           rm -f override.cfg
           # 종료 코드와 별개로 출력도 본다 — 스모크가 지나가지 않은 길에서 난 오류도 잡는다.
-          if grep -nE "SCRIPT ERROR|Parse Error|Compile Error" import.log check.log; then
+          if grep -nE "SCRIPT ERROR|Parse Error|Compile Error" check.log; then
             echo "::error::Godot 출력에 스크립트 오류가 있다"
             exit 1
           fi
