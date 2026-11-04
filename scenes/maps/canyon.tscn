@@ -35,60 +35,67 @@ size = Vector2(40, 648)
 [node name="Canyon" type="Node2D"]
 
 [node name="Background" type="Sprite2D" parent="."]
-position = Vector2(576, 324)
+position = Vector2(576, 364)
 scale = Vector2(0.6, 0.6)
 texture = ExtResource("1_bg")
 
+[node name="SkyFill" type="Sprite2D" parent="."]
+position = Vector2(576, 20)
+scale = Vector2(0.6, 40)
+texture = ExtResource("1_bg")
+region_enabled = true
+region_rect = Rect2(0, 0, 1920, 1)
+
 [node name="CliffLeftTop" type="StaticBody2D" parent="."]
-position = Vector2(124, 175.5)
+position = Vector2(124, 215.5)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="CliffLeftTop"]
 shape = SubResource("RectangleShape2D_cliff_l_top")
 
 [node name="CliffLeftMid" type="StaticBody2D" parent="."]
-position = Vector2(101, 336)
+position = Vector2(101, 376)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="CliffLeftMid"]
 shape = SubResource("RectangleShape2D_cliff_l_mid")
 
 [node name="CliffLeftLow" type="StaticBody2D" parent="."]
-position = Vector2(89, 570)
+position = Vector2(89, 610)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="CliffLeftLow"]
 shape = SubResource("RectangleShape2D_cliff_l_low")
 
 [node name="CliffRightTop" type="StaticBody2D" parent="."]
-position = Vector2(1040, 180)
+position = Vector2(1040, 220)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="CliffRightTop"]
 shape = SubResource("RectangleShape2D_cliff_r_top")
 
 [node name="CliffRightMid" type="StaticBody2D" parent="."]
-position = Vector2(1047.5, 336)
+position = Vector2(1047.5, 376)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="CliffRightMid"]
 shape = SubResource("RectangleShape2D_cliff_r_mid")
 
 [node name="CliffRightLow" type="StaticBody2D" parent="."]
-position = Vector2(1056, 570)
+position = Vector2(1056, 610)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="CliffRightLow"]
 shape = SubResource("RectangleShape2D_cliff_r_low")
 
 [node name="PlatformCenter" type="StaticBody2D" parent="."]
-position = Vector2(574.5, 359)
+position = Vector2(574.5, 399)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="PlatformCenter"]
 shape = SubResource("RectangleShape2D_plat_center")
 
 [node name="PlatformSmallLeft" type="StaticBody2D" parent="."]
-position = Vector2(459.5, 211)
+position = Vector2(459.5, 251)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="PlatformSmallLeft"]
 shape = SubResource("RectangleShape2D_plat_small_l")
 
 [node name="PlatformSmallRight" type="StaticBody2D" parent="."]
-position = Vector2(703.5, 212)
+position = Vector2(703.5, 252)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="PlatformSmallRight"]
 shape = SubResource("RectangleShape2D_plat_small_r")
@@ -108,7 +115,7 @@ shape = SubResource("RectangleShape2D_wall")
 [node name="Spawns" type="Node2D" parent="."]
 
 [node name="Spawn1" type="Marker2D" parent="Spawns"]
-position = Vector2(140, 66)
+position = Vector2(140, 106)
 
 [node name="Spawn2" type="Marker2D" parent="Spawns"]
-position = Vector2(1020, 75)
+position = Vector2(1020, 115)
