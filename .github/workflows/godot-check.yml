@@ -1,0 +1,71 @@
+# Godot 헤드리스 검사 (#436).
+#
+# 모든 스크립트·씬·리소스를 한 번씩 불러 보고(컴파일 오류), 사람 손 없이 한 경기를 열어
+# 점수가 나는 데까지 돌린다. 검사 내용은 `tools/ci/ci_check.gd` 에 있다.
+#
+# 헤드리스는 **오류 유무만** 알려 준다 — 색·배치·조작감은 여전히 F5 로 봐야 한다.
+name: Godot check
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+  workflow_dispatch:
+
+concurrency:
+  group: godot-check-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # 팀이 쓰는 엔진과 같은 판이어야 한다 (CLAUDE.md 의 Godot 4.6.2).
+  GODOT_VERSION: 4.6.2-stable
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot binary
+        id: godot-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/godot
+          key: godot-${{ env.GODOT_VERSION }}-linux
+
+      - name: Download Godot
+        if: steps.godot-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/godot
+          curl -fsSL -o /tmp/godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d ~/godot
+          mv ~/godot/Godot_v${GODOT_VERSION}_linux.x86_64 ~/godot/godot
+          chmod +x ~/godot/godot
+
+      # `.godot/` 는 저장소에 없으므로 처음 한 번 리소스를 가져와야 한다
+      # (class_name 목록과 텍스처 가져오기가 여기서 만들어진다).
+      - name: Import project
+        run: ~/godot/godot --headless --path . --import 2>&1 | tee import.log
+
+      - name: Load all + one-match smoke
+        run: |
+          # 검사 스크립트를 오토로드로 붙인다. 이 파일은 저장소에 없고 여기서만 만든다.
+          printf '[autoload]\nCICheck="*res://tools/ci/ci_check.gd"\n' > override.cfg
+          set +e
+          ~/godot/godot --headless --path . 2>&1 | tee check.log
+          status=${PIPESTATUS[0]}
+          set -e
+          rm -f override.cfg
+          # 종료 코드와 별개로 출력도 본다 — 스모크가 지나가지 않은 길에서 난 오류도 잡는다.
+          if grep -nE "SCRIPT ERROR|Parse Error|Compile Error" import.log check.log; then
+            echo "::error::Godot 출력에 스크립트 오류가 있다"
+            exit 1
+          fi
+          if ! grep -q "^CI_RESULT ok" check.log; then
+            echo "::error::검사가 통과하지 못했다 (exit=$status)"
+            exit 1
+          fi
+          exit $status
