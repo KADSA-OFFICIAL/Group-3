@@ -1,6 +1,11 @@
 [gd_scene format=3]
 
 [ext_resource type="Texture2D" path="res://assets/maps/canyon.png" id="1_bg"]
+[ext_resource type="Shader" path="res://resources/map_top_fill.gdshader" id="2_fill"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_sky_fill"]
+shader = ExtResource("2_fill")
+shader_parameter/art = ExtResource("1_bg")
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_cliff_l_top"]
 size = Vector2(328, 113)
@@ -35,67 +40,66 @@ size = Vector2(40, 648)
 [node name="Canyon" type="Node2D"]
 
 [node name="Background" type="Sprite2D" parent="."]
-position = Vector2(576, 364)
+position = Vector2(576, 444)
 scale = Vector2(0.6, 0.6)
 texture = ExtResource("1_bg")
 
-[node name="SkyFill" type="Sprite2D" parent="."]
-position = Vector2(576, 20)
-scale = Vector2(0.6, 40)
-texture = ExtResource("1_bg")
-region_enabled = true
-region_rect = Rect2(0, 0, 1920, 1)
+[node name="SkyFill" type="ColorRect" parent="."]
+material = SubResource("ShaderMaterial_sky_fill")
+offset_right = 1152.0
+offset_bottom = 120.0
+mouse_filter = 2
 
 [node name="CliffLeftTop" type="StaticBody2D" parent="."]
-position = Vector2(124, 215.5)
+position = Vector2(124, 295.5)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="CliffLeftTop"]
 shape = SubResource("RectangleShape2D_cliff_l_top")
 
 [node name="CliffLeftMid" type="StaticBody2D" parent="."]
-position = Vector2(101, 376)
+position = Vector2(101, 456)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="CliffLeftMid"]
 shape = SubResource("RectangleShape2D_cliff_l_mid")
 
 [node name="CliffLeftLow" type="StaticBody2D" parent="."]
-position = Vector2(89, 610)
+position = Vector2(89, 690)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="CliffLeftLow"]
 shape = SubResource("RectangleShape2D_cliff_l_low")
 
 [node name="CliffRightTop" type="StaticBody2D" parent="."]
-position = Vector2(1040, 220)
+position = Vector2(1040, 300)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="CliffRightTop"]
 shape = SubResource("RectangleShape2D_cliff_r_top")
 
 [node name="CliffRightMid" type="StaticBody2D" parent="."]
-position = Vector2(1047.5, 376)
+position = Vector2(1047.5, 456)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="CliffRightMid"]
 shape = SubResource("RectangleShape2D_cliff_r_mid")
 
 [node name="CliffRightLow" type="StaticBody2D" parent="."]
-position = Vector2(1056, 610)
+position = Vector2(1056, 690)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="CliffRightLow"]
 shape = SubResource("RectangleShape2D_cliff_r_low")
 
 [node name="PlatformCenter" type="StaticBody2D" parent="."]
-position = Vector2(574.5, 399)
+position = Vector2(574.5, 479)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="PlatformCenter"]
 shape = SubResource("RectangleShape2D_plat_center")
 
 [node name="PlatformSmallLeft" type="StaticBody2D" parent="."]
-position = Vector2(459.5, 251)
+position = Vector2(459.5, 331)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="PlatformSmallLeft"]
 shape = SubResource("RectangleShape2D_plat_small_l")
 
 [node name="PlatformSmallRight" type="StaticBody2D" parent="."]
-position = Vector2(703.5, 252)
+position = Vector2(703.5, 332)
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="PlatformSmallRight"]
 shape = SubResource("RectangleShape2D_plat_small_r")
@@ -115,7 +119,7 @@ shape = SubResource("RectangleShape2D_wall")
 [node name="Spawns" type="Node2D" parent="."]
 
 [node name="Spawn1" type="Marker2D" parent="Spawns"]
-position = Vector2(140, 106)
+position = Vector2(140, 186)
 
 [node name="Spawn2" type="Marker2D" parent="Spawns"]
-position = Vector2(1020, 115)
+position = Vector2(1020, 195)
