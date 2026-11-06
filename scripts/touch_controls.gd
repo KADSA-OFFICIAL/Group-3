@@ -48,12 +48,18 @@ func _ready() -> void:
 	# 노치·펀치홀을 피한다 (#445). 조작물이 모두 이 노드의 모서리에 앵커로 붙어 있어
 	# 이 노드 하나만 줄이면 넷이 같이 들어온다. 손가락 판정(`_pad_at`)도 실제 자리를 본다.
 	SafeArea.fit(self)
-	get_viewport().size_changed.connect(SafeArea.fit.bind(self))
+	get_viewport().size_changed.connect(_on_view_resized)
 	for path in covers:
 		var overlay := get_node_or_null(path)
 		if overlay != null:
 			overlay.visibility_changed.connect(_refresh)
 	_refresh()
+
+
+## 화면 크기가 바뀌면(폴더블을 접고 펴기, #451) 안전 영역을 다시 잰다. 인스턴스 함수로 받는
+## 이유는 `SafeArea.refit()` 주석에 있다.
+func _on_view_resized() -> void:
+	SafeArea.refit(self)
 
 
 ## 덮는 화면이 떠 있으면 접는다. **접을 때 잡고 있던 것을 놓아야 한다** —
