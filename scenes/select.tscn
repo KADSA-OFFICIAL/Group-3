@@ -4,6 +4,7 @@
 [ext_resource type="PackedScene" uid="uid://bnruslf487aii" path="res://scenes/player_panel.tscn" id="2_panel"]
 [ext_resource type="Script" path="res://scripts/select_decor.gd" id="5_decor"]
 [ext_resource type="Texture2D" path="res://assets/ui/select_bg.png" id="6_wall"]
+[ext_resource type="Script" path="res://scripts/safe_area.gd" id="7_safe"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_go"]
 bg_color = Color(0.8, 0.29, 0.56, 1)
@@ -76,7 +77,17 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("5_decor")
 
-[node name="HomeButton" type="Button" parent="." unique_id=1195090992]
+[node name="Safe" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("7_safe")
+
+[node name="HomeButton" type="Button" parent="Safe" unique_id=1195090992]
 layout_mode = 0
 offset_left = 16.0
 offset_top = 12.0
@@ -85,7 +96,7 @@ offset_bottom = 54.0
 theme_override_font_sizes/font_size = 20
 text = "홈"
 
-[node name="P1Panel" parent="." unique_id=2071895197 instance=ExtResource("2_panel")]
+[node name="P1Panel" parent="Safe" unique_id=2071895197 instance=ExtResource("2_panel")]
 anchors_preset = 0
 offset_left = 16.0
 offset_top = 78.0
@@ -93,7 +104,7 @@ offset_right = 436.0
 offset_bottom = 572.0
 accent = Color(0.96, 0.55, 0.78, 1)
 
-[node name="P2Panel" parent="." unique_id=1015086149 instance=ExtResource("2_panel")]
+[node name="P2Panel" parent="Safe" unique_id=1015086149 instance=ExtResource("2_panel")]
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
@@ -106,7 +117,7 @@ mirrored = true
 default_character = 1
 accent = Color(0.56, 0.59, 0.91, 1)
 
-[node name="GoButton" type="Button" parent="." unique_id=402992325]
+[node name="GoButton" type="Button" parent="Safe" unique_id=402992325]
 layout_mode = 1
 anchors_preset = 5
 anchor_left = 0.5

@@ -23,6 +23,8 @@
 
 **새로 만드는 UI는 반드시 앵커로 잡는다.** 절대 좌표(`anchors_preset = 0`)로 두면 넓어진 화면에서 왼쪽에 쏠린 채 남는다 — `select.tscn`의 `P2Panel`(오른쪽 앵커)·`GoButton`(가운데 앵커)이 이 이유로 고쳐졌다. 화면 크기를 읽어 그리는 `_draw()`(`select_decor.gd`·`point_gain.gd`·`countdown.gd`)는 `size`를 쓰고 있어 손댈 것이 없었다 — 새로 그리는 것도 상수 대신 `size`에서 잰다.
 
+**화면 끝에 붙는 UI는 노치·펀치홀(안전 영역)을 피한다**(이슈 #445). `scripts/safe_area.gd`(`class_name SafeArea`)가 `DisplayServer.get_display_safe_area()`를 뷰포트 좌표로 바꿔, 전체 화면 앵커 노드를 그만큼 안쪽으로 줄인다. 선택 창은 `Safe` 노드 아래에 `HomeButton`·`P1Panel`·`P2Panel`·`GoButton`을, 타이틀은 `SubLabel`을 두고, 조작물은 `touch_controls.gd`가 `SafeArea.fit(self)`를 직접 부른다. **배경(맵·원화·진열장)은 넣지 않는다** — 화면 끝까지 깔려야 한다. **모바일(`mobile` 태그)에서만 재고 PC에서는 늘 0이다**(PC의 안전 영역은 작업 표시줄을 뺀 화면이라 창과 무관한 여백이 생긴다). 둥근 모서리는 Godot이 값을 주지 않아 다루지 않는다. 화면 끝에 새 UI를 붙이면 `Safe` 아래에 넣는다.
+
 **플레이어 번호는 1과 2다.** 자리(slot)는 0·1이고 `번호 = 자리 + 1`이며, 변환은 `GameState.id_at()`·`slot_of()`만 쓴다. 전투 화면의 표(점수·쿨타임·출혈)가 전부 이 번호를 열쇠로 쓰고, 노드 이름도 `Player_1`·`Player_2`다.
 
 `main` 브랜치는 2026-07-26에 새 구현(커밋 `e2a7dcb`)으로 교체되었다. 이전 구현(`autoload/game_manager.gd`, `scripts/weapons/`, `scenes/maps/` 등)은 `backup/main-before-reset` 브랜치에만 있고 현재 코드베이스에는 없다 — 그 경로를 참조하지 말 것.
