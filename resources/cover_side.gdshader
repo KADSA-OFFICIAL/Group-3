@@ -15,11 +15,19 @@ uniform float art_height = 768.0;
 uniform float max_blur_px = 190.0;
 // 가장자리에서 몇 픽셀 안쪽을 읽을지. 맨 끝 한 줄은 안티앨리어싱 찌꺼기가 있을 수 있다.
 uniform float inset_px = 2.0;
+// 번짐을 노드 폭이 아니라 **이음선에서의 픽셀 거리**로 잰다 (#451). band_px = 이 노드의 폭,
+// blur_reach_px = 번짐이 max_blur_px 에 닿는 거리. 폴더블 커버 화면(약 2.7:1)을 덮으려고 띠를
+// 넓혀도 이음선 가까이의 모양은 그대로다. 0이면 예전처럼 노드 끝에서 닿는다.
+uniform float band_px = 0.0;
+uniform float blur_reach_px = 0.0;
 
 const int TAPS = 20;
 
 void fragment() {
 	float dist = right_side ? UV.x : 1.0 - UV.x; // 0 = 이음선, 1 = 가장 먼 곳
+	if (band_px > 0.0 && blur_reach_px > 0.0) {
+		dist = min(dist * band_px / blur_reach_px, 1.0);
+	}
 	float edge_u = right_side ? 1.0 - inset_px / art_width : inset_px / art_width;
 	// 이음선 가까이에서 빨리 퍼지게 한다(제곱근 꼴) — 직선으로 퍼지면 가장자리의 선명한 색
 	// (성의 주황)이 한참 동안 줄무늬로 남는다.

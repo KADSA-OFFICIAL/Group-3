@@ -28,6 +28,11 @@ extends Control
 ## 몇 %다 — 이상한 값 하나로 UI가 화면 가운데로 몰리는 것을 막는다.
 const MAX_SHARE := 0.2
 
+## 화면 크기가 바뀐 뒤 안전 영역을 다시 재는 때(초) (#451). 폴더블을 접고 펴면 노치·펀치홀
+## 자리가 화면마다 다른데, 안드로이드는 새 컷아웃을 창 크기보다 몇 프레임 늦게 줄 수 있다 —
+## 바뀐 순간 한 번만 재면 옛 화면의 여백이 남는다.
+const SETTLE_TIMES: Array[float] = [0.1, 0.3, 0.6, 1.0]
+
 
 func _ready() -> void:
 	mouse_filter = MOUSE_FILTER_IGNORE
@@ -36,7 +41,21 @@ func _ready() -> void:
 
 
 func _on_size_changed() -> void:
-	fit(self)
+	refit(self)
+
+
+## 크기가 바뀐 순간과 그 뒤 잠깐 동안 다시 잰다 (#451). 크기 변경 신호는 **부르는 쪽의
+## 인스턴스 함수**로 받아 이것을 부를 것 — 정적 함수에 노드를 묶어 뷰포트 신호에 걸면
+## 씬이 바뀐 뒤에도 연결이 남아 해제된 노드로 불린다(뷰포트는 씬보다 오래 산다).
+static func refit(control: Control) -> void:
+	fit(control)
+	if not OS.has_feature("mobile"):
+		return
+	var tree := control.get_tree()
+	for delay in SETTLE_TIMES:
+		tree.create_timer(delay).timeout.connect(func() -> void:
+			if is_instance_valid(control) and control.is_inside_tree():
+				fit(control))
 
 
 ## `control`(전체 화면 앵커)의 offset을 안전 영역 여백으로 맞춘다.
