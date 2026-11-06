@@ -45,6 +45,10 @@ func _ready() -> void:
 		hide()
 		set_process_input(false)
 		return
+	# 노치·펀치홀을 피한다 (#445). 조작물이 모두 이 노드의 모서리에 앵커로 붙어 있어
+	# 이 노드 하나만 줄이면 넷이 같이 들어온다. 손가락 판정(`_pad_at`)도 실제 자리를 본다.
+	SafeArea.fit(self)
+	get_viewport().size_changed.connect(SafeArea.fit.bind(self))
 	for path in covers:
 		var overlay := get_node_or_null(path)
 		if overlay != null:
