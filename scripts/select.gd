@@ -7,12 +7,12 @@ extends Control
 ##
 ## 고른 값은 `GameState`에 적히고 전투 화면이 그것을 읽어 젤리를 세운다.
 
-@onready var panels := [$P1Panel, $P2Panel]
-@onready var go_button: Button = $GoButton
+@onready var panels := [$Safe/P1Panel, $Safe/P2Panel]
+@onready var go_button: Button = $Safe/GoButton
 
 
 func _ready() -> void:
-	$HomeButton.pressed.connect(_on_home_pressed)
+	$Safe/HomeButton.pressed.connect(_on_home_pressed)
 	go_button.pressed.connect(_on_go_pressed)
 
 	# **가운데 두 칸(맵·무기)이 아예 없다** (요청). 맵도 무기도 라운드가 시작될 때 전투

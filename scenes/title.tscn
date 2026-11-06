@@ -1,8 +1,9 @@
-[gd_scene load_steps=9 format=3 uid="uid://jellytitle001"]
+[gd_scene load_steps=10 format=3 uid="uid://jellytitle001"]
 
 [ext_resource type="Script" path="res://scripts/title.gd" id="1_title"]
 [ext_resource type="Texture2D" path="res://assets/ui/cover.png" id="2_cover"]
 [ext_resource type="Shader" path="res://resources/cover_side.gdshader" id="3_side"]
+[ext_resource type="Script" path="res://scripts/safe_area.gd" id="4_safe"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_side_l"]
 shader = ExtResource("3_side")
@@ -106,7 +107,17 @@ offset_right = 1440.0
 offset_bottom = 768.0
 mouse_filter = 2
 
-[node name="SubLabel" type="Label" parent="."]
+[node name="Safe" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("4_safe")
+
+[node name="SubLabel" type="Label" parent="Safe"]
 anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 16.0
