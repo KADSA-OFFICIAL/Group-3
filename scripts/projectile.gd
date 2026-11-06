@@ -630,7 +630,9 @@ func _physics_process(delta: float) -> void:
 		return
 
 	# 맵에서 완전히 벗어나면 정리한다.
-	var screen := get_viewport_rect().size
+	# 판정이 아니라 치우는 것이라 화면 전체로 잰다 — 넓은 화면의 양옆으로 날아가는 것도
+	# 보이는 동안은 남아 있어야 한다.
+	var screen := get_viewport_rect()
 	if Combat.is_out_of_bounds(position, screen) or position.y < -Combat.FALL_MARGIN_SIDE:
 		_finish()
 
