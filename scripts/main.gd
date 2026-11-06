@@ -49,6 +49,10 @@ const WEAPON_PICK_TIME := 20.0
 ## 그쪽은 이 시간에 맞춰 커졌다 사라지고, 여기서는 이만큼 무기 선택을 미룬다.
 ## 어긋나면 그림이 덜 사라진 채로 카드가 뜨거나(이 값이 짧을 때) 빈 화면을 본다(길 때).
 const MATCH_INTRO_TIME := 2.0
+## 화면 비율이 이만큼(10%) 넘게 바뀌면 접기·펴기·분할 화면으로 보고 판을 멈춘다 (#451).
+## 폴드 커버(약 2.5:1)와 안쪽(약 1.2:1)은 두 배 넘게 차이 나고, 시스템 막대가 잠깐 나타나는
+## 정도는 몇 %다.
+const FOLD_RATIO_CHANGE := 0.1
 
 ## 아래 상태는 전부 전투 판정이 쓴다.
 ## "공격자>피격자" -> 다음 기본 공격이 들어갈 수 있는 시각
@@ -137,6 +141,8 @@ var _hazard: Area2D = null
 ## 맵 칸(`Maps.SIZE`)을 화면 가운데에 놓기 위해 밀어 둔 거리 (#329).
 ## 16:9 화면에서는 (0, 0)이라 예전과 아무것도 달라지지 않는다 — `_center_map()` 참고.
 var _map_offset := Vector2.ZERO
+## 마지막으로 본 화면 크기 (#451). 접기·펴기로 비율이 얼마나 바뀌었는지 재는 데만 쓴다.
+var _view_size := Vector2.ZERO
 ## 아직 안 나온 맵들. 판마다 하나씩 꺼내 쓰고, 비면 다시 섞어 채운다 —
 ## `_pick_round_map()` 참고.
 var _map_pool: Array[String] = []
@@ -186,6 +192,9 @@ func _ready() -> void:
 	# 그래도 하나는 깔아 둔다. 씬이 열리고 첫 라운드가 열리기까지의 몇 프레임 동안
 	# 빈 화면을 보이지 않기 위해서다.
 	_load_map(Maps.default_name())
+	# 폴더블을 접고 펴면 앱이 다시 시작하지 않고 창 크기만 바뀐다 (#451) — 판 도중에도 온다.
+	_view_size = get_viewport_rect().size
+	get_viewport().size_changed.connect(_on_view_resized)
 	# 라운드마다 뜨는 무기 선택 카드 (#205). 1P·2P가 차례로 고른다.
 	weapon_pick.weapon_chosen.connect(_take_pick)
 	quit_confirm.get_node("Card/ResumeButton").pressed.connect(_close_quit_confirm)
@@ -727,11 +736,43 @@ func _on_fish_struck(body: Node2D, direction: float) -> void:
 ## 좌표를 고치는 것이 아니라 칸째로 옮기는 것이라 발판 높이·간격은 한 픽셀도 안 바뀐다.
 ##
 ## **판이 도는 중에는 다시 재지 않는다** — 창 크기가 바뀔 때마다 맵을 옮기면 이미 서 있는
-## 젤리가 지형 밖에 남아 떨어진다. 다음 판에서 `_load_map()` 이 다시 잰다.
+## 젤리가 지형 밖에 남아 떨어진다. 다음 판에서 `_load_map()` 이 다시 잰다. 그 사이에 화면이
+## 바뀌면(폴더블을 접고 펴기, #451) 세상은 그대로 두고 **보는 자리만** 옮긴다 — `_follow_view()`.
+## 맵을 새로 깔았으니 그 보정은 여기서 걷는다.
 func _center_map() -> void:
 	_map_offset = ((get_viewport_rect().size - Maps.SIZE) * 0.5).floor()
 	if _map != null:
 		_map.position = _map_offset
+	get_viewport().canvas_transform = Transform2D.IDENTITY
+
+
+## 판 도중 화면 크기가 바뀌었다 (#451). 폴더블은 접고 펼 때 앱을 다시 시작하지 않고
+## 창 크기만 바꾼다(내보낸 APK의 `resizeableActivity=true`, `configChanges`에 `screenSize`).
+func _on_view_resized() -> void:
+	_follow_view()
+	var before := _view_size
+	var view := get_viewport_rect().size
+	_view_size = view
+	# 두 사람이 폰을 잡은 채 화면이 통째로 바뀌었다 — 다시 잡을 때까지 멈춘다(#424와 같은 창).
+	# **모바일에서만** 멈춘다: PC 에서 창을 끌어 늘리는 것은 경기 중에 일어날 일이 아니고,
+	# 창이 뜨면서 크기를 한 번 맞추는 것에 멈춤 창이 뜨면 안 된다. 비율로 재는 것도 같은
+	# 이유다 — 시스템 막대가 잠깐 나타나는 정도의 변화에는 멈추지 않는다.
+	if not OS.has_feature("mobile") or before.x <= 0.0 or before.y <= 0.0 or view.y <= 0.0:
+		return
+	var change := absf((view.x / view.y) / (before.x / before.y) - 1.0)
+	if change > FOLD_RATIO_CHANGE and not quit_confirm.visible:
+		_open_quit_confirm()
+
+
+## 맵 칸이 새 화면 가운데에 **보이도록** 뷰포트의 `canvas_transform` 만 민다 (#451).
+##
+## 맵·젤리·투사체·연출은 한 좌표도 안 움직인다 — `_map_offset`·낙사 경계·스폰·쥐고 있는
+## 위치값(강제 이동·펀치 예약·잔상)이 전부 그대로라 **판정은 접기 전과 같다.** 맵만 옮기면
+## 젤리가 지형 밖에 남고, 하나하나 같이 옮기면 위치를 쥔 곳을 하나만 놓쳐도 어긋난다.
+## `CanvasLayer`(HUD·조작물·`Backdrop`)는 이 변환을 타지 않아 원래대로 화면에 붙는다.
+func _follow_view() -> void:
+	var wanted := ((get_viewport_rect().size - Maps.SIZE) * 0.5).floor()
+	get_viewport().canvas_transform = Transform2D(0.0, wanted - _map_offset)
 
 
 ## 맵이 들고 있는 스폰 지점. 맵에 없으면 대비값을 쓴다.
@@ -2017,3 +2058,5 @@ func _quit_to_title() -> void:
 func _exit_tree() -> void:
 	# 어느 길로 나가든 멈춤을 남기지 않는다.
 	GameState.set_game_paused(false)
+	# 보는 자리 보정(#451)도 남기지 않는다 — 뷰포트 것이라 다음 씬(title·select)까지 밀린다.
+	get_viewport().canvas_transform = Transform2D.IDENTITY
