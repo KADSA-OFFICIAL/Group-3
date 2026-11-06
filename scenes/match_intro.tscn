@@ -1,8 +1,9 @@
-[gd_scene load_steps=6 format=3 uid="uid://jellymatchintro"]
+[gd_scene load_steps=8 format=3 uid="uid://jellymatchintro"]
 
 [ext_resource type="Script" path="res://scripts/match_intro.gd" id="1_intro"]
 [ext_resource type="Texture2D" path="res://assets/ui/cover.png" id="2_art"]
 [ext_resource type="Shader" path="res://resources/cover_side.gdshader" id="3_side"]
+[ext_resource type="Shader" path="res://resources/map_top_fill.gdshader" id="5_top"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_side_l"]
 shader = ExtResource("3_side")
@@ -13,6 +14,10 @@ shader_parameter/right_side = false
 shader = ExtResource("3_side")
 shader_parameter/art = ExtResource("2_art")
 shader_parameter/right_side = true
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_side_t"]
+shader = ExtResource("5_top")
+shader_parameter/art = ExtResource("2_art")
 
 [node name="MatchIntro" type="Control"]
 layout_mode = 3
@@ -78,4 +83,11 @@ layout_mode = 0
 offset_left = 1152.0
 offset_right = 1440.0
 offset_bottom = 768.0
+mouse_filter = 2
+
+[node name="SideT" type="ColorRect" parent="Art"]
+material = SubResource("ShaderMaterial_side_t")
+layout_mode = 0
+offset_top = -320.0
+offset_right = 1152.0
 mouse_filter = 2

@@ -381,13 +381,14 @@ func _steer(input: Dictionary) -> void:
 
 
 ## 돌진이 벽 없는 맵에서 무한히 이어지지 않게 하는 안전장치 시간(초).
-## 화면 폭을 돌진 속도로 지나가는 시간이면 충분하다.
+## 맵 칸 폭을 돌진 속도로 지나가는 시간이면 충분하다. **화면 폭으로 재지 않는다** (#448) —
+## 화면은 기기 비율을 따라 넓어지므로 넓은 폰에서만 돌진이 더 멀리 가게 된다.
 ##
 ## **여기 있는 것은 돌진을 거는 자리가 둘이기 때문이다** (#260) — 특수를 누른 순간
 ## (`main.gd._execute_special()`)과 제자리 회전이 끝나는 순간(`_apply_forced()`)이다.
 ## 두 곳이 각자 재면 언젠가 값이 갈라지고, 그때 회전을 거친 돌진만 사거리가 달라진다.
 func dash_time() -> float:
-	return get_viewport_rect().size.x / FORCED_SPEED
+	return Maps.SIZE.x / FORCED_SPEED
 
 
 ## 캐릭터 그림을 붙이고 크기·위치를 맞춘다.

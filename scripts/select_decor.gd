@@ -35,8 +35,15 @@ const RIBBON_EDGE := Color(0.78, 0.26, 0.48)
 
 const FONT := preload("res://resources/display_font.tres")
 
+## 아래 좌표(`VS_CENTER_Y`·`RIBBON_TOP`)를 잡은 화면 높이 — `project.godot` 의 뷰포트 높이다.
+## 높은 화면(4:3 태블릿·폴드 안쪽 화면)에서는 남는 높이의 절반만큼 내려 그린다 (#448).
+## 패널·`GoButton` 이 세로 가운데 앵커라 같이 내려가므로, 리본과 `VS` 도 따라가야
+## 카드 사이 빈 자리에 그대로 남는다. 16:9 이상의 넓은 화면에서는 0이다.
+const DESIGN_HEIGHT := 648.0
+
 
 func _draw() -> void:
+	draw_set_transform(Vector2(0.0, floorf(maxf(size.y - DESIGN_HEIGHT, 0.0) * 0.5)))
 	_draw_vs()
 	_draw_ribbon()
 

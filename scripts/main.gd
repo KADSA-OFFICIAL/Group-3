@@ -472,7 +472,8 @@ func _open_round() -> void:
 func _check_falls() -> void:
 	if _match_over:
 		return
-	var screen := Vector2(get_viewport_rect().size)
+	# 화면이 아니라 맵 칸으로 잰다 — 기기 비율과 무관하게 같은 자리에서 떨어진다 (#448).
+	var area := Rect2(_map_offset, Maps.SIZE)
 	# 삼항으로 받으면 안 된다 — get_overlapping_bodies()는 Array[Node2D]인데
 	# 빈 배열 갈래는 타입 없는 Array라 대입에서 터진다.
 	var drowning: Array[Node2D] = []
@@ -481,7 +482,7 @@ func _check_falls() -> void:
 	for player: Player in players_root.get_children():
 		if not player.alive:
 			continue
-		if Combat.is_out_of_bounds(player.global_position, screen) or drowning.has(player):
+		if Combat.is_out_of_bounds(player.global_position, area) or drowning.has(player):
 			player.kill()
 
 

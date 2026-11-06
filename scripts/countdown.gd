@@ -98,6 +98,12 @@ func _step_age() -> float:
 	return _elapsed - float(_step()) * STEP
 
 
+## 글자 가운데의 세로 자리. `CENTER_Y` 는 648 높이 기준이라, 높은 화면(4:3 태블릿·폴드
+## 안쪽)에서는 맵 칸이 내려간 만큼(`main._center_map()`) 같이 내린다 (#448).
+func _center_y() -> float:
+	return CENTER_Y + floorf(maxf(size.y - 648.0, 0.0) * 0.5)
+
+
 func _draw() -> void:
 	if _elapsed < 0.0:
 		return
@@ -121,7 +127,7 @@ func _draw() -> void:
 	var size_now := START_SIZE if is_start else NUMBER_SIZE
 	var color := START_COLOR if is_start else NUMBER_COLOR
 
-	draw_set_transform(Vector2(size.x * 0.5, CENTER_Y), 0.0, Vector2.ONE * scale_now)
+	draw_set_transform(Vector2(size.x * 0.5, _center_y()), 0.0, Vector2.ONE * scale_now)
 	var text: String = LABELS[step]
 	var width := FONT.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size_now).x
 	# 밑선을 글자 높이의 절반쯤 내려 잡아 시각적으로 가운데에 온다.
@@ -141,5 +147,5 @@ func _draw_ring(age: float, is_start: bool, alpha: float) -> void:
 	var reach := RING_RADIUS * (1.6 if is_start else 1.0)
 	var radius := reach * (1.0 - pow(1.0 - p, 2.5))
 	var color := START_COLOR if is_start else NUMBER_COLOR
-	draw_arc(Vector2(size.x * 0.5, CENTER_Y), radius, 0.0, TAU, RING_SEGMENTS,
+	draw_arc(Vector2(size.x * 0.5, _center_y()), radius, 0.0, TAU, RING_SEGMENTS,
 			Color(color, 0.55 * (1.0 - p) * alpha), lerpf(10.0, 1.5, p), true)

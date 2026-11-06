@@ -84,7 +84,7 @@ const PROJECTILE_SPEED := 1120.0
 ## 더 벌리면 가운데가 성겨져 서 있는 상대가 화살 사이로 빠진다.
 const PARALLEL_SPACING := 26.0
 
-## 낙사 경계 — 화면(1152×648) 밖으로 이만큼 벗어나면 낙사.
+## 낙사 경계 — 맵 칸(1152×648) 밖으로 이만큼 벗어나면 낙사.
 ## "일반 평맵" 은 좌우 벽이 있어서 낙사가 일어나지 않는다.
 ## 좌우 벽이 없는 맵(용암 등)에서 쓴다. 물·용암에 닿는 즉사는 맵의 Hazard가 따로 판정한다.
 const FALL_MARGIN_BOTTOM := 200.0
@@ -103,8 +103,13 @@ static func knockback_velocity(level: int, direction: float, speed_override := 0
 	return Vector2(direction * speed, -speed * KNOCKBACK_LIFT)
 
 
-## 맵 밖으로 나갔는가.
-static func is_out_of_bounds(position: Vector2, screen: Vector2) -> bool:
-	return (position.y > screen.y + FALL_MARGIN_BOTTOM
-		or position.x < -FALL_MARGIN_SIDE
-		or position.x > screen.x + FALL_MARGIN_SIDE)
+## `area`(맵 칸) 밖으로 나갔는가.
+##
+## **낙사는 화면이 아니라 맵 칸으로 잰다** (#448). 화면은 기기 비율을 따라 넓어지거나
+## 높아지는데(#329), 화면으로 재면 넓은 폰에서는 옆으로 255px 더 나가도 살고 4:3
+## 태블릿에서는 맵 바닥보다 108px 더 떨어져야 죽는다 — 같은 경기가 기기마다 달라진다.
+## 맵 칸(`Rect2(main._map_offset, Maps.SIZE)`)으로 재면 어느 기기든 16:9와 똑같다.
+static func is_out_of_bounds(position: Vector2, area: Rect2) -> bool:
+	return (position.y > area.end.y + FALL_MARGIN_BOTTOM
+		or position.x < area.position.x - FALL_MARGIN_SIDE
+		or position.x > area.end.x + FALL_MARGIN_SIDE)
