@@ -38,6 +38,12 @@ const TOTAL := Combat.POINT_GAIN_TIME
 # ─────────────────────────── 배치 (기준 화면 1152×648) ───────────────────────────
 ## 가로는 상수로 두지 않고 `size.x` 에서 잰다 — 기준 화면에 박아 두면 뷰포트 크기를
 ## 손대는 날 장면만 가운데를 벗어난다.
+##
+## 세로 좌표(`*_Y`)는 648 높이 기준이라 **쓸 때 `_y()`를 거친다** (#448). 높은 화면
+## (4:3 태블릿·폴드 안쪽)에서는 맵 칸이 세로 가운데로 내려가므로(`main._center_map()`)
+## 장면도 같이 내려야 맵 위 같은 자리에 뜬다. 16:9 이상에서는 0이다.
+## 떨어지기 시작하는 자리(`DROP_FROM_Y`)만은 화면 위 기준으로 둔다 — 화면 밖에서 날아 들어와야 한다.
+const STAGE_HEIGHT := 648.0
 
 ## 포인트 칸 트레이. 칸 세 개가 가운데를 기준으로 좌우로 벌어진다.
 const TRAY_CENTER_Y := 412.0
@@ -227,9 +233,14 @@ func _arc(p: float) -> Vector2:
 	return Vector2(4.0 * p * (1.0 - p), absf(2.0 * p - 1.0))
 
 
+## 648 높이 기준의 세로 좌표를 지금 화면에 옮긴다 — 남는 높이의 절반만큼 내린다.
+func _y(stage_y: float) -> float:
+	return stage_y + floorf(maxf(size.y - STAGE_HEIGHT, 0.0) * 0.5)
+
+
 func _pip_center(index: int) -> Vector2:
 	var offset := (float(index) - float(Combat.POINTS_TO_WIN - 1) * 0.5) * PIP_GAP
-	return Vector2(size.x * 0.5 + offset, TRAY_CENTER_Y)
+	return Vector2(size.x * 0.5 + offset, _y(TRAY_CENTER_Y))
 
 
 ## 이 시각의 젤리: `[발밑 좌표, 크기 배율]`. 아직 나타나지 않았으면 빈 배열.
@@ -238,13 +249,13 @@ func _pip_center(index: int) -> Vector2:
 func _jelly_state(t: float) -> Array:
 	if t < DROP_AT:
 		return []
-	var home := Vector2(size.x * 0.5, GROUND_Y)
-	var target := Vector2(_pip_center(_new_pip).x, GROUND_Y)
+	var home := Vector2(size.x * 0.5, _y(GROUND_Y))
+	var target := Vector2(_pip_center(_new_pip).x, _y(GROUND_Y))
 
 	if t < LAND_FIRST_AT:
 		# 가속하며 떨어진다. 떨어지는 동안은 세로로 길쭉하다.
 		var p := (t - DROP_AT) / DROP_TIME
-		return [Vector2(home.x, lerpf(DROP_FROM_Y, GROUND_Y, p * p)), Vector2(0.86, 1.22)]
+		return [Vector2(home.x, lerpf(DROP_FROM_Y, _y(GROUND_Y), p * p)), Vector2(0.86, 1.22)]
 
 	if t < JUMP_AT - CROUCH_TIME:
 		var v := _wobble(t - LAND_FIRST_AT)
@@ -257,7 +268,7 @@ func _jelly_state(t: float) -> Array:
 	if t < LAND_AT:
 		var p := (t - JUMP_AT) / JUMP_TIME
 		var arc := _arc(p)
-		var pos := Vector2(lerpf(home.x, target.x, p), GROUND_Y - JUMP_HEIGHT * arc.x)
+		var pos := Vector2(lerpf(home.x, target.x, p), _y(GROUND_Y) - JUMP_HEIGHT * arc.x)
 		var stretch := 1.0 + 0.24 * arc.y
 		return [pos, Vector2(1.0 - 0.14 * arc.y, stretch)]
 
@@ -268,7 +279,7 @@ func _jelly_state(t: float) -> Array:
 	if t < CHEER_AT + CHEER_TIME:
 		var p := (t - CHEER_AT) / CHEER_TIME
 		var arc := _arc(p)
-		return [Vector2(target.x, GROUND_Y - CHEER_HEIGHT * arc.x),
+		return [Vector2(target.x, _y(GROUND_Y) - CHEER_HEIGHT * arc.x),
 				Vector2(1.0 - 0.08 * arc.y, 1.0 + 0.14 * arc.y)]
 
 	var settle := _wobble(t - CHEER_AT - CHEER_TIME)
@@ -287,7 +298,7 @@ func _draw() -> void:
 	var tray_scale := _back(t / TRAY_POP)
 	if tray_scale > 0.02:
 		var tray_xf := Transform2D(0.0, Vector2.ONE * tray_scale, 0.0,
-				Vector2(size.x * 0.5, TRAY_CENTER_Y))
+				Vector2(size.x * 0.5, _y(TRAY_CENTER_Y)))
 		_draw_tray(tray_xf)
 		for i in Combat.POINTS_TO_WIN:
 			_draw_pip(i, t, tray_xf)
@@ -309,14 +320,14 @@ func _draw_scrim(t: float) -> void:
 
 ## 무대 뒤에서 번지는 편 색의 빛. 착지하는 순간 한 번 맥동하고, 그 자리(칸)에서 흰 빛이 터진다.
 func _draw_aura(t: float) -> void:
-	var center := Vector2(size.x * 0.5, 330.0)
+	var center := Vector2(size.x * 0.5, _y(330.0))
 	var swell := clampf(t / 0.30, 0.0, 1.0)
 	Art.draw_glow(self, center, 360.0, _band_color, 0.42 * swell, 22)
 	if t < LAND_AT:
 		return
 	var a := t - LAND_AT
 	var flash := exp(-5.0 * a)
-	var at := Vector2(_pip_center(_new_pip).x, GROUND_Y)
+	var at := Vector2(_pip_center(_new_pip).x, _y(GROUND_Y))
 	Art.draw_glow(self, at, 170.0 * (1.5 if _is_final else 1.0), WHITE, 0.55 * flash, 18)
 
 
@@ -383,7 +394,7 @@ func _draw_name(t: float) -> void:
 	var alpha := clampf(t / TRAY_POP, 0.0, 1.0)
 	if alpha <= 0.0:
 		return
-	_draw_centered(_scorer_name, Vector2(size.x * 0.5, NAME_Y), NAME_SIZE,
+	_draw_centered(_scorer_name, Vector2(size.x * 0.5, _y(NAME_Y)), NAME_SIZE,
 			Color(WHITE, alpha), 3, Color(_stripe_color.darkened(0.2), alpha))
 
 
@@ -395,10 +406,10 @@ func _draw_jelly(t: float) -> void:
 	var feet: Vector2 = state[0]
 	var squash: Vector2 = state[1]
 
-	var height := GROUND_Y - feet.y
+	var height := _y(GROUND_Y) - feet.y
 	var near := clampf(1.0 - height / 420.0, 0.0, 1.0)
 	if near > 0.0:
-		draw_set_transform(Vector2(feet.x, GROUND_Y + 3.0), 0.0, Vector2(1.0, 0.22))
+		draw_set_transform(Vector2(feet.x, _y(GROUND_Y) + 3.0), 0.0, Vector2(1.0, 0.22))
 		draw_circle(Vector2.ZERO, 56.0 * (0.5 + 0.5 * near), Color(0.0, 0.0, 0.0, 0.24 * near))
 
 	if _avatar != null and _avatar_region.size.x > 0.0 and _avatar_region.size.y > 0.0:
@@ -427,7 +438,7 @@ func _draw_splash(t: float) -> void:
 	if ring_p < 1.0:
 		var eased := 1.0 - pow(1.0 - ring_p, 2.5)
 		var radius := lerpf(24.0, RING_RADIUS_FINAL if _is_final else RING_RADIUS, eased)
-		draw_set_transform(Vector2(pip_x, GROUND_Y + 4.0), 0.0, Vector2(1.0, 0.26))
+		draw_set_transform(Vector2(pip_x, _y(GROUND_Y) + 4.0), 0.0, Vector2(1.0, 0.26))
 		draw_arc(Vector2.ZERO, radius, 0.0, TAU, 48, Color(WHITE, 0.9 * (1.0 - ring_p)),
 				lerpf(12.0, 2.0, ring_p), true)
 		if _is_final:
@@ -435,7 +446,7 @@ func _draw_splash(t: float) -> void:
 					Color(PIP_FILLED, 0.8 * (1.0 - ring_p)), lerpf(10.0, 2.0, ring_p), true)
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
-	var origin := Vector2(pip_x, TRAY_CENTER_Y - PIP_RADIUS)
+	var origin := Vector2(pip_x, _y(TRAY_CENTER_Y) - PIP_RADIUS)
 	var count := DROP_COUNT_FINAL if _is_final else DROP_COUNT
 	var fastest := 640.0 if _is_final else 470.0
 	for i in count:
@@ -467,7 +478,7 @@ func _draw_gain_text(t: float) -> void:
 	# 튀어나오며 좌우로 흔들린 뒤 가만히 떠서 숨 쉰다.
 	var tilt := 0.14 * exp(-6.0 * a) * sin(22.0 * a)
 	var bob := 4.0 * sin(a * 6.0)
-	draw_set_transform(Vector2(size.x * 0.5, GAIN_Y + bob), tilt, Vector2.ONE * pop)
+	draw_set_transform(Vector2(size.x * 0.5, _y(GAIN_Y) + bob), tilt, Vector2.ONE * pop)
 	_draw_centered(GAIN_TEXT, Vector2(0.0, font_size * 0.36), font_size, WHITE,
 			GAIN_OUTLINE, _stripe_color)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

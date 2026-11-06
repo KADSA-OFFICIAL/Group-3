@@ -25,6 +25,11 @@
 
 **화면 끝에 붙는 UI는 노치·펀치홀(안전 영역)을 피한다**(이슈 #445). `scripts/safe_area.gd`(`class_name SafeArea`)가 `DisplayServer.get_display_safe_area()`를 뷰포트 좌표로 바꿔, 전체 화면 앵커 노드를 그만큼 안쪽으로 줄인다. 선택 창은 `Safe` 노드 아래에 `HomeButton`·`P1Panel`·`P2Panel`·`GoButton`을, 타이틀은 `SubLabel`을 두고, 조작물은 `touch_controls.gd`가 `SafeArea.fit(self)`를 직접 부른다. **배경(맵·원화·진열장)은 넣지 않는다** — 화면 끝까지 깔려야 한다. **모바일(`mobile` 태그)에서만 재고 PC에서는 늘 0이다**(PC의 안전 영역은 작업 표시줄을 뺀 화면이라 창과 무관한 여백이 생긴다). 둥근 모서리는 Godot이 값을 주지 않아 다루지 않는다. 화면 끝에 새 UI를 붙이면 `Safe` 아래에 넣는다.
 
+**어느 비율에서든 규칙과 화면이 같아야 한다**(이슈 #448 — 4:3 태블릿·16:10·16:9·20:9·21:9·폴드 커버(약 2.6:1)·폴드 안쪽(약 1.2:1)을 띄워 확인했다).
+- **판정은 화면이 아니라 맵 칸으로 잰다.** 낙사는 `Combat.is_out_of_bounds(pos, Rect2(_map_offset, Maps.SIZE))`, 돌진 안전장치 시간은 `Maps.SIZE.x / FORCED_SPEED`다. 예전에는 화면 크기로 재서 넓은 폰에서는 옆으로 더 나가도 살고 4:3에서는 더 떨어져야 죽었다. 투사체를 치우는 것만 화면 전체로 잰다(판정이 아니다). **전투 수치에 `get_viewport_rect()`를 새로 쓰지 말 것.**
+- **높은 화면(16:9보다 세로가 긴 것)에서는 맵 칸이 세로 가운데로 내려간다**(`_center_map()`). 그래서 맵 위에 뜨는 것은 **세로 가운데 앵커**(`anchor_top/bottom = 0.5`, offset = 648 기준 y − 324)로 둔다 — `Banner`, `ResultOverlay`의 `Jelly`·`ResultLabel`·`ScoreLabel`, 무기 선택 `Title`·`Timer`·`Cards`·`Status`, 선택 창 `P1Panel`·`P2Panel`·`GoButton`이 그렇다. `_draw()`로 그리는 것은 남는 높이의 절반을 더한다(`countdown.gd`의 `_center_y()`, `point_gain.gd`의 `_y()`, `select_decor.gd`의 `draw_set_transform`). 16:9 이상의 넓은 화면에서는 전부 0이라 화면이 이 변경 전과 같다. 화면 끝에 붙는 것(점수 카드·조작물·`홈`)만 위·아래 앵커로 남는다.
+- **원화를 바닥에 붙여 까는 화면(타이틀·경기 표지)은 원화 위로 남는 자리를 `SideT`가 채운다** — `map_top_fill.gdshader`(협곡 `SkyFill`과 같은 것)로 원화 맨 윗줄을 위로 늘려 흐리게 잇는다. 예전에는 어둡게 깐 `CoverBack`이 띠로 보였다. 높이 320이라 가로:세로 약 1.06:1까지 덮는다.
+
 **플레이어 번호는 1과 2다.** 자리(slot)는 0·1이고 `번호 = 자리 + 1`이며, 변환은 `GameState.id_at()`·`slot_of()`만 쓴다. 전투 화면의 표(점수·쿨타임·출혈)가 전부 이 번호를 열쇠로 쓰고, 노드 이름도 `Player_1`·`Player_2`다.
 
 `main` 브랜치는 2026-07-26에 새 구현(커밋 `e2a7dcb`)으로 교체되었다. 이전 구현(`autoload/game_manager.gd`, `scripts/weapons/`, `scenes/maps/` 등)은 `backup/main-before-reset` 브랜치에만 있고 현재 코드베이스에는 없다 — 그 경로를 참조하지 말 것.

@@ -90,8 +90,10 @@ color = Color(0.12, 0.1, 0.18, 0.78)
 
 [node name="Title" type="Label" parent="."]
 anchor_right = 1.0
-offset_top = 28.0
-offset_bottom = 100.0
+anchor_top = 0.5
+offset_top = -296.0
+anchor_bottom = 0.5
+offset_bottom = -224.0
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_outline_color = Color(0.29, 0.23, 0.32, 1)
 theme_override_constants/outline_size = 12
@@ -102,8 +104,10 @@ vertical_alignment = 1
 
 [node name="Timer" type="Label" parent="."]
 anchor_right = 1.0
-offset_top = 100.0
-offset_bottom = 134.0
+anchor_top = 0.5
+offset_top = -224.0
+anchor_bottom = 0.5
+offset_bottom = -190.0
 theme_override_colors/font_color = Color(1, 0.85, 0.55, 1)
 theme_override_font_sizes/font_size = 24
 text = "20초"
@@ -114,9 +118,11 @@ vertical_alignment = 1
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -450.0
-offset_top = 156.0
+anchor_top = 0.5
+offset_top = -168.0
 offset_right = 450.0
-offset_bottom = 556.0
+anchor_bottom = 0.5
+offset_bottom = 232.0
 theme_override_constants/separation = 30
 alignment = 1
 
@@ -266,8 +272,10 @@ script = ExtResource("3_shine")
 
 [node name="Status" type="Label" parent="."]
 anchor_right = 1.0
-offset_top = 566.0
-offset_bottom = 610.0
+anchor_top = 0.5
+offset_top = 242.0
+anchor_bottom = 0.5
+offset_bottom = 286.0
 theme_override_colors/font_color = Color(0.9, 0.88, 0.96, 1)
 theme_override_colors/font_outline_color = Color(0.29, 0.23, 0.32, 1)
 theme_override_constants/outline_size = 8

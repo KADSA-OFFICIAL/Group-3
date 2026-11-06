@@ -1,8 +1,9 @@
-[gd_scene load_steps=10 format=3 uid="uid://jellytitle001"]
+[gd_scene load_steps=12 format=3 uid="uid://jellytitle001"]
 
 [ext_resource type="Script" path="res://scripts/title.gd" id="1_title"]
 [ext_resource type="Texture2D" path="res://assets/ui/cover.png" id="2_cover"]
 [ext_resource type="Shader" path="res://resources/cover_side.gdshader" id="3_side"]
+[ext_resource type="Shader" path="res://resources/map_top_fill.gdshader" id="5_top"]
 [ext_resource type="Script" path="res://scripts/safe_area.gd" id="4_safe"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_side_l"]
@@ -14,6 +15,10 @@ shader_parameter/right_side = false
 shader = ExtResource("3_side")
 shader_parameter/art = ExtResource("2_cover")
 shader_parameter/right_side = true
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_side_t"]
+shader = ExtResource("5_top")
+shader_parameter/art = ExtResource("2_cover")
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_start"]
 bg_color = Color(0.8, 0.29, 0.56, 1)
@@ -105,6 +110,13 @@ layout_mode = 0
 offset_left = 1152.0
 offset_right = 1440.0
 offset_bottom = 768.0
+mouse_filter = 2
+
+[node name="SideT" type="ColorRect" parent="Cover"]
+material = SubResource("ShaderMaterial_side_t")
+layout_mode = 0
+offset_top = -320.0
+offset_right = 1152.0
 mouse_filter = 2
 
 [node name="Safe" type="Control" parent="."]
