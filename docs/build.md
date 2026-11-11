@@ -71,6 +71,10 @@ export GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD="<비밀번호>"
 "<godot>" --headless --path . --install-android-build-template --export-release "Android (Play)" build/JellyWars.aab
 ```
 
+> **`Godot_..._console.exe` 로 내보내면 끝나지 않을 수 있습니다.** Gradle 이 띄운 데몬(java)이 콘솔 래퍼의
+> 출력 파이프를 물려받아, 래퍼가 그 파이프가 닫히기를 하염없이 기다립니다(AAB 는 이미 만들어져 있음).
+> 명령줄에서는 콘솔 없는 `Godot_..._win64.exe` 를 쓰고, 끝나면 `android/build/gradlew --stop` 으로 데몬을 끕니다.
+
 ### dl.google.com 이 막힌 네트워크
 
 학교·회사망처럼 `dl.google.com` 이 막혀 있으면 Gradle 이 Google Maven 의존성을 못 받습니다.
@@ -89,7 +93,7 @@ SDK 부품도 `https://dl-ssl.google.com/android/repository/<파일 이름>` 에
 ## 앱 아이콘 (이슈 #478)
 
 `assets/icon/` 의 그림을 두 프리셋의 `launcher_icons/*` 가 씁니다 — 기본 런처 192px, 적응형 앞·뒤 판
-432px, Play 스토어 등록용 `play_512.png`. 1P 분홍 곰 원화로 만들며, 다시 만들려면:
+432px, Play 스토어 등록용 `play_512.png`. **타이틀 배경(`assets/ui/cover.png`)의 가운데 정사각형**을 그대로 쓰고(적응형은 뒤판에 깔고 앞판은 비움 — 런처에서는 가운데 약 2/3 만 보인다), 다시 만들려면:
 
 ```bash
 "<godot>" --headless --path . --script res://tools/make_icons.gd
