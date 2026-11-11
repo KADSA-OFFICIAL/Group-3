@@ -7,18 +7,25 @@ extends Control
 ## `README.md` 에 적혀 있다.
 
 @onready var start_button: Button = $StartButton
+## 크레딧 (#478) — 음원·글꼴·엔진 출처. 스토어 배포에 출처 표기가 의무인 것들이 있다.
+@onready var credits = $Credits
 
 
 func _ready() -> void:
 	start_button.pressed.connect(_on_start_pressed)
+	$Safe/CreditsButton.pressed.connect(credits.open)
 	# 메뉴 곡 (#457). 앱을 켤 때도, 전투에서 그만두고 돌아올 때도 여기서 다시 튼다.
 	Music.start_menu()
 
 
 ## 첫 화면에서의 안드로이드 뒤로 가기는 앱을 끝낸다 (#424, 보통의 앱과 같다).
 ## 엔진이 저절로 끄지 않게 `quit_on_go_back = false` 로 두었으므로 여기서 직접 끈다.
+## 크레딧이 떠 있으면 앱을 끄지 않고 크레딧만 닫는다 (#478).
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		if credits.visible:
+			credits.close()
+			return
 		get_tree().quit()
 
 
