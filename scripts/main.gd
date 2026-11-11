@@ -553,8 +553,6 @@ func _show_match_result(winner_id: int) -> void:
 	if winner == null:
 		return
 	_play_result(winner.character_id, "%s 승리!" % winner.player_name)
-	# 포인트 장면이 낮춰 둔 배경음을 결과 화면에서 되돌린다 (#454).
-	Music.set_ducked(false)
 	# 한 화면이라 이긴 사람도 같은 화면 앞에 있으므로 늘 승리음이다.
 	Sfx.play("victory", 0.0, false)
 
@@ -1859,9 +1857,10 @@ func _play_point_gain(scorer_id: int, score_after: int, is_final: bool) -> void:
 	var scorer := get_player(scorer_id)
 	if scorer == null:
 		return
-	# 포인트 장면 동안 배경음을 낮춘다 (#454). 되돌리는 것은 장면 뒤에 오는 쪽이다 —
-	# 다음 라운드는 무기 선택이 낮춘 채로 이어받고, 마지막 포인트는 결과 화면이 되돌린다.
-	Music.set_ducked(true)
+	# 라운드가 끝났다 — 배경음을 서서히 줄여 끈다 (#472, 요청). 포인트 장면(2.6초) 안에 다
+	# 꺼지고, 다음 라운드는 무기 선택이 새 곡을 낮은 음량으로 연다. 마지막 포인트 뒤 결과
+	# 화면은 배경음 없이 승리음만 들린다.
+	Music.fade_out()
 	# 몇 번째 포인트인지에 따라 소리가 다르다 (#469, 사용자가 준 음원) — `point_1`·`point_2`·
 	# `point_3`. 누가 땄는지는 가르지 않는다. 3포인트 소리는 포인트 장면(2.6초)보다 짧게 잘라
 	# 결과 화면의 `victory` 와 겹치지 않는다.
