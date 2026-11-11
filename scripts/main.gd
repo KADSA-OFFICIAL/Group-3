@@ -371,6 +371,10 @@ func _begin_pick_phase() -> void:
 		return
 
 	_picking = true
+	# 배경음은 첫 무기 선택부터 튼다 (#454, 요청) — 그 뒤 라운드에서는 이미 돌고 있어
+	# `start()` 가 아무것도 하지 않는다. 카드를 읽는 동안은 낮춘다.
+	Music.set_ducked(true)
+	Music.start()
 	_open_pick_turn(_next_picker())
 
 
@@ -452,6 +456,7 @@ func _finish_pick_phase() -> void:
 	_pick_options.clear()
 	_pick_choices.clear()
 	weapon_pick.close()
+	Music.set_ducked(false)
 
 	# 세는 것은 화면이고 **판을 여는 것은 `_tick_round()`다** — 실제 시작 시각은
 	# `_round_opens_at` 하나로 정해진다.
@@ -544,6 +549,8 @@ func _show_match_result(winner_id: int) -> void:
 	if winner == null:
 		return
 	_play_result(winner.character_id, "%s 승리!" % winner.player_name)
+	# 포인트 장면이 낮춰 둔 배경음을 결과 화면에서 되돌린다 (#454).
+	Music.set_ducked(false)
 	# 한 화면이라 이긴 사람도 같은 화면 앞에 있으므로 늘 승리음이다.
 	Sfx.play("victory", 0.0, false)
 
@@ -1848,6 +1855,9 @@ func _play_point_gain(scorer_id: int, score_after: int, is_final: bool) -> void:
 	var scorer := get_player(scorer_id)
 	if scorer == null:
 		return
+	# 포인트 장면 동안 배경음을 낮춘다 (#454). 되돌리는 것은 장면 뒤에 오는 쪽이다 —
+	# 다음 라운드는 무기 선택이 낮춘 채로 이어받고, 마지막 포인트는 결과 화면이 되돌린다.
+	Music.set_ducked(true)
 	point_gain.play(scorer.player_name, scorer.character_id, score_after, true, is_final)
 
 
@@ -2060,3 +2070,5 @@ func _exit_tree() -> void:
 	GameState.set_game_paused(false)
 	# 보는 자리 보정(#451)도 남기지 않는다 — 뷰포트 것이라 다음 씬(title·select)까지 밀린다.
 	get_viewport().canvas_transform = Transform2D.IDENTITY
+	# 배경음은 전투 화면에서만 난다 (#454) — 타이틀·선택 창으로 따라가지 않는다.
+	Music.stop()
