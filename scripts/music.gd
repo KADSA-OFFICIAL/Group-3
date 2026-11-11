@@ -23,10 +23,15 @@ const TRACKS := ["combat_loop", "arcade_battle", "face_off_groove"]
 ## 평소 음량(dB). 효과음(`Sfx.MASTER_DB` -8dB)보다 아래에 깔리게 둔다 — 세 곡 다 평균
 ## -17~-18dB 로 꽉 차게 녹음되어 있어 그대로 두면 무기 소리를 덮는다.
 const NORMAL_DB := -12.0
-## 무기 선택·포인트 획득 동안의 음량(dB).
+## 무기 선택 동안의 음량(dB).
 const DUCKED_DB := -24.0
 ## 음량을 옮기는 데 걸리는 시간(초).
 const FADE_TIME := 0.4
+## 라운드가 끝날 때 곡을 꺼뜨리는 시간(초, #472). 포인트 장면(`Combat.POINT_GAIN_TIME`
+## 2.6초) 안에 다 꺼지게 둔다 — 장면 뒤에 무기 선택이 새 곡을 연다.
+const ROUND_END_FADE_TIME := 2.4
+## 이 음량까지 내려가면 들리지 않는 것으로 보고 멈춘다.
+const SILENT_DB := -60.0
 
 ## 타이틀·선택 창 곡 (#457). **이것만 파일의 `loop` 를 켰다**(`.import`) — 한 곡을
 ## 끝없이 되풀이하므로 `finished` 로 다시 트는 것보다 이음매 없이 이어진다.
@@ -44,6 +49,8 @@ var _track := -1
 var _menu := false
 var _ducked := false
 var _fade: Tween
+## 라운드 끝 페이드아웃(#472) 중인가. 이 동안은 `set_ducked()` 가 음량을 건드리지 않는다.
+var _fading_out := false
 
 
 func _ready() -> void:
@@ -98,8 +105,9 @@ func set_ducked(value: bool) -> void:
 	if value == _ducked:
 		return
 	_ducked = value
-	# 메뉴 곡은 낮추지 않는다 — 값만 적어 두고 다음 전투 곡이 그 값으로 시작한다.
-	if _menu:
+	# 메뉴 곡은 낮추지 않고, 꺼지는 중인 곡은 다시 키우지 않는다 — 값만 적어 두고 다음
+	# 전투 곡이 그 값으로 시작한다.
+	if _menu or _fading_out:
 		return
 	if not _player.playing:
 		_player.volume_db = _target_db()
@@ -107,6 +115,22 @@ func set_ducked(value: bool) -> void:
 	_kill_fade()
 	_fade = create_tween()
 	_fade.tween_property(_player, "volume_db", _target_db(), FADE_TIME)
+
+
+## 라운드가 끝났다 — 곡을 서서히 줄여 끈다 (#472). 다 꺼지면 멈추되 방금 곡(`_track`)은
+## 기억해 둬서, 다음 무기 선택의 `start()` 가 같은 곡을 고르지 않는다.
+##
+## 줄이는 동안 `set_ducked()` 가 와도 음량을 다시 올리지 않는다 — 결과 화면이 그렇다.
+## 낮춤 값만 적어 두고 다음 곡이 그 값으로 시작한다.
+func fade_out(seconds := ROUND_END_FADE_TIME) -> void:
+	if not _player.playing or _menu:
+		return
+	_kill_fade()
+	_fading_out = true
+	_fade = create_tween()
+	# 데시벨을 곧게 내리면 귀에는 고르게 줄어드는 것으로 들린다.
+	_fade.tween_property(_player, "volume_db", SILENT_DB, seconds)
+	_fade.tween_callback(_player.stop)
 
 
 func is_playing() -> bool:
@@ -160,3 +184,4 @@ func _kill_fade() -> void:
 	if _fade != null and _fade.is_valid():
 		_fade.kill()
 	_fade = null
+	_fading_out = false
