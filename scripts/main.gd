@@ -1862,6 +1862,10 @@ func _play_point_gain(scorer_id: int, score_after: int, is_final: bool) -> void:
 	# 포인트 장면 동안 배경음을 낮춘다 (#454). 되돌리는 것은 장면 뒤에 오는 쪽이다 —
 	# 다음 라운드는 무기 선택이 낮춘 채로 이어받고, 마지막 포인트는 결과 화면이 되돌린다.
 	Music.set_ducked(true)
+	# 몇 번째 포인트인지에 따라 소리가 다르다 (#469, 사용자가 준 음원) — `point_1`·`point_2`·
+	# `point_3`. 누가 땄는지는 가르지 않는다. 3포인트 소리는 포인트 장면(2.6초)보다 짧게 잘라
+	# 결과 화면의 `victory` 와 겹치지 않는다.
+	Sfx.play("point_%d" % clampi(score_after, 1, Combat.POINTS_TO_WIN), 0.0, false)
 	point_gain.play(scorer.player_name, scorer.character_id, score_after, true, is_final)
 
 
