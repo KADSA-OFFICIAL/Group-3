@@ -38,3 +38,59 @@
 > **릴리즈 키스토어가 없어 apk 는 `--export-debug`로 만듭니다**(`--export-release`는
 > "릴리즈 키스토어를 찾을 수 없어" 실패합니다). 내보내기에는 `project.godot`의
 > `textures/vram_compression/import_etc2_astc=true`가 있어야 합니다(이슈 #370).
+
+## Google Play 용 AAB (이슈 #478)
+
+Play 스토어는 새 앱에 **AAB**(Android App Bundle)와 **출시용 서명**을 요구합니다. 그래서 프리셋이 둘입니다.
+
+| 프리셋 | 산출물 | 서명 | 쓰임 |
+| --- | --- | --- | --- |
+| `Android` | `build/JellyWars.apk` | 디버그 키 (`--export-debug`) | 친구에게 바로 설치해 보게 할 때 |
+| `Android (Play)` | `build/JellyWars.aab` | **업로드 키** (`--export-release`) | Play Console 에 올릴 때 |
+
+`Android (Play)` 는 **Gradle 빌드**를 씁니다(Godot 은 Gradle 로만 AAB 를 만듭니다). 타깃 API 는
+`gradle_build/target_sdk="36"`, 아키텍처는 arm64-v8a 만입니다. **올릴 때마다 `version/code` 를 1씩
+올려야** Play 가 받아 줍니다(`version/name` 은 사람이 보는 번호).
+
+### 처음 한 번 더 필요한 것
+
+1. 내보내기 템플릿 안의 `android_source.zip` (Gradle 빌드 템플릿). 내보낼 때
+   `--install-android-build-template` 를 붙이면 프로젝트의 `android/` 에 풀립니다(`.gitignore` 에 있음).
+2. Android SDK 의 `platforms/android-35` (컴파일용)와 `build-tools/35.0.1`·`platform-tools`.
+3. **업로드 키** — 저장소 밖에 둡니다. 절대 커밋하지 않습니다. 잃어버리면 Play Console 에서
+   업로드 키 재설정을 요청해야 하므로 따로 백업합니다.
+
+### 내보내기 (명령줄)
+
+키 경로·별칭·비밀번호는 프리셋에 적지 않고 환경 변수로 넘깁니다.
+
+```bash
+export GODOT_ANDROID_KEYSTORE_RELEASE_PATH="<업로드 키 .keystore 경로>"
+export GODOT_ANDROID_KEYSTORE_RELEASE_USER="<별칭>"
+export GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD="<비밀번호>"
+"<godot>" --headless --path . --install-android-build-template --export-release "Android (Play)" build/JellyWars.aab
+```
+
+### dl.google.com 이 막힌 네트워크
+
+학교·회사망처럼 `dl.google.com` 이 막혀 있으면 Gradle 이 Google Maven 의존성을 못 받습니다.
+같은 파일을 주는 Google 공식 별칭 `dl-ssl.google.com` 으로 돌리는 init 스크립트가
+[`tools/android/dl-ssl.init.gradle`](../tools/android/dl-ssl.init.gradle) 입니다. 내보내기 전에
+Gradle 홈을 따로 잡고 그 `init.d/` 에 넣어 둡니다(평소 Gradle 설정은 건드리지 않습니다).
+
+```bash
+export GRADLE_USER_HOME="<아무 빈 폴더>"
+mkdir -p "$GRADLE_USER_HOME/init.d" && cp tools/android/dl-ssl.init.gradle "$GRADLE_USER_HOME/init.d/"
+```
+
+SDK 부품도 `https://dl-ssl.google.com/android/repository/<파일 이름>` 에서 받을 수 있습니다
+(파일 이름·SHA-1 은 같은 곳의 `repository2-3.xml`).
+
+## 앱 아이콘 (이슈 #478)
+
+`assets/icon/` 의 그림을 두 프리셋의 `launcher_icons/*` 가 씁니다 — 기본 런처 192px, 적응형 앞·뒤 판
+432px, Play 스토어 등록용 `play_512.png`. 1P 분홍 곰 원화로 만들며, 다시 만들려면:
+
+```bash
+"<godot>" --headless --path . --script res://tools/make_icons.gd
+```

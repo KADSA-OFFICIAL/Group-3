@@ -1,10 +1,11 @@
-[gd_scene load_steps=12 format=3 uid="uid://jellytitle001"]
+[gd_scene load_steps=13 format=3 uid="uid://jellytitle001"]
 
 [ext_resource type="Script" path="res://scripts/title.gd" id="1_title"]
 [ext_resource type="Texture2D" path="res://assets/ui/cover.png" id="2_cover"]
 [ext_resource type="Shader" path="res://resources/cover_side.gdshader" id="3_side"]
 [ext_resource type="Shader" path="res://resources/map_top_fill.gdshader" id="5_top"]
 [ext_resource type="Script" path="res://scripts/safe_area.gd" id="4_safe"]
+[ext_resource type="PackedScene" path="res://scenes/credits.tscn" id="6_credits"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_side_l"]
 shader = ExtResource("3_side")
@@ -153,3 +154,19 @@ theme_override_styles/normal = SubResource("StyleBoxFlat_start")
 theme_override_styles/hover = SubResource("StyleBoxFlat_start_hover")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_start_pressed")
 text = "시작"
+
+[node name="CreditsButton" type="Button" parent="Safe"]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -60.0
+offset_right = 136.0
+offset_bottom = -16.0
+grow_vertical = 0
+theme_override_font_sizes/font_size = 20
+text = "크레딧"
+
+[node name="Credits" parent="." instance=ExtResource("6_credits")]
+layout_mode = 1
