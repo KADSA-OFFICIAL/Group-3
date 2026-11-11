@@ -836,19 +836,6 @@ def _():
               hp(noise(1.2), 5000) * env(1.2, 0.002, 3.5) * 0.25)
     return verb(mix(riser, at(sat(hit, 1.6), d - 0.02)), "hall", 0.32)
 
-
-@sound("victory", 0.74)
-def _():
-    # 승리 — 솔·도·미·솔로 뛰어오르는 금관 뒤에 길게 뻗는 도 장조 화음, 팀파니와 심벌.
-    lead = mix(*[at(fm_brass(f, dur, 3.0) * 0.6, o) for f, dur, o in
-                 [(392, 0.13, 0.0), (523, 0.13, 0.12), (659, 0.13, 0.24), (784, 0.3, 0.36)]])
-    chord = at(sum(fm_brass(f, 1.6, 2.6, 5.0) for f in (262, 523, 659, 784, 1047)) / 3.4, 0.62)
-    timp = mix(*[at(mix(modal(98, (1.0, 1.5, 1.98, 2.44), 0.8, 3.5, 0.001, hard=0.003) * 0.7,
-                        thump(98, 70, 0.35, 7)), o) for o in (0.36, 0.62)])
-    cymbal = at(hp(noise(1.8), 6000) * env(1.8, 0.003, 2.2) * 0.35, 0.62)
-    return verb(lp(mix(lead, chord, timp, cymbal), 7000), "hall", 0.3)
-
-
 @sound("defeat", 0.66)
 def _():
     # 패배 — 반음씩 내려가는 어두운 트롬본 '빠-빠-빠-빠아~', 마지막 음이 떨리며 처진다.
