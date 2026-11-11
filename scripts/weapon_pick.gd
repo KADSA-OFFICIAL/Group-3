@@ -25,6 +25,9 @@ const FADED := Color(0.45, 0.45, 0.5, 1.0)
 ## 이쪽은 "아직 고를 수 있는 것"이라, 같은 짙기면 이미 고른 화면처럼 보인다.
 const UNFOCUSED := Color(0.74, 0.74, 0.8, 1.0)
 
+## 고르면 칼 소리 대신 장전 소리가 나는 무기 (#460, 요청).
+const RELOAD_WEAPONS := ["소총", "대포 총", "활"]
+
 ## 고르는 사람의 색 (#344). 선택 창 패널·점수 카드와 같은 1P 핑크·2P 라벤더다 —
 ## 한 화면에서 차례로 고르므로 **지금 누구 차례인지가 이 색 하나로 드러나야 한다.**
 ## 파스텔이지만 어두운 바탕 위에 진한 외곽선을 둘러 쓰므로 대비는 외곽선이 받친다.
@@ -69,6 +72,10 @@ var _armed := false
 var _picker := 0
 ## 키보드로 짚고 있는 카드 자리. 마우스로 누르면 그 자리로 따라간다.
 var _cursor := 0
+## 이번 차례에 좌우 키를 한 번이라도 눌렀는가 (#460). 누르기 전에는 커서를 **그리지 않는다** —
+## 열자마자 왼쪽 카드에 테두리를 두르고 나머지를 어둡게 하면, 손가락으로 고르는 사람에게는
+## 이미 하나가 골라진 것처럼 보인다.
+var _cursor_shown := false
 ## 남은 시간을 세는 기준 시각. 0이면 세지 않는다.
 var _ends_at := 0.0
 ## 키보드로 짚은 카드의 테두리 (#344). 씬의 hover 모양을 복제해 테두리만 고르는 사람의
@@ -174,6 +181,7 @@ func open(choices: Array, seconds: float, player_id: int) -> void:
 	_armed = true
 	_picker = player_id
 	_cursor = 0
+	_cursor_shown = false
 	_ends_at = _now() + seconds
 	_title.text = "%dP 무기 선택" % _picker
 	_card_box.visible = true
@@ -216,11 +224,16 @@ func _move_cursor(step: int) -> void:
 	var count := _visible_card_count()
 	if count <= 0:
 		return
-	_cursor = (_cursor + step + count) % count
+	# 처음 누른 키는 커서를 **보이게만** 한다 — 아직 안 보이던 자리에서 한 칸 옮기면
+	# 왼쪽 카드를 건너뛰고 가운데부터 짚게 된다.
+	if _cursor_shown:
+		_cursor = (_cursor + step + count) % count
+	_cursor_shown = true
 	_refresh_cursor()
 
 
-## 짚은 카드만 밝게 두고 테두리를 고르는 사람의 색으로 두른다.
+## 짚은 카드만 밝게 두고 테두리를 고르는 사람의 색으로 두른다. 키를 누르기 전에는
+## 세 장을 똑같이 둔다 (#460).
 func _refresh_cursor() -> void:
 	if not _armed:
 		return
@@ -228,8 +241,9 @@ func _refresh_cursor() -> void:
 		var card: Button = _cards[i]
 		if not card.visible:
 			continue
-		card.modulate = Color.WHITE if i == _cursor else UNFOCUSED
-		card.add_theme_stylebox_override("normal", _cursor_style if i == _cursor else _card_style)
+		var marked := _cursor_shown and i == _cursor
+		card.modulate = Color.WHITE if marked or not _cursor_shown else UNFOCUSED
+		card.add_theme_stylebox_override("normal", _cursor_style if marked else _card_style)
 
 
 func _visible_card_count() -> int:
@@ -284,9 +298,17 @@ func _on_card_pressed(index: int) -> void:
 		return
 	_cursor = index
 	mark_chosen(index)
-	Sfx.play("weapon_pick", 0.0, false)
+	Sfx.play(_pick_sound(index), 0.0, false)
 	_status.text = "%dP 선택 완료" % _picker
 	weapon_chosen.emit(index)
+
+
+## 고른 순간의 소리 (#460, 사용자가 준 음원). 장전하는 무기는 장전 소리, 나머지는 칼이
+## 부딪히는 소리다. **둘 중 하나만 낸다** — 같은 순간에 두 소리가 나가면 한 소리로 뭉쳐
+## 음높이가 달라진 것처럼 들린다.
+func _pick_sound(index: int) -> String:
+	var weapon_name: String = _cards[index].get_node("Art").weapon_id
+	return "pick_reload" if weapon_name in RELOAD_WEAPONS else "pick_clash"
 
 
 func _now() -> float:
