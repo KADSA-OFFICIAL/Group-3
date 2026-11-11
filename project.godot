@@ -24,6 +24,7 @@ config/quit_on_go_back=false
 
 GameState="*res://scripts/game_state.gd"
 Sfx="*res://scripts/sfx.gd"
+Music="*res://scripts/music.gd"
 
 [display]
 
