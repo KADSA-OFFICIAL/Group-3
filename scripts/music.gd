@@ -1,14 +1,15 @@
 extends Node
 ## 배경음 (오토로드 싱글턴 Music, 이슈 #454).
 ##
-## **전투 화면** — `main.gd` 가 첫 무기 선택을 열 때 `start()`, 화면을 떠날 때 `stop()` 을
+## **전투 화면** — `main.gd` 가 무기 선택을 열 때마다 `start()`, 화면을 떠날 때 `stop()` 을
 ## 부른다. **타이틀·선택 창**은 `start_menu()` 가 메뉴 곡(`MENU_TRACK`)을 반복해 튼다(#457) —
 ## 두 화면이 각자 `_ready()` 에서 부르고, 이미 도는 중이면 이어서 둔다(title → select 에서
 ## 끊기지 않는다). 전투 화면이 열리면 `main._ready()` 가 `stop()` 으로 끊는다.
 ##
-## 곡은 `TRACKS` 순서대로 하나씩 끝까지 틀고, 마지막 곡이 끝나면 첫 곡으로 돌아간다 —
-## 두 곡을 합쳐 5분 남짓이라 경기가 길어지면 끝나 버린다. 파일마다 반복(loop)을 켜지
-## 않는 이유도 같다: 켜면 `finished` 가 오지 않아 다음 곡으로 넘어가지 못한다.
+## **곡은 무기 선택이 열릴 때마다 무작위로 바뀐다**(#463, 요청) — `TRACKS` 중 방금 틀던 곡을
+## 뺀 나머지에서 고르므로 같은 곡이 두 번 연달아 나오지 않는다. 라운드 도중 곡이 끝나도
+## 같은 규칙으로 넘어간다. 파일마다 반복(loop)을 켜지 않는 이유가 이것이다: 켜면
+## `finished` 가 오지 않아 다음 곡으로 넘어가지 못한다.
 ##
 ## **무기 선택·포인트 획득 동안은 낮춘다**(`set_ducked()`) — 카드 설명을 읽고 점수를
 ## 확인하는 장면이라 음악이 앞에 나서면 안 된다. 툭 끊기지 않게 `FADE_TIME` 동안 옮긴다.
@@ -17,9 +18,9 @@ extends Node
 ## 오토로드는 기본이 `PROCESS_MODE_INHERIT` 라 따로 할 일이 없다.
 
 const DIR := "res://assets/music/"
-## 트는 순서. 첫 곡이 다 끝나야 다음 곡이다 (요청).
-const TRACKS := ["combat_loop", "arcade_battle"]
-## 평소 음량(dB). 효과음(`Sfx.MASTER_DB` -8dB)보다 아래에 깔리게 둔다 — 두 곡 다 평균
+## 전투 곡들. 여기서 무작위로 고른다 (#463 — 순서는 뜻이 없다).
+const TRACKS := ["combat_loop", "arcade_battle", "face_off_groove"]
+## 평소 음량(dB). 효과음(`Sfx.MASTER_DB` -8dB)보다 아래에 깔리게 둔다 — 세 곡 다 평균
 ## -17~-18dB 로 꽉 차게 녹음되어 있어 그대로 두면 무기 소리를 덮는다.
 const NORMAL_DB := -12.0
 ## 무기 선택·포인트 획득 동안의 음량(dB).
@@ -35,7 +36,10 @@ const MENU_TRACK := "menu"
 const MENU_DB := -16.0
 
 var _player: AudioStreamPlayer
-var _track := 0
+## 지금(또는 마지막으로) 튼 전투 곡의 자리. -1 이면 아직 아무것도 안 틀었다.
+## **`stop()` 이 지우지 않는다** — 경기를 나갔다 다시 들어와도 직전 경기의 마지막 곡이
+## 새 경기의 첫 곡으로 연달아 나오지 않게 한다.
+var _track := -1
 ## 지금 메뉴 곡을 트는 중인가. 전투 곡과 한 플레이어를 나눠 쓴다.
 var _menu := false
 var _ducked := false
@@ -54,13 +58,13 @@ func _exit_tree() -> void:
 	stop()
 
 
-## 첫 곡부터 튼다. 이미 도는 중이면 아무것도 하지 않는다 — 라운드마다 불러도 곡이
-## 처음으로 돌아가지 않는다.
+## 방금 곡을 뺀 무작위 전투 곡을 처음부터 튼다 (#463). 무기 선택이 열릴 때마다 부른다.
+##
+## **낮춤 상태는 건드리지 않는다** — `main` 이 먼저 `set_ducked(true)` 를 걸고 부르면
+## 곡이 처음부터 낮은 음량으로 나온다. 여기서 지우면 큰 소리로 시작했다가 줄어든다.
 func start() -> void:
-	if _player.playing and not _menu:
-		return
-	stop()
-	_track = 0
+	_menu = false
+	_track = _random_track()
 	_play_track()
 
 
@@ -91,9 +95,12 @@ func stop() -> void:
 
 ## 낮춘다(`true`) / 되돌린다(`false`). 같은 값이 거듭 와도 페이드를 새로 걸지 않는다.
 func set_ducked(value: bool) -> void:
-	if value == _ducked or _menu:
+	if value == _ducked:
 		return
 	_ducked = value
+	# 메뉴 곡은 낮추지 않는다 — 값만 적어 두고 다음 전투 곡이 그 값으로 시작한다.
+	if _menu:
+		return
 	if not _player.playing:
 		_player.volume_db = _target_db()
 		return
@@ -122,8 +129,17 @@ func _next_track() -> void:
 	if _menu:
 		_player.play()
 		return
-	_track = (_track + 1) % TRACKS.size()
+	_track = _random_track()
 	_play_track()
+
+
+## 방금 곡(`_track`)을 뺀 나머지 중 하나. 아직 아무것도 안 틀었으면 전부에서 고른다.
+func _random_track() -> int:
+	var pool: Array[int] = []
+	for i in TRACKS.size():
+		if i != _track:
+			pool.append(i)
+	return pool.pick_random() if not pool.is_empty() else 0
 
 
 func _play_track() -> void:
