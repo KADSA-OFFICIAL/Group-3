@@ -5,14 +5,15 @@ extends Node
 ## (카운트다운·포인트·승리·카드·버튼), 무기끼리 부딪침 소리는 들어 본 뒤 뺐다. 되살리려면
 ## #373~#376 이력의 `tools/gen_sfx.py` 와 호출부를 본다.
 ## 예외로 경기의 큰 마디 넷은 사용자 요청으로 다시 붙였다(#400, 예전 소리가 아니라 새로 만든 것):
-## `match_start`(경기 표지, `main._play_match_intro`) · `weapon_pick`(카드를 고른 기기,
+## `match_start`(경기 표지, `main._play_match_intro`) · `pick_clash`·`pick_reload`(카드를 고른 순간 — #460 에서 사용자가 준 음원으로 바꿨다,
 ## `WeaponPick._on_card_pressed`) · `victory`/`defeat`(결과 화면, `main._show_match_result` —
 ## 한 화면이라 늘 `victory`). 모두 `play()` 다.
 ## 판마다 도는 카운트다운도 레이싱 출발 신호로 다시 붙였다(#403): `3`·`2`·`1` 에 `count_beep`(뚜),
 ## `START!` 에 `count_go`(한 옥타브 위 땅!) — `countdown.gd` 가 칸이 바뀌는 프레임에 낸다.
 ##
 ## 소리는 `assets/sfx/<이름>.wav` 이고 `tools/gen_sfx.py` 가 합성해서 만든다 — 소리를
-## 고치려면 그 스크립트의 숫자를 바꿔 다시 돌린다. 파일이 없는 이름은 **조용히** 넘어간다
+## 고치려면 그 스크립트의 숫자를 바꿔 다시 돌린다(`pick_clash`·`pick_reload` 만 예외로 사용자가 준
+## mp3 를 ffmpeg 로 바꾼 것이라 생성기에 없다 — #460). 파일이 없는 이름은 **조용히** 넘어간다
 ## (무기 그림이 없을 때 막대로 대신하는 것과 같은 태도다 — 소리 하나 빠졌다고 게임이 멈추지
 ## 않는다).
 ##

@@ -135,19 +135,6 @@ grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("4_safe")
 
-[node name="SubLabel" type="Label" parent="Safe"]
-anchor_top = 1.0
-anchor_bottom = 1.0
-offset_left = 16.0
-offset_top = -34.0
-offset_right = 416.0
-offset_bottom = -8.0
-theme_override_colors/font_color = Color(1, 1, 1, 1)
-theme_override_colors/font_outline_color = Color(0.24, 0.14, 0.3, 1)
-theme_override_constants/outline_size = 8
-theme_override_font_sizes/font_size = 18
-text = "JELLY WARS  —  스틱매너"
-
 [node name="StartButton" type="Button" parent="."]
 anchor_left = 0.5
 anchor_top = 1.0

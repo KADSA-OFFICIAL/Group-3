@@ -2,13 +2,13 @@
 
 importer="wav"
 type="AudioStreamWAV"
-uid="uid://da54y4g0y1wel"
-path="res://.godot/imported/weapon_pick.wav-6ca123b9f63b154843220eb57d05bcee.sample"
+uid="uid://lruvja6euufp"
+path="res://.godot/imported/pick_clash.wav-cfef0cd8409c743b82ad5fd554bd6703.sample"
 
 [deps]
 
-source_file="res://assets/sfx/weapon_pick.wav"
-dest_files=["res://.godot/imported/weapon_pick.wav-6ca123b9f63b154843220eb57d05bcee.sample"]
+source_file="res://assets/sfx/pick_clash.wav"
+dest_files=["res://.godot/imported/pick_clash.wav-cfef0cd8409c743b82ad5fd554bd6703.sample"]
 
 [params]
 
