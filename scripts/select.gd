@@ -14,6 +14,8 @@ extends Control
 func _ready() -> void:
 	$Safe/HomeButton.pressed.connect(_on_home_pressed)
 	go_button.pressed.connect(_on_go_pressed)
+	# 메뉴 곡 (#457). 타이틀에서 왔으면 이어서 두고, 경기가 끝나 돌아왔으면 다시 튼다.
+	Music.start_menu()
 
 	# **가운데 두 칸(맵·무기)이 아예 없다** (요청). 맵도 무기도 라운드가 시작될 때 전투
 	# 화면에서 정해지므로(`main.gd`의 `_start_round`·`_begin_pick_phase`) 이 화면에서는

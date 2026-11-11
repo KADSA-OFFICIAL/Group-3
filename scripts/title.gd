@@ -11,6 +11,8 @@ extends Control
 
 func _ready() -> void:
 	start_button.pressed.connect(_on_start_pressed)
+	# 메뉴 곡 (#457). 앱을 켤 때도, 전투에서 그만두고 돌아올 때도 여기서 다시 튼다.
+	Music.start_menu()
 
 
 ## 첫 화면에서의 안드로이드 뒤로 가기는 앱을 끝낸다 (#424, 보통의 앱과 같다).
