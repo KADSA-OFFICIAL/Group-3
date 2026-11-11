@@ -5,7 +5,8 @@ extends Control
 ## CC BY 4.0 이라 이름과 라이선스를 적어야 하고, Godot 엔진(MIT)과 Black Han Sans 글꼴(SIL OFL
 ## 1.1)도 저작권 문구를 함께 배포해야 한다. 엔진 라이선스 원문은 `Engine.get_license_text()` 로
 ## 엔진에서 그대로 꺼낸다 — 손으로 옮겨 적으면 엔진 버전을 올릴 때 어긋난다.
-## 전투 곡 셋은 AI 음악 생성 서비스 Suno 로 만든 곡이다(#481) — 그 출처를 밝힌다.
+## 전투 곡 셋은 `tools/gen_music.py` 가 합성한 곡이다(#484 — 그 전의 Suno 곡(#481)은 무료 요금제
+## 약관상 배포할 수 없어 바꿨다).
 ##
 ## 글은 `SECTIONS` 한 곳에서만 고친다. 음원을 더하거나 바꾸면 여기에 한 줄을 더한다.
 
@@ -17,8 +18,8 @@ const SECTIONS := [
 		"Licensed under Creative Commons: By Attribution 4.0 License",
 		"http://creativecommons.org/licenses/by/4.0/",
 		"",
-		"\"Combat Loop\" · \"Arcade Battle\" · \"Face Off Groove\"",
-		"Made with Suno (suno.com)",
+		"\"Jelly Rush\" · \"Gummy Showdown\" · \"Sticky Groove\"",
+		"전투 곡은 직접 작곡해 합성했습니다.",
 	]],
 	["효과음", [
 		"dragon-studio · universfield · humordome · poorartistt · dariocoiro (Pixabay)",

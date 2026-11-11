@@ -18,10 +18,11 @@ extends Node
 ## 오토로드는 기본이 `PROCESS_MODE_INHERIT` 라 따로 할 일이 없다.
 
 const DIR := "res://assets/music/"
-## 전투 곡들. 여기서 무작위로 고른다 (#463 — 순서는 뜻이 없다).
-const TRACKS := ["combat_loop", "arcade_battle", "face_off_groove"]
+## 전투 곡들. 여기서 무작위로 고른다 (#463 — 순서는 뜻이 없다). **`tools/gen_music.py` 가 합성한 곡이다**
+## (#484) — 이전 곡(Suno 무료 생성)은 약관상 배포할 수 없어 바꿨다. 곡을 고치려면 그 스크립트의 악보를 고친다.
+const TRACKS := ["battle_rush", "battle_showdown", "battle_groove"]
 ## 평소 음량(dB). 효과음(`Sfx.MASTER_DB` -8dB)보다 아래에 깔리게 둔다 — 세 곡 다 평균
-## -17~-18dB 로 꽉 차게 녹음되어 있어 그대로 두면 무기 소리를 덮는다.
+## -18dB 로 꽉 차게 만들어 두어(생성기의 `TARGET_RMS_DB`) 그대로 두면 무기 소리를 덮는다.
 const NORMAL_DB := -12.0
 ## 무기 선택 동안의 음량(dB).
 const DUCKED_DB := -24.0
