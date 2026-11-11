@@ -192,6 +192,9 @@ func _ready() -> void:
 	# 그래도 하나는 깔아 둔다. 씬이 열리고 첫 라운드가 열리기까지의 몇 프레임 동안
 	# 빈 화면을 보이지 않기 위해서다.
 	_load_map(Maps.default_name())
+	# 게임이 시작됐다 — 선택 창에서 이어지던 메뉴 곡을 끊는다 (#457). 전투 곡은 첫 무기
+	# 선택이 연다(`_begin_pick_phase()`).
+	Music.stop()
 	# 폴더블을 접고 펴면 앱이 다시 시작하지 않고 창 크기만 바뀐다 (#451) — 판 도중에도 온다.
 	_view_size = get_viewport_rect().size
 	get_viewport().size_changed.connect(_on_view_resized)
@@ -372,9 +375,10 @@ func _begin_pick_phase() -> void:
 
 	_picking = true
 	# 배경음은 첫 무기 선택부터 튼다 (#454, 요청) — 그 뒤 라운드에서는 이미 돌고 있어
-	# `start()` 가 아무것도 하지 않는다. 카드를 읽는 동안은 낮춘다.
-	Music.set_ducked(true)
+	# `start()` 가 아무것도 하지 않는다. 카드를 읽는 동안은 낮춘다 — **`start()` 뒤에** 낮춘다:
+	# 처음 틀 때 `start()` 가 `stop()` 을 지나며 낮춘 상태를 지운다.
 	Music.start()
+	Music.set_ducked(true)
 	_open_pick_turn(_next_picker())
 
 
