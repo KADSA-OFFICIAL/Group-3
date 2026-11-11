@@ -365,6 +365,10 @@ func _begin_pick_phase() -> void:
 		# 카드를 읽는 사람이 그 자리에서 맞지 않도록 조작과 판정을 함께 잠근다.
 		player.set_frozen(true)
 		_pick_options[player.player_id] = Weapons.random_choices(WEAPON_CHOICES)
+		# 카드에 그릴 그림의 여백을 카드가 뜨기 전에 재 둔다 (#475) — 처음 보는 무기면
+		# 재는 데 시간이 걸려 카드가 떠오르는 연출이 멈칫한다.
+		for weapon_name: String in _pick_options[player.player_id]:
+			Art.warm([Weapons.preview_texture(weapon_name)])
 
 	# 세울 젤리가 아직 없다 — 열어 둘 판이 없으므로 시작하지 않는다.
 	if _pick_options.is_empty():
@@ -443,6 +447,12 @@ func _finish_pick_phase() -> void:
 			continue
 		var choices: Array = _pick_options[player_id]
 		var chosen: String = _pick_choices.get(player_id, choices.pick_random())
+		# 이번 판에 쓸 그림(무기의 모든 그림·탄 그림, 젤리의 세 포즈)을 판이 열리기 전에
+		# 재 둔다 (#475). 젤리는 얼어 있고 카운트다운이 도는 동안이라 여기서 걸리는 시간은
+		# 보이지 않는다 — 전투 중 첫 발사·첫 포즈 변경에서 멈칫하지 않게 한다.
+		Art.warm(Weapons.all_textures(chosen))
+		for pose: String in [Characters.POSE_IDLE, Characters.POSE_WIN, Characters.POSE_LOSE]:
+			Art.warm([Characters.pose_texture(player.character_id, pose)])
 		player.set_weapon(chosen)
 		# 궁극기 버튼에도 이번 라운드 무기 그림을 보여준다 (#334) — 쿨타임과 달리
 		# 라운드마다 한 번만 바뀌는 값이라 여기서 한 번만 넘긴다.
