@@ -837,16 +837,6 @@ def _():
     return verb(mix(riser, at(sat(hit, 1.6), d - 0.02)), "hall", 0.32)
 
 
-@sound("weapon_pick", 0.6)
-def _():
-    # 무기를 집는다 — 손에 쥐는 '착'과 칼날이 뽑히는 짧은 '슁', 위로 오르는 맑은 두 음.
-    grab = mix(click(0.005, 2600, 0.03) * 1.2, thump(240, 150, 0.05, 60) * 0.5)
-    shing = at(mix(scrape(0.16, 4200, 6500, 30) * env(0.16, 0.004, 22) * 0.5,
-                   modal(1760, BAR, 0.5, 7, 0.0008, beat=0.002, hard=0.0002) * 0.3), 0.02)
-    chime = mix(at(modal(1319, GLOCK, 0.6, 5, 0.0003), 0.05), at(modal(1976, GLOCK, 0.7, 4.5, 0.0003), 0.13)) * 0.42
-    return verb(mix(grab, shing, chime), "room", 0.14)
-
-
 @sound("victory", 0.74)
 def _():
     # 승리 — 솔·도·미·솔로 뛰어오르는 금관 뒤에 길게 뻗는 도 장조 화음, 팀파니와 심벌.
