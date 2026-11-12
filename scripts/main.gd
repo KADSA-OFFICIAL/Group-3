@@ -365,6 +365,10 @@ func _begin_pick_phase() -> void:
 		# 카드를 읽는 사람이 그 자리에서 맞지 않도록 조작과 판정을 함께 잠근다.
 		player.set_frozen(true)
 		_pick_options[player.player_id] = Weapons.random_choices(WEAPON_CHOICES)
+		# 카드에 그릴 그림의 여백을 카드가 뜨기 전에 재 둔다 (#475) — 처음 보는 무기면
+		# 재는 데 시간이 걸려 카드가 떠오르는 연출이 멈칫한다.
+		for weapon_name: String in _pick_options[player.player_id]:
+			Art.warm([Weapons.preview_texture(weapon_name)])
 
 	# 세울 젤리가 아직 없다 — 열어 둘 판이 없으므로 시작하지 않는다.
 	if _pick_options.is_empty():
@@ -443,6 +447,12 @@ func _finish_pick_phase() -> void:
 			continue
 		var choices: Array = _pick_options[player_id]
 		var chosen: String = _pick_choices.get(player_id, choices.pick_random())
+		# 이번 판에 쓸 그림(무기의 모든 그림·탄 그림, 젤리의 세 포즈)을 판이 열리기 전에
+		# 재 둔다 (#475). 젤리는 얼어 있고 카운트다운이 도는 동안이라 여기서 걸리는 시간은
+		# 보이지 않는다 — 전투 중 첫 발사·첫 포즈 변경에서 멈칫하지 않게 한다.
+		Art.warm(Weapons.all_textures(chosen))
+		for pose: String in [Characters.POSE_IDLE, Characters.POSE_WIN, Characters.POSE_LOSE]:
+			Art.warm([Characters.pose_texture(player.character_id, pose)])
 		player.set_weapon(chosen)
 		# 궁극기 버튼에도 이번 라운드 무기 그림을 보여준다 (#334) — 쿨타임과 달리
 		# 라운드마다 한 번만 바뀌는 값이라 여기서 한 번만 넘긴다.
@@ -553,8 +563,6 @@ func _show_match_result(winner_id: int) -> void:
 	if winner == null:
 		return
 	_play_result(winner.character_id, "%s 승리!" % winner.player_name)
-	# 포인트 장면이 낮춰 둔 배경음을 결과 화면에서 되돌린다 (#454).
-	Music.set_ducked(false)
 	# 한 화면이라 이긴 사람도 같은 화면 앞에 있으므로 늘 승리음이다.
 	Sfx.play("victory", 0.0, false)
 
@@ -1859,9 +1867,14 @@ func _play_point_gain(scorer_id: int, score_after: int, is_final: bool) -> void:
 	var scorer := get_player(scorer_id)
 	if scorer == null:
 		return
-	# 포인트 장면 동안 배경음을 낮춘다 (#454). 되돌리는 것은 장면 뒤에 오는 쪽이다 —
-	# 다음 라운드는 무기 선택이 낮춘 채로 이어받고, 마지막 포인트는 결과 화면이 되돌린다.
-	Music.set_ducked(true)
+	# 라운드가 끝났다 — 배경음을 서서히 줄여 끈다 (#472, 요청). 포인트 장면(2.6초) 안에 다
+	# 꺼지고, 다음 라운드는 무기 선택이 새 곡을 낮은 음량으로 연다. 마지막 포인트 뒤 결과
+	# 화면은 배경음 없이 승리음만 들린다.
+	Music.fade_out()
+	# 몇 번째 포인트인지에 따라 소리가 다르다 (#469, 사용자가 준 음원) — `point_1`·`point_2`·
+	# `point_3`. 누가 땄는지는 가르지 않는다. 3포인트 소리는 포인트 장면(2.6초)보다 짧게 잘라
+	# 결과 화면의 `victory` 와 겹치지 않는다.
+	Sfx.play("point_%d" % clampi(score_after, 1, Combat.POINTS_TO_WIN), 0.0, false)
 	point_gain.play(scorer.player_name, scorer.character_id, score_after, true, is_final)
 
 
