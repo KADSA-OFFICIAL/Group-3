@@ -664,6 +664,19 @@ static func texture_file(file: String) -> Texture2D:
 	return tex
 
 
+## 이 무기가 쓸 수 있는 그림 전부 (#475) — 손에 든 그림·선택창 그림·강화 그림·탄 그림처럼
+## 이름이 `file` 로 끝나는 칸을 모두 모은다. 판이 열리기 전에 `Art.warm()` 으로 미리 재는 데 쓴다.
+static func all_textures(weapon_name: String) -> Array:
+	var out: Array = []
+	var weapon := get_weapon(weapon_name)
+	for key: String in weapon:
+		if key.ends_with("file") and weapon[key] is String:
+			var tex := texture_file(weapon[key])
+			if tex != null:
+				out.append(tex)
+	return out
+
+
 ## 선택 창 선택창에 보여줄 무기 그림 (#173). `preview_file` 이 있으면 그쪽을,
 ## 없으면 손에 드는 그림(`file`)을 그대로 쓴다 — 나머지 16종은 달라지지 않는다.
 ##
