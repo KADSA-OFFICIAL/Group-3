@@ -152,6 +152,8 @@ var _scorer_name := ""
 ## 이번에 채워질 칸의 번호(0부터). 3점째면 2다.
 var _new_pip := 0
 var _is_final := false
+## 이번 장면의 포인트 효과음을 이미 냈는지 (#495). 밟는 순간 한 번만 낸다.
+var _land_sound_played := false
 ## 방울·색종이의 모양을 사람마다 조금 다르게 하는 값. 이름에서 잡는다.
 var _salt := 0.0
 
@@ -186,6 +188,7 @@ func play(scorer_name: String, character_id: String, score_after: int,
 	_avatar = Characters.pose_texture(character_id, Characters.POSE_WIN)
 	_avatar_region = Art.content_rect(_avatar) if _avatar != null else Rect2()
 	_apply_palette(as_gain)
+	_land_sound_played = false
 	_elapsed = 0.0
 	modulate.a = 1.0
 	visible = true
@@ -196,6 +199,15 @@ func _process(delta: float) -> void:
 	if _elapsed < 0.0:
 		return
 	_elapsed += delta
+	# 포인트 효과음은 곰젤리가 새 칸에 **내려앉는 순간** 낸다 (#495, 요청) — 칸이 금색으로
+	# 터지는 이 장면의 중심과 맞춘다. 예전에는 `main.gd` 가 장면을 틀 때 바로 내서 1.24초
+	# 일렀다. `countdown.gd` 처럼 시각이 그 선을 넘는 프레임에 한 번만 낸다. 몇 번째
+	# 포인트인지에 따라 `point_1`·`point_2`·`point_3`(#469)이다. 세 소리 모두 시작 0.03초
+	# 안에 터지므로 앞당길 것이 없고, 3포인트 소리(1.4초)는 장면 끝(2.6초)을 0.04초 넘지만
+	# 그 꼬리가 -72dBFS 라 결과 화면의 `victory` 와 겹쳐 들리지 않는다.
+	if not _land_sound_played and _elapsed >= LAND_AT:
+		_land_sound_played = true
+		Sfx.play("point_%d" % (_new_pip + 1), 0.0, false)
 	if _elapsed >= TOTAL:
 		_elapsed = -1.0
 		visible = false

@@ -1871,10 +1871,8 @@ func _play_point_gain(scorer_id: int, score_after: int, is_final: bool) -> void:
 	# 꺼지고, 다음 라운드는 무기 선택이 새 곡을 낮은 음량으로 연다. 마지막 포인트 뒤 결과
 	# 화면은 배경음 없이 승리음만 들린다.
 	Music.fade_out()
-	# 몇 번째 포인트인지에 따라 소리가 다르다 (#469, 사용자가 준 음원) — `point_1`·`point_2`·
-	# `point_3`. 누가 땄는지는 가르지 않는다. 3포인트 소리는 포인트 장면(2.6초)보다 짧게 잘라
-	# 결과 화면의 `victory` 와 겹치지 않는다.
-	Sfx.play("point_%d" % clampi(score_after, 1, Combat.POINTS_TO_WIN), 0.0, false)
+	# 포인트 효과음(`point_1`·`point_2`·`point_3`, #469)은 여기서 내지 않는다 — 곰젤리가 새
+	# 칸에 내려앉는 순간 `point_gain.gd` 가 낸다 (#495).
 	point_gain.play(scorer.player_name, scorer.character_id, score_after, true, is_final)
 
 
