@@ -115,15 +115,16 @@ func _draw_art(center: Vector2) -> void:
 	draw_texture_rect_region(_art, Rect2(center - draw_size * 0.5, draw_size), region)
 
 
-## 차오른 만큼을 **왼쪽에서 오른쪽으로** 덮는다 (#334).
+## 차오른 만큼을 **아래에서 위로** 덮는다 (#489 — #334 에서는 왼쪽에서 오른쪽이었다).
 ##
-## 원을 세로선으로 자른 조각이라 **볼록**하다 — `draw_colored_polygon()` 이 삼각형을
+## 원을 가로선으로 자른 조각이라 **볼록**하다 — `draw_colored_polygon()` 이 삼각형을
 ## 나누는 방식이 볼록한 것을 전제로 해서, 오목한 모양이면 엉뚱한 자리가 메워진다
 ## (`select_decor.gd` 의 꽃밭 띠가 그래서 세로 조각으로 그려져 있다).
 ##
-## 경계선의 각도는 `acos` 로 얻는다. 채우는 쪽 경계가 `x = center.x + RADIUS * t` 이면
-## 그 세로선이 원과 만나는 곳이 `±acos(t)` 이고, 왼쪽 조각은 그 둘 사이를 **π 를 지나며**
-## 잇는 호다.
+## 경계선의 각도는 `asin` 으로 얻는다. 화면 좌표는 아래가 +y 라 채우는 쪽 경계가
+## `y = center.y + RADIUS * s` 이면 그 가로선이 원과 만나는 곳이 `asin(s)` 와 `π - asin(s)` 이고,
+## 아래 조각은 그 둘 사이를 **π/2(맨 아래)를 지나며** 잇는 호다. 다 비었을 때 `s = 1`(맨 아래 한 점),
+## 다 찼을 때 `s = -1`(맨 위)이다.
 func _draw_charge(center: Vector2) -> void:
 	# 눌렸을 때(0.78)보다 옅어서 "찼다"와 "누르고 있다"가 구분되고, 조작물이 젤리가
 	# 서는 자리와 겹치므로(#322) 발이 사라질 만큼 진하지 않다.
@@ -131,10 +132,10 @@ func _draw_charge(center: Vector2) -> void:
 	if _charge >= READY:
 		draw_circle(center, RADIUS, charge_color)
 		return
-	var edge := acos(clampf(_charge * 2.0 - 1.0, -1.0, 1.0))
+	var edge := asin(clampf(1.0 - _charge * 2.0, -1.0, 1.0))
 	var points := PackedVector2Array()
 	for i in CHARGE_STEPS + 1:
-		var angle := lerpf(edge, TAU - edge, float(i) / float(CHARGE_STEPS))
+		var angle := lerpf(edge, PI - edge, float(i) / float(CHARGE_STEPS))
 		points.append(center + Vector2(cos(angle), sin(angle)) * RADIUS)
 	draw_colored_polygon(points, charge_color)
 
