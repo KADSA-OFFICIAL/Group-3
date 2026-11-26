@@ -18,15 +18,31 @@ static var _content_rects := {}
 ## 전부 훑는 것이라 PC 에서도 한 번에 수십 ms 다 — 그런데 궁극기 버튼의 `_draw()` 가
 ## 쿨타임이 차는 동안 매 프레임, 투사체가 한 발마다 이것을 불러 폰에서 프레임이 무너졌다.
 ## 같은 경로의 그림은 `load()` 가 같은 인스턴스를 주므로 인스턴스로 기억하면 된다.
+##
+## **원화는 재지 않고 표에서 꺼낸다** (#501). 처음 한 번 재는 것조차 폰에서는 판이 넘어갈
+## 때마다(무기 카드·카운트다운) 멈칫하게 만들었다 — `ArtRects.RECTS`(`tools/gen_art_rects.gd`
+## 가 원본 PNG 에서 미리 잰 비율)에 있으면 텍스처 크기를 곱하기만 한다. 표에 없는 그림
+## (새로 넣고 표를 안 다시 만든 원화)만 예전처럼 잰다 — 느릴 뿐 값은 같다.
 static func content_rect(texture: Texture2D) -> Rect2:
 	if texture == null:
 		return Rect2()
 	var key := texture.get_instance_id()
 	if _content_rects.has(key):
 		return _content_rects[key]
-	var rect := _measure_content(texture)
+	var rect := _table_rect(texture)
+	if rect.size == Vector2.ZERO:
+		rect = _measure_content(texture)
 	_content_rects[key] = rect
 	return rect
+
+
+## 미리 잰 표에서 꺼낸다 (#501). 표에 없으면 빈 영역.
+static func _table_rect(texture: Texture2D) -> Rect2:
+	var ratio: Rect2 = ArtRects.RECTS.get(texture.resource_path, Rect2())
+	if ratio.size == Vector2.ZERO:
+		return Rect2()
+	var size := Vector2(texture.get_size())
+	return Rect2(ratio.position * size, ratio.size * size)
 
 
 ## 판이 열리기 전에 미리 재 둔다 (#475) — 처음 쓰는 순간이 전투 한가운데면 그 한 번이 멈칫한다.
