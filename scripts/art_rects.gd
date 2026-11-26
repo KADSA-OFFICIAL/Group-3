@@ -1,0 +1,47 @@
+class_name ArtRects
+extends RefCounted
+## **생성 파일 — 손으로 고치지 않는다.** `tools/gen_art_rects.gd` 가 만든다 (#501).
+## 가져온 원화 텍스처의 투명 여백을 뺀 실제 그림 영역을 텍스처 크기에 대한 비율(0~1)로 적는다.
+## 쓰는 곳은 `Art.content_rect()` 하나다.
+
+const RECTS := {
+	"res://assets/weapons/bomb.png": Rect2(0.265625, 0.267578, 0.449219, 0.472656),
+	"res://assets/weapons/bomb_charged.png": Rect2(0.050781, 0.134766, 0.744141, 0.835938),
+	"res://assets/weapons/bow.png": Rect2(0.355469, 0.158203, 0.228516, 0.708984),
+	"res://assets/weapons/bullet.png": Rect2(0.359375, 0.097656, 0.281250, 0.773438),
+	"res://assets/weapons/cannon.png": Rect2(0.046875, 0.318359, 0.736328, 0.322266),
+	"res://assets/weapons/chainsaw.png": Rect2(0.123047, 0.416016, 0.707031, 0.261719),
+	"res://assets/weapons/dagger.png": Rect2(0.333984, 0.093750, 0.365234, 0.679688),
+	"res://assets/weapons/double_axe.png": Rect2(0.195313, 0.021484, 0.673828, 0.910156),
+	"res://assets/weapons/double_axe_red.png": Rect2(0.195313, 0.021484, 0.673828, 0.910156),
+	"res://assets/weapons/glove.png": Rect2(0.275391, 0.275391, 0.521484, 0.441406),
+	"res://assets/weapons/glove_rocket.png": Rect2(0.072266, 0.275391, 0.724609, 0.441406),
+	"res://assets/weapons/hammer.png": Rect2(0.326172, 0.224609, 0.380859, 0.644531),
+	"res://assets/weapons/knuckle.png": Rect2(0.203125, 0.285156, 0.626953, 0.343750),
+	"res://assets/weapons/knuckle_worn.png": Rect2(0.205078, 0.177734, 0.613281, 0.570313),
+	"res://assets/weapons/laser_sword.png": Rect2(0.419922, 0.101563, 0.423828, 0.751953),
+	"res://assets/weapons/pole.png": Rect2(0.458984, 0.039063, 0.091797, 0.814453),
+	"res://assets/weapons/rifle.png": Rect2(0.041016, 0.337891, 0.847656, 0.470703),
+	"res://assets/weapons/shield.png": Rect2(0.224609, 0.125000, 0.595703, 0.730469),
+	"res://assets/weapons/shotgun.png": Rect2(0.105469, 0.324219, 0.884766, 0.275391),
+	"res://assets/weapons/shuriken.png": Rect2(0.119141, 0.093750, 0.796875, 0.796875),
+	"res://assets/weapons/shuriken_red.png": Rect2(0.119141, 0.093750, 0.796875, 0.796875),
+	"res://assets/weapons/sword.png": Rect2(0.421875, 0.052734, 0.158203, 0.765625),
+	"res://assets/weapons/sword_charged.png": Rect2(0.419922, 0.101563, 0.423828, 0.750000),
+	"res://assets/weapons/trident.png": Rect2(0.447266, 0.201172, 0.183594, 0.730469),
+	"res://assets/characters/bear_blue.png": Rect2(0.233073, 0.074219, 0.467448, 0.839844),
+	"res://assets/characters/bear_blue_lose.png": Rect2(0.234375, 0.372396, 0.492188, 0.451823),
+	"res://assets/characters/bear_blue_win.png": Rect2(0.292969, 0.208333, 0.414063, 0.589844),
+	"res://assets/characters/bear_green.png": Rect2(0.265625, 0.134115, 0.489583, 0.742188),
+	"res://assets/characters/bear_green_lose.png": Rect2(0.234375, 0.372396, 0.492188, 0.451823),
+	"res://assets/characters/bear_green_win.png": Rect2(0.279948, 0.209635, 0.423177, 0.674479),
+	"res://assets/characters/bear_pink.png": Rect2(0.248698, 0.101563, 0.446615, 0.739583),
+	"res://assets/characters/bear_pink_lose.png": Rect2(0.234375, 0.372396, 0.492188, 0.451823),
+	"res://assets/characters/bear_pink_win.png": Rect2(0.283854, 0.212240, 0.445313, 0.687500),
+	"res://assets/characters/bear_red.png": Rect2(0.257813, 0.115885, 0.511719, 0.750000),
+	"res://assets/characters/bear_red_lose.png": Rect2(0.234375, 0.372396, 0.492188, 0.451823),
+	"res://assets/characters/bear_red_win.png": Rect2(0.238281, 0.226563, 0.505208, 0.671875),
+	"res://assets/characters/bear_yellow.png": Rect2(0.281250, 0.119792, 0.389323, 0.723958),
+	"res://assets/characters/bear_yellow_lose.png": Rect2(0.234375, 0.372396, 0.492188, 0.451823),
+	"res://assets/characters/bear_yellow_win.png": Rect2(0.255208, 0.216146, 0.423177, 0.597656),
+}
